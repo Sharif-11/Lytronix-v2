@@ -64,7 +64,7 @@ export default function Shop() {
             <div className="absolute -bottom-24 -left-10 w-72 h-72 rounded-full bg-ui-brand/25 blur-2xl" />
             <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16 text-center">
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.25em] text-accent-lime font-medium mb-4 border border-accent-lime/30 rounded-full px-3 py-1">
-                {COMPANY_NAME}-তে স্বাগতম
+{COMPANY_NAME} এ স্বাগতম
               </div>
               <h1 className="font-display text-3xl sm:text-5xl leading-tight">
                 {COMPANY_TAGLINE_BN}

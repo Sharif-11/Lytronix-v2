@@ -212,6 +212,11 @@ export const getSmsLogs = (orderId) => client.get('/sms-logs', { params: { order
 // failed balance check is shown inline on the Marketing page, not as a modal.
 export const getSmsBalance = () => client.get('/sms-logs/balance', { skipErrorModal: true }).then((r) => r.data);
 
+// ---- Contact messages (from the storefront Contact page) ----
+export const getContactMessages = (params) => client.get('/contact', { params }).then((r) => r.data);
+export const updateContactMessage = (id, status) => client.patch(`/contact/${id}`, { status }).then((r) => r.data);
+export const deleteContactMessage = (id) => client.delete(`/contact/${id}`).then((r) => r.data);
+
 // ---- Public tracking ----
 // skipErrorModal: a wrong/unknown tracking id is an expected outcome here,
 // shown inline on the page itself — not a failure worth a popup.
