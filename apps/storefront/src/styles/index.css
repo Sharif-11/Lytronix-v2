@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-ui-bg text-ui-ink antialiased;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-ui-line bg-white px-3.5 py-2.5 text-base sm:text-sm text-ui-ink placeholder:text-ui-faint focus:border-ui-brand focus:ring-4 focus:ring-ui-brand/10 outline-none transition-shadow;
+  }
+  .input-plain {
+    @apply w-full rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-sm text-ui-ink hover:border-ui-line focus:border-ui-brand transition-colors;
+  }
+  .label {
+    @apply block text-xs font-medium text-ui-muted mb-1.5;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-ui-brand px-4 py-2.5 sm:py-2 text-sm font-medium text-white shadow-[0_1px_2px_rgba(58,98,22,0.15),0_4px_10px_rgba(58,98,22,0.18)] hover:bg-ui-brandDark hover:shadow-[0_2px_6px_rgba(58,98,22,0.2),0_8px_20px_rgba(58,98,22,0.24)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none disabled:translate-y-0;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-ui-line bg-white px-4 py-2.5 sm:py-2 text-sm font-medium text-ui-ink hover:bg-ui-surfaceAlt hover:border-ui-faint/60 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:translate-y-0;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-transparent bg-red-50 px-4 py-2.5 sm:py-2 text-sm font-medium text-ui-rust hover:bg-red-100 active:scale-[0.98] transition-all;
+  }
+  .card {
+    @apply bg-ui-surface border border-ui-line rounded-2xl shadow-card transition-shadow duration-200;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border;
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* Faint dot-grid texture used behind hero/feature sections for depth
+   without needing a photograph. Kept subtle (low opacity) so Bangla text
+   stays fully legible on top of it. */
+.bg-dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+::selection {
+  background: #4A7D1E;
+  color: #FFFFFF;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #4A7D1E;
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

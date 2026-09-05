@@ -1,0 +1,95 @@
+import { Link } from 'react-router-dom';
+import { Phone, Mail, MapPin, MessageCircle, ShieldCheck, Truck, Banknote } from 'lucide-react';
+import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, COMPANY_WHATSAPP } from '../utils/company';
+import logo from '../assets/lytronix-logo.png';
+
+export default function Footer() {
+  return (
+    <footer className="border-t border-ui-line bg-white mt-16">
+      {/* Trust strip */}
+      <div className="bg-ui-brand/[0.04] border-b border-ui-line">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap justify-center sm:justify-between gap-x-8 gap-y-2 text-xs sm:text-sm text-ui-ink">
+          <span className="inline-flex items-center gap-2">
+            <ShieldCheck size={15} className="text-ui-brand" /> ১০০% আসল পণ্যের নিশ্চয়তা
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <Truck size={15} className="text-ui-brand" /> সারা বাংলাদেশে হোম ডেলিভারি
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <Banknote size={15} className="text-ui-brand" /> ক্যাশ অন ডেলিভারি সুবিধা
+          </span>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div>
+            <img src={logo} alt={COMPANY_NAME} className="h-8 w-auto mb-3" />
+            <p className="text-sm text-ui-muted leading-relaxed max-w-xs">
+              পাওয়ার ব্যাংক, চার্জার, ব্যাটারি ও এক্সেসরিজ — সম্পূর্ণ আসল পণ্য, ক্যাশ অন ডেলিভারিসহ সারা
+              বাংলাদেশে ডেলিভারি সুবিধা।
+            </p>
+          </div>
+
+          <FooterColumn title="শপিং">
+            <FooterLink to="/shop">সকল পণ্য</FooterLink>
+            <FooterLink to="/shop/cart">কার্ট</FooterLink>
+            <FooterLink to="/shop/login">সাইন ইন</FooterLink>
+          </FooterColumn>
+
+          <FooterColumn title="কোম্পানি">
+            <FooterLink to="/shop/about">আমাদের সম্পর্কে</FooterLink>
+            <FooterLink to="/shop/contact">যোগাযোগ</FooterLink>
+          </FooterColumn>
+
+          <FooterColumn title="যোগাযোগ করুন">
+            <a href={`tel:${COMPANY_PHONE}`} className="flex items-center gap-2 text-sm text-ui-muted hover:text-ui-brand">
+              <Phone size={14} /> {COMPANY_PHONE}
+            </a>
+            <a
+              href={`https://wa.me/${COMPANY_WHATSAPP}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-sm text-ui-muted hover:text-ui-brand"
+            >
+              <MessageCircle size={14} /> হোয়াটসঅ্যাপ
+            </a>
+            <a href={`mailto:${COMPANY_EMAIL}`} className="flex items-center gap-2 text-sm text-ui-muted hover:text-ui-brand">
+              <Mail size={14} /> {COMPANY_EMAIL}
+            </a>
+            <span className="flex items-start gap-2 text-sm text-ui-muted font-bangla" dir="auto">
+              <MapPin size={14} className="shrink-0 mt-0.5" /> {COMPANY_ADDRESS}
+            </span>
+          </FooterColumn>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-10 pt-6 border-t border-ui-line">
+          <p className="text-xs text-ui-faint">© {new Date().getFullYear()} {COMPANY_NAME}। সর্বস্বত্ব সংরক্ষিত।</p>
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="rounded border border-ui-line px-2 py-0.5 text-ui-faint">ক্যাশ অন ডেলিভারি</span>
+            <span className="rounded px-2 py-0.5 font-semibold text-white" style={{ background: '#E2136E' }}>
+              bKash
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function FooterColumn({ title, children }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-ui-faint mb-3">{title}</h3>
+      <div className="flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+function FooterLink({ to, children }) {
+  return (
+    <Link to={to} className="text-sm text-ui-muted hover:text-ui-brand">
+      {children}
+    </Link>
+  );
+}

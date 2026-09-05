@@ -1,0 +1,21 @@
+{
+  "name": "lytronix",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Root orchestrator only. Each of server/, apps/storefront/ and apps/admin/ is a fully standalone project with its own package.json and node_modules — this is NOT an npm workspaces monorepo. These scripts just install/build/run all three from one place.",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix apps/storefront && npm install --prefix apps/admin",
+    "dev": "concurrently -n server,storefront,admin -c blue,green,magenta \"npm run dev --prefix server\" \"npm run dev --prefix apps/storefront\" \"npm run dev --prefix apps/admin\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:storefront": "npm run dev --prefix apps/storefront",
+    "dev:admin": "npm run dev --prefix apps/admin",
+    "seed": "npm run seed --prefix server",
+    "build": "npm run build --prefix apps/storefront && npm run build --prefix apps/admin",
+    "build:storefront": "npm run build --prefix apps/storefront",
+    "build:admin": "npm run build --prefix apps/admin",
+    "start:server": "npm start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

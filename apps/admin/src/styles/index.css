@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-ui-bg text-ui-ink antialiased;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-ui-line bg-white px-3.5 py-2.5 text-base sm:text-sm text-ui-ink placeholder:text-ui-faint focus:border-ui-brand focus:ring-4 focus:ring-ui-brand/10 outline-none transition-shadow;
+  }
+  .input-plain {
+    @apply w-full rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-sm text-ui-ink hover:border-ui-line focus:border-ui-brand transition-colors;
+  }
+  .label {
+    @apply block text-xs font-medium text-ui-muted mb-1.5;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-ui-brand px-4 py-2.5 sm:py-2 text-sm font-medium text-white shadow-sm hover:bg-ui-brandDark active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-ui-line bg-white px-4 py-2.5 sm:py-2 text-sm font-medium text-ui-ink hover:bg-ui-surfaceAlt hover:border-ui-faint/60 active:scale-[0.98] transition-all disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-transparent bg-red-50 px-4 py-2.5 sm:py-2 text-sm font-medium text-ui-rust hover:bg-red-100 active:scale-[0.98] transition-all;
+  }
+  .card {
+    @apply bg-ui-surface border border-ui-line rounded-2xl shadow-card;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border;
+  }
+  .table-header-cell {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ui-muted;
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+
+::selection {
+  background: #4A7D1E;
+  color: #FFFFFF;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* visible keyboard focus everywhere */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #4A7D1E;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---- Print views (parcel slip / logbook) ---- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
