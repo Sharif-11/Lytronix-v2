@@ -8,9 +8,11 @@ import ScrollToTop from './components/ScrollToTop';
 import { trackVisitOnce } from './lib/analytics';
 
 import Shop from './pages/Shop';
+import Products from './pages/Products';
 import Category from './pages/Category';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
+import SavedPage from './pages/SavedPage';
 import Checkout from './pages/Checkout';
 import Login from './pages/Login';
 import TrackOrder from './pages/TrackOrder';
@@ -44,10 +46,12 @@ export default function App() {
     <>
       <ScrollToTop />
     <Routes>
-      {/* Public order tracking — standalone, no shop chrome */}
-      <Route path="/track/:trackingId" element={<TrackOrder />} />
+      {/* Public order tracking — inside the normal shop layout (header/footer) */}
+      <Route path="/track/:trackingId" element={<ShopLayout><TrackOrder /></ShopLayout>} />
 
       <Route path="/shop" element={<ShopLayout><Shop /></ShopLayout>} />
+      <Route path="/shop/products" element={<ShopLayout><Products /></ShopLayout>} />
+      <Route path="/shop/saved" element={<ShopLayout><SavedPage /></ShopLayout>} />
       <Route path="/shop/c/:slug" element={<ShopLayout><Category /></ShopLayout>} />
       <Route path="/shop/p/:slug" element={<ShopLayout><ProductDetail /></ShopLayout>} />
       <Route path="/shop/cart" element={<ShopLayout><Cart /></ShopLayout>} />

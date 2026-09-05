@@ -5,6 +5,7 @@ import { track } from '../lib/analytics';
 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'lytronix_shop_cart_v1';
+const SAVED_KEY = 'lytronix_shop_saved_v1';
 
 function loadLocal() {
   try {
@@ -19,6 +20,25 @@ function saveLocal(items) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   } catch {
     /* ignore quota / privacy-mode */
+  }
+}
+
+// Guests can still save products — the ids live in localStorage only until
+// they sign in, at which point they're merged into the server wishlist.
+function loadLocalSaved() {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function saveLocalSaved(ids) {
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
   }
 }
 const isAuthed = () => Boolean(localStorage.getItem(SHOP_TOKEN_KEY));
@@ -41,7 +61,7 @@ function lineFromProduct(product, qty) {
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(() => (isAuthed() ? [] : loadLocal()));
-  const [savedIds, setSavedIds] = useState([]);
+  const [savedIds, setSavedIds] = useState(() => (isAuthed() ? [] : loadLocalSaved()));
   const [ready, setReady] = useState(!isAuthed());
   const authedRef = useRef(isAuthed());
 
@@ -92,6 +112,13 @@ export function CartProvider({ children }) {
         await loadServerCart();
       }
       saveLocal([]);
+
+      // Merge guest-saved products into the server wishlist, then reload.
+      const localSaved = loadLocalSaved();
+      if (localSaved.length) {
+        await Promise.allSettled(localSaved.map((id) => api.addToWishlist(id)));
+        saveLocalSaved([]);
+      }
       loadWishlist();
     };
     const onLogout = () => {
@@ -99,6 +126,7 @@ export function CartProvider({ children }) {
       setItems([]);
       setSavedIds([]);
       saveLocal([]);
+      saveLocalSaved([]);
     };
     window.addEventListener('lytronix:login', onLogin);
     window.addEventListener('lytronix:logout', onLogout);
@@ -108,10 +136,13 @@ export function CartProvider({ children }) {
     };
   }, [loadServerCart, loadWishlist]);
 
-  // ----- persist guest cart -----
+  // ----- persist guest cart + saved list -----
   useEffect(() => {
     if (!authedRef.current) saveLocal(items);
   }, [items]);
+  useEffect(() => {
+    if (!authedRef.current) saveLocalSaved(savedIds);
+  }, [savedIds]);
 
   // ----- mutations (optimistic for guests, server round-trip for members) -----
   const addItem = useCallback(async (product, qty = 1) => {
@@ -171,21 +202,23 @@ export function CartProvider({ children }) {
   // ----- wishlist -----
   const isSaved = useCallback((productId) => savedIds.includes(productId), [savedIds]);
 
-  // Returns false + does nothing when the visitor isn't signed in — callers
-  // can then nudge them to log in.
   const toggleSaved = useCallback(
     async (productId) => {
-      if (!authedRef.current) return { ok: false, reason: 'auth' };
       const currentlySaved = savedIds.includes(productId);
       setSavedIds((prev) =>
         currentlySaved ? prev.filter((x) => x !== productId) : [...prev, productId]
       );
+
+      // Guests: localStorage only (the persist effect handles saving).
+      if (!authedRef.current) {
+        return { ok: true, saved: !currentlySaved, guest: true };
+      }
+
       try {
         if (currentlySaved) await api.removeFromWishlist(productId);
         else await api.addToWishlist(productId);
         return { ok: true, saved: !currentlySaved };
       } catch {
-        // revert
         setSavedIds((prev) =>
           currentlySaved ? [...prev, productId] : prev.filter((x) => x !== productId)
         );

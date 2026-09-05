@@ -47,18 +47,18 @@ export const formatTime = (dateStr) => {
 // webhook can set any of these directly (see steadfastStatusMap.js), so a
 // customer's own order can land on any of them, not just the original six.
 const ORDER_STATUS_BN = {
-  unverified: 'পেমেন্ট যাচাই বাকি',
-  pending: 'অপেক্ষমাণ',
-  processing: 'প্রক্রিয়াধীন',
-  shipped: 'পাঠানো হয়েছে',
-  delivered: 'ডেলিভারি হয়েছে',
-  partial_delivered: 'আংশিক ডেলিভারি হয়েছে',
-  completed: 'সম্পন্ন',
-  cancelled: 'বাতিল হয়েছে',
-  hold: 'সাময়িক স্থগিত',
-  in_review: 'পর্যালোচনায় আছে',
-  refunded: 'রিফান্ড হয়েছে',
-  returned: 'ফেরত হয়েছে',
+  unverified: 'পেমেন্ট ভেরিফাই বাকি',
+  pending: 'পেন্ডিং',
+  processing: 'প্রসেসিং',
+  shipped: 'শিপড',
+  delivered: 'ডেলিভারড',
+  partial_delivered: 'পার্শিয়াল ডেলিভারড',
+  completed: 'কমপ্লিটেড',
+  cancelled: 'ক্যানসেলড',
+  hold: 'হোল্ড',
+  in_review: 'ইন রিভিউ',
+  refunded: 'রিফান্ডেড',
+  returned: 'রিটার্নড',
 };
 
 export const STATUS_STYLES = {
@@ -85,11 +85,11 @@ export const statusLabel = (status) => ORDER_STATUS_BN[(status || '').toLowerCas
 
 // ---- Payment status / method ----
 const PAYMENT_STATUS_BN = {
-  pending: 'অপেক্ষমাণ',
-  pending_verification: 'যাচাই চলছে',
-  verified: 'যাচাইকৃত',
-  failed: 'ব্যর্থ',
-  refunded: 'ফেরত',
+  pending: 'পেন্ডিং',
+  pending_verification: 'ভেরিফাই চলছে',
+  verified: 'ভেরিফায়েড',
+  failed: 'ফেইলড',
+  refunded: 'রিফান্ডেড',
 };
 export const paymentStatusLabel = (status) => PAYMENT_STATUS_BN[(status || '').toLowerCase()] || status || '—';
 
@@ -98,7 +98,7 @@ const PAYMENT_METHOD_BN = {
   bkash_manual: 'বিকাশ (ম্যানুয়াল)',
   bkash_automated: 'বিকাশ চেকআউট',
   sslcommerz: 'এসএসএলকমার্জ',
-  other: 'অন্যান্য',
+  other: 'আদার',
 };
 export const paymentMethodLabel = (method) => PAYMENT_METHOD_BN[(method || '').toLowerCase()] || method || '—';
 

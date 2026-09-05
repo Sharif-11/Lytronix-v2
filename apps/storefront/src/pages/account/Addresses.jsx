@@ -46,7 +46,7 @@ export default function Addresses() {
   const save = async (e) => {
     e.preventDefault();
     if (!form.address.trim() || !form.zilla.trim()) {
-      setError('জেলা ও ঠিকানা আবশ্যক।');
+      setError('জেলা ও অ্যাড্রেস আবশ্যক।');
       return;
     }
     setBusy(true);
@@ -57,14 +57,14 @@ export default function Addresses() {
       refresh();
       setEditing(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'ঠিকানা সংরক্ষণ করা যায়নি।');
+      setError(err.response?.data?.message || 'অ্যাড্রেস সেভ করা যায়নি।');
     } finally {
       setBusy(false);
     }
   };
 
   const remove = async (id) => {
-    if (!(await confirm('এই ঠিকানাটি মুছে ফেলবেন?', { danger: true }))) return;
+    if (!(await confirm('এই অ্যাড্রেসটি ডিলিট করবেন?', { danger: true }))) return;
     const res = await deleteAddress(id);
     patchCustomer(res.customer);
     refresh();
@@ -79,10 +79,10 @@ export default function Addresses() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg text-ui-ink">সংরক্ষিত ঠিকানা</h2>
+        <h2 className="font-display text-lg text-ui-ink">সেভ করা অ্যাড্রেস</h2>
         {editing === null && (
           <button onClick={startNew} className="btn-primary py-2">
-            <Plus size={15} /> ঠিকানা যোগ করুন
+            <Plus size={15} /> অ্যাড্রেস যোগ করুন
           </button>
         )}
       </div>
@@ -90,7 +90,7 @@ export default function Addresses() {
       {editing !== null && (
         <form onSubmit={save} className="card p-4 sm:p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium">{editing === 'new' ? 'নতুন ঠিকানা' : 'ঠিকানা সম্পাদনা'}</h3>
+            <h3 className="font-medium">{editing === 'new' ? 'নতুন অ্যাড্রেস' : 'অ্যাড্রেস এডিট'}</h3>
             <button type="button" onClick={() => setEditing(null)} className="text-ui-muted">
               <X size={18} />
             </button>
@@ -105,14 +105,14 @@ export default function Addresses() {
           />
           <div className="grid sm:grid-cols-2 gap-3">
             <SearchableSelect
-              placeholder={districts.length ? 'জেলা নির্বাচন করুন…' : 'লোড হচ্ছে…'}
+              placeholder={districts.length ? 'জেলা সিলেক্ট করুন…' : 'লোড হচ্ছে…'}
               loading={!districts.length}
               value={form.zilla}
               onChange={(v) => setForm({ ...form, zilla: v, policeStation: '' })}
               options={districts.map((d) => ({ value: d.name, label: d.name }))}
             />
             <SearchableSelect
-              placeholder="থানা নির্বাচন করুন…"
+              placeholder="থানা সিলেক্ট করুন…"
               disabledHint="প্রথমে জেলা বেছে নিন"
               disabled={!form.zilla}
               value={form.policeStation}
@@ -134,17 +134,17 @@ export default function Addresses() {
               checked={form.isDefault}
               onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
             />
-            এটি আমার ডিফল্ট ডেলিভারি ঠিকানা হিসেবে ব্যবহার করুন
+            এটি আমার ডিফল্ট ডেলিভারি অ্যাড্রেস হিসেবে ব্যবহার করুন
           </label>
           <button disabled={busy} className="btn-primary">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : 'ঠিকানা সংরক্ষণ করুন'}
+            {busy ? <Loader2 size={15} className="animate-spin" /> : 'অ্যাড্রেস সেভ করুন'}
           </button>
         </form>
       )}
 
       {addresses.length === 0 && editing === null && (
         <div className="card p-8 text-center text-ui-muted text-sm">
-          এখনো কোনো ঠিকানা সংরক্ষণ করা হয়নি। পরের বার দ্রুত চেকআউট করতে একটি যোগ করুন।
+          এখনো কোনো অ্যাড্রেস সেভ করা হয়নি। পরের বার দ্রুত চেকআউট করতে একটি যোগ করুন।
         </div>
       )}
 
@@ -167,7 +167,7 @@ export default function Addresses() {
             </div>
             <div className="flex gap-3 mt-3 pt-3 border-t border-dashed border-ui-line text-xs">
               <button onClick={() => startEdit(a)} className="text-ui-brand hover:underline">
-                সম্পাদনা
+                এডিট
               </button>
               {!a.isDefault && (
                 <button onClick={() => makeDefault(a._id)} className="text-ui-muted hover:underline inline-flex items-center gap-1">
@@ -175,7 +175,7 @@ export default function Addresses() {
                 </button>
               )}
               <button onClick={() => remove(a._id)} className="text-ui-rust hover:underline inline-flex items-center gap-1 ml-auto">
-                <Trash2 size={12} /> মুছে ফেলুন
+                <Trash2 size={12} /> ডিলিট করুন
               </button>
             </div>
           </div>

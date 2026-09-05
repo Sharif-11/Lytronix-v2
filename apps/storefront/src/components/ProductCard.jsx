@@ -49,10 +49,7 @@ export default function ProductCard({ product }) {
   };
 
   const handleSave = async () => {
-    if (!isAuthed) {
-      navigate(`/shop/login?next=${encodeURIComponent(window.location.pathname)}`);
-      return;
-    }
+    // Guests can save too — it's kept in localStorage and merged on sign-in.
     await toggleSaved(product._id);
   };
 
@@ -92,7 +89,7 @@ export default function ProductCard({ product }) {
         <button
           type="button"
           onClick={handleSave}
-          aria-label={saved ? 'পছন্দের তালিকা থেকে সরান' : 'পরে কেনার জন্য সংরক্ষণ করুন'}
+          aria-label={saved ? 'পছন্দের তালিকা থেকে রিমুভ' : 'পরে কেনার জন্য সেভ করুন'}
           className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/95 flex items-center justify-center shadow hover:scale-105 transition-transform"
         >
           <Heart size={15} className={saved ? 'fill-ui-rust text-ui-rust' : 'text-ui-muted'} />

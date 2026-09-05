@@ -17,7 +17,7 @@ export default function TrackOrder() {
   }, [trackingId]);
 
   return (
-    <div className="min-h-screen flex items-start justify-center px-4 sm:px-5 py-10 sm:py-16">
+    <div className="min-h-[70vh] flex items-start justify-center px-4 sm:px-5 py-8 sm:py-14">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <div className="text-xs uppercase tracking-[0.2em] text-ui-muted">আপনার অর্ডার ট্র্যাক করুন</div>
@@ -71,7 +71,7 @@ export default function TrackOrder() {
             </div>
 
             <div className="border-t border-dashed border-ui-line pt-4">
-              <h3 className="text-xs uppercase tracking-wide text-ui-muted mb-2">পণ্যসমূহ</h3>
+              <h3 className="text-xs uppercase tracking-wide text-ui-muted mb-2">প্রোডাক্টসমূহ</h3>
               <ul className="text-sm space-y-1 mb-3">
                 {order.items.map((it, idx) => (
                   <li key={idx} className="flex justify-between">
@@ -81,7 +81,7 @@ export default function TrackOrder() {
                 ))}
               </ul>
               <div className="flex justify-between text-sm font-semibold text-ui-brand border-t border-ui-line pt-2">
-                <span>সর্বমোট</span>
+                <span>গ্র্যান্ড টোটাল</span>
                 <span className="font-mono">{formatMoney(order.pricing?.grandTotal)}</span>
               </div>
               <div className="flex justify-between text-sm text-ui-muted">

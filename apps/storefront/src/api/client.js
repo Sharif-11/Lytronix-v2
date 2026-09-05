@@ -7,22 +7,57 @@ const baseURL = import.meta.env.VITE_API_URL || '/api';
 const client = axios.create({ baseURL });
 
 export const SHOP_TOKEN_KEY = 'lytronix_shop_token';
+export const SHOP_REFRESH_KEY = 'lytronix_shop_refresh';
 
-// Attach the signed-in customer's token (if any) to every request.
+export function setShopTokens({ token, refreshToken }) {
+  if (token) localStorage.setItem(SHOP_TOKEN_KEY, token);
+  if (refreshToken) localStorage.setItem(SHOP_REFRESH_KEY, refreshToken);
+}
+export function clearShopTokens() {
+  localStorage.removeItem(SHOP_TOKEN_KEY);
+  localStorage.removeItem(SHOP_REFRESH_KEY);
+}
+
+// Attach the signed-in customer's access token (if any) to every request.
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem(SHOP_TOKEN_KEY);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token && !config._skipAuth) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// A 401 on an /account/* call means the session lapsed — clear it so the UI
-// falls back to the guest experience instead of looping on errors.
+// Persistent login: when a request 401s because the short-lived access token
+// expired, trade the refresh token for a new one and replay the request once.
+// If the refresh itself fails, the session is truly over — clear it and let
+// the UI drop back to guest.
+let refreshing = null;
+async function runRefresh() {
+  const refreshToken = localStorage.getItem(SHOP_REFRESH_KEY);
+  if (!refreshToken) throw new Error('no refresh token');
+  const { data } = await client.post('/auth/customer/refresh', { refreshToken }, { _skipAuth: true, _noRetry: true });
+  setShopTokens(data);
+  return data.token;
+}
+
 client.interceptors.response.use(
   (res) => res,
-  (err) => {
-    const url = err.config?.url || '';
-    if (err.response?.status === 401 && url.includes('/account')) {
-      localStorage.removeItem(SHOP_TOKEN_KEY);
+  async (err) => {
+    const cfg = err.config || {};
+    const is401 = err.response?.status === 401;
+    const isAuthedCall = Boolean(localStorage.getItem(SHOP_TOKEN_KEY)) && !cfg._skipAuth;
+
+    if (is401 && isAuthedCall && !cfg._noRetry && !cfg._retried) {
+      try {
+        refreshing = refreshing || runRefresh();
+        const newToken = await refreshing;
+        refreshing = null;
+        cfg._retried = true;
+        cfg.headers = { ...(cfg.headers || {}), Authorization: `Bearer ${newToken}` };
+        return client(cfg);
+      } catch {
+        refreshing = null;
+        clearShopTokens();
+        window.dispatchEvent(new CustomEvent('lytronix:logout'));
+      }
     }
     return Promise.reject(err);
   }
@@ -39,15 +74,21 @@ export const recordProductView = (id, body) =>
 export const getCategories = (params) => client.get('/categories', { params }).then((r) => r.data);
 export const getCategory = (slug) => client.get(`/categories/${slug}`).then((r) => r.data);
 
-// ---- Customer auth (phone + OTP) ----
+// ---- Customer auth (phone + OTP, or optional password) ----
 export const requestOtp = (phone) =>
   client.post('/auth/customer/request-otp', { phone }).then((r) => r.data);
 export const verifyOtp = (phone, code) =>
   client.post('/auth/customer/verify-otp', { phone, code }).then((r) => r.data);
+export const passwordLogin = (phone, password) =>
+  client.post('/auth/customer/login', { phone, password }, { _skipAuth: true }).then((r) => r.data);
+export const forgotPassword = (phone) =>
+  client.post('/auth/customer/forgot-password', { phone }, { _skipAuth: true }).then((r) => r.data);
 
 // ---- Account ----
 export const getMe = () => client.get('/account/me').then((r) => r.data);
 export const updateProfile = (data) => client.patch('/account/profile', data).then((r) => r.data);
+export const setAccountPassword = (data) => client.post('/account/password', data).then((r) => r.data);
+export const removeAccountPassword = () => client.delete('/account/password').then((r) => r.data);
 export const addAddress = (data) => client.post('/account/addresses', data).then((r) => r.data);
 export const updateAddress = (id, data) =>
   client.patch(`/account/addresses/${id}`, data).then((r) => r.data);

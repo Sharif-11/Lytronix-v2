@@ -41,6 +41,7 @@ exports.listProducts = async (req, res) => {
     minPrice,
     maxPrice,
     inStock,
+    ids,
     sort = 'newest',
     page = 1,
     limit = 24,
@@ -51,6 +52,17 @@ exports.listProducts = async (req, res) => {
   if (search) filter.$text = { $search: search };
   if (active === 'true') filter.isActive = true;
   if (active === 'false') filter.isActive = false;
+
+  // `ids=a,b,c` — fetch a specific set (used by the guest wishlist, which
+  // keeps only ids in localStorage). Capped so it can't be abused.
+  if (ids) {
+    const list = String(ids)
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => /^[a-f\d]{24}$/i.test(s))
+      .slice(0, 100);
+    filter._id = { $in: list.length ? list : [new mongoose.Types.ObjectId()] };
+  }
 
   if (category) {
     const catId = await resolveCategoryId(category);

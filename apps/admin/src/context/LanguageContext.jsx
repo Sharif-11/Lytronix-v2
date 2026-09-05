@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { translations } from '../i18n/translations';
 
 const LanguageContext = createContext(null);
@@ -33,6 +33,12 @@ export function LanguageProvider({ children }) {
   const toggleLanguage = useCallback(() => {
     setLanguage(language === 'en' ? 'bn' : 'en');
   }, [language, setLanguage]);
+
+  // Reflect the active language on <html> so the browser picks the right
+  // font/line-height for Bangla and screen readers announce it correctly.
+  useEffect(() => {
+    document.documentElement.lang = language === 'bn' ? 'bn' : 'en';
+  }, [language]);
 
   // t('nav.orders') or t('dashboard.inProgress', { n: 3 }) for simple
   // {placeholder} interpolation. Falls back to English, then the raw key —

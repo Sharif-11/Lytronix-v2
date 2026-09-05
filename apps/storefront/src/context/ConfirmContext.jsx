@@ -5,7 +5,7 @@ const ConfirmContext = createContext(null);
 
 /**
  * Promise-based replacement for window.confirm(). Mounted once near the app
- * root; call `const ok = await confirm('মুছে ফেলবেন?')` from any handler.
+ * root; call `const ok = await confirm('ডিলিট করবেন?')` from any handler.
  * Never uses the OS-native confirm dialog.
  */
 export function ConfirmProvider({ children }) {
@@ -51,7 +51,7 @@ export function ConfirmProvider({ children }) {
                   state.danger ? 'bg-ui-rust text-white hover:bg-red-700' : 'bg-ui-brand text-white hover:bg-ui-brandDark'
                 }`}
               >
-                {state.confirmLabel || (state.danger ? 'মুছুন' : 'নিশ্চিত করুন')}
+                {state.confirmLabel || (state.danger ? 'রিমুভ' : 'কনফার্ম করুন')}
               </button>
             </div>
           </div>

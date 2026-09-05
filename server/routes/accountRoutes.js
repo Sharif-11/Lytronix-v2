@@ -10,6 +10,8 @@ router.use(protectCustomer);
 // Profile
 router.get('/me', asyncHandler(ctrl.getMe));
 router.patch('/profile', asyncHandler(ctrl.updateProfile));
+router.post('/password', asyncHandler(ctrl.setPassword));
+router.delete('/password', asyncHandler(ctrl.removePassword));
 
 // Addresses
 router.post('/addresses', asyncHandler(ctrl.addAddress));

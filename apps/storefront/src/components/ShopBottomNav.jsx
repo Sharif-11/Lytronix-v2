@@ -5,7 +5,7 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 
 const TABS = [
   { to: '/shop', label: 'শপ', icon: Home, end: true },
-  { to: '/shop?category=', label: 'বিভাগ', icon: Grid3x3 },
+  { to: '/shop/products', label: 'প্রোডাক্ট', icon: Grid3x3 },
   { to: '/shop/cart', label: 'কার্ট', icon: ShoppingBag, badge: true },
 ];
 
@@ -47,7 +47,7 @@ export default function ShopBottomNav() {
           }
         >
           <User size={20} />
-          {isAuthed ? 'অ্যাকাউন্ট' : 'সাইন ইন'}
+          {isAuthed ? 'অ্যাকাউন্ট' : 'লগইন'}
         </NavLink>
       </div>
     </nav>

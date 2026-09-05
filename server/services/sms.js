@@ -1,9 +1,18 @@
 const axios = require('axios');
+const logger = require('./logger');
 
 const BASE_URL = process.env.SMS_BASE_URL || 'http://bulksmsbd.net/api/smsapi';
 
 function isConfigured() {
   return Boolean(process.env.SMS_API_KEY && process.env.SMS_SENDER_ID);
+}
+
+// Outside production, every send is faked: the message is logged and reported
+// as delivered, but the paid BulkSMSBD gateway is never actually hit — SMS
+// costs money and dev/testing churns through a lot of them. Set SMS_LIVE=true
+// in server/.env to send for real even in dev (e.g. a one-off delivery test).
+function isMocked() {
+  return process.env.NODE_ENV !== 'production' && process.env.SMS_LIVE !== 'true';
 }
 
 // BulkSMSBD wants an 11-digit local number (01XXXXXXXXX). Accepts inputs
@@ -19,6 +28,16 @@ function normalizeBdNumber(raw) {
 // object and decide what to do; a failed SMS should never break the order
 // flow it was triggered from.
 async function sendSms(rawNumber, message) {
+  const number = normalizeBdNumber(rawNumber);
+  if (number.length !== 11) {
+    return { success: false, responseCode: null, raw: null, error: `Invalid BD phone number: "${rawNumber}"` };
+  }
+
+  if (isMocked()) {
+    logger.info(`sms[MOCK — not actually sent] → ${number}: ${message}`);
+    return { success: true, responseCode: 202, raw: { mock: true }, error: '' };
+  }
+
   if (!isConfigured()) {
     return {
       success: false,
@@ -26,11 +45,6 @@ async function sendSms(rawNumber, message) {
       raw: null,
       error: 'SMS gateway not configured (set SMS_API_KEY / SMS_SENDER_ID in server/.env).',
     };
-  }
-
-  const number = normalizeBdNumber(rawNumber);
-  if (number.length !== 11) {
-    return { success: false, responseCode: null, raw: null, error: `Invalid BD phone number: "${rawNumber}"` };
   }
 
   try {
@@ -78,6 +92,17 @@ function chunk(arr, size) {
 async function sendBulkSms(rawNumbers, message) {
   const numbers = [...new Set((rawNumbers || []).map(normalizeBdNumber).filter((n) => n.length === 11))];
   const invalid = (rawNumbers || []).filter((n) => normalizeBdNumber(n).length !== 11);
+
+  if (isMocked()) {
+    logger.info(`sms[MOCK — not actually sent] bulk → ${numbers.length} recipient(s): ${message}`);
+    return {
+      success: numbers.length > 0,
+      sent: numbers,
+      failed: invalid.map((number) => ({ number, error: 'Invalid BD phone number' })),
+      responseCode: 202,
+      error: '',
+    };
+  }
 
   if (!isConfigured()) {
     return {
@@ -154,6 +179,11 @@ const BALANCE_URL = 'http://bulksmsbd.net/api/getBalanceApi';
 // Remaining SMS credit on the BulkSMSBD account (separate from the Steadfast
 // courier balance). Never throws — returns { balance: number|null, raw, error }.
 async function getBalance() {
+  if (isMocked()) {
+    // Keep the admin UI's "SMS credit" chip healthy so sending stays enabled
+    // while testing — no real balance call is made.
+    return { balance: 999999, raw: { mock: true }, error: '' };
+  }
   if (!isConfigured()) {
     return { balance: null, raw: null, error: 'SMS gateway not configured.' };
   }
@@ -175,4 +205,4 @@ async function getBalance() {
   }
 }
 
-module.exports = { sendSms, sendBulkSms, getBalance, isConfigured, normalizeBdNumber };
+module.exports = { sendSms, sendBulkSms, getBalance, isConfigured, isMocked, normalizeBdNumber };

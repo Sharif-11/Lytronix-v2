@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock,
@@ -12,6 +12,7 @@ import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { getSessionId, track } from '../lib/analytics';
+import { copyText } from '../lib/clipboard';
 import { BKASH_MERCHANT_NUMBER } from '../utils/company';
 
 const emptyAddress = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
@@ -120,7 +121,7 @@ export default function Checkout() {
       return;
     }
     if (!a.address?.trim() || !a.zilla?.trim()) {
-      setError('ডেলিভারি ঠিকানা ও জেলা দিন।');
+      setError('ডেলিভারি অ্যাড্রেস ও জেলা দিন।');
       return;
     }
     if (paymentMethod === 'bkash_manual' && (!bkash.senderNumber.trim() || !bkash.transactionId.trim())) {
@@ -208,14 +209,14 @@ export default function Checkout() {
       <h1 className="font-display text-2xl sm:text-3xl text-ui-brand mb-1">চেকআউট</h1>
       <p className="text-sm text-ui-muted mb-6">
         {isAuthed
-          ? 'ডেলিভারি ঠিকানা ও পেমেন্ট পদ্ধতি নিশ্চিত করুন।'
+          ? 'ডেলিভারি অ্যাড্রেস ও পেমেন্ট পদ্ধতি কনফার্ম করুন।'
           : 'গেস্ট হিসেবে অর্ডার করুন, অথবা '}
         {!isAuthed && (
           <Link to={`/shop/login?next=${encodeURIComponent('/shop/checkout')}`} className="text-ui-brand underline">
-            ফোন নম্বর দিয়ে সাইন ইন করুন
+            ফোন নম্বর দিয়ে লগইন করুন
           </Link>
         )}
-        {!isAuthed && ' — অর্ডার ট্র্যাক করতে ও তথ্য সংরক্ষণ করতে।'}
+        {!isAuthed && ' — অর্ডার ট্র্যাক করতে ও তথ্য সেভ করতে।'}
       </p>
 
       {error && (
@@ -248,7 +249,7 @@ export default function Checkout() {
               <span>{formatMoney(deliveryTotal)}</span>
             </div>
             <div className="flex justify-between text-ui-brand font-semibold text-base pt-1">
-              <span>সর্বমোট</span>
+              <span>গ্র্যান্ড টোটাল</span>
               <span>{formatMoney(grandTotal)}</span>
             </div>
           </div>
@@ -297,7 +298,7 @@ export default function Checkout() {
                   onChange={() => setSelectedAddrId('new')}
                 />
                 <span className="text-sm font-medium text-ui-ink inline-flex items-center gap-1.5">
-                  <Plus size={14} /> নতুন ঠিকানা ব্যবহার করুন
+                  <Plus size={14} /> নতুন অ্যাড্রেস ব্যবহার করুন
                 </span>
               </label>
             </div>
@@ -325,7 +326,7 @@ export default function Checkout() {
               </Field>
               <Field label="জেলা" required>
                 <SearchableSelect
-                  placeholder={districts.length ? 'জেলা নির্বাচন করুন…' : 'লোড হচ্ছে…'}
+                  placeholder={districts.length ? 'জেলা সিলেক্ট করুন…' : 'লোড হচ্ছে…'}
                   loading={!districts.length}
                   value={form.zilla}
                   onChange={(v) => setForm({ ...form, zilla: v, thana: '' })}
@@ -334,7 +335,7 @@ export default function Checkout() {
               </Field>
               <Field label="থানা">
                 <SearchableSelect
-                  placeholder="থানা নির্বাচন করুন…"
+                  placeholder="থানা সিলেক্ট করুন…"
                   disabledHint="প্রথমে জেলা বেছে নিন"
                   disabled={!form.zilla}
                   value={form.thana}
@@ -342,7 +343,7 @@ export default function Checkout() {
                   options={thanaOptions.map((ps) => ({ value: ps.name, label: ps.name }))}
                 />
               </Field>
-              <Field label="ডেলিভারি ঠিকানা" full>
+              <Field label="ডেলিভারি অ্যাড্রেস" full>
                 <textarea
                   className="input font-bangla"
                   dir="auto"
@@ -355,14 +356,14 @@ export default function Checkout() {
             </div>
           )}
 
-          <Field label="আর কিছু জানানোর আছে?" full className="mt-4">
+          <Field label="কমেন্টস" full className="mt-4">
             <textarea
               className="input font-bangla"
               dir="auto"
               rows={2}
               value={form.comments}
               onChange={(e) => setForm({ ...form, comments: e.target.value })}
-              placeholder="পছন্দের ডেলিভারি সময়, রঙ, বা কোনো প্রশ্ন…"
+              placeholder="আপনার কোনো কিছু বলার থাকলে বলুন"
             />
           </Field>
         </section>
@@ -373,7 +374,7 @@ export default function Checkout() {
 
           {advanceRequired && (
             <p className="mb-4 rounded-xl border border-ui-gold/40 bg-amber-50 text-ui-gold text-sm px-4 py-3">
-              আপনার কার্টে এমন পণ্য আছে যাতে অগ্রিম পেমেন্ট প্রয়োজন, তাই শুধুমাত্র ক্যাশ অন ডেলিভারিতে অর্ডারটি
+              আপনার কার্টে এমন প্রোডাক্ট আছে যাতে অগ্রিম পেমেন্ট প্রয়োজন, তাই শুধুমাত্র ক্যাশ অন ডেলিভারিতে অর্ডারটি
               সম্পন্ন করা যাচ্ছে না — বিকাশের মাধ্যমে{' '}
               <span className="font-mono font-medium">{formatMoney(advanceInfo.requiredAdvance)}</span> অগ্রিম
               পাঠাতে হবে।
@@ -392,7 +393,7 @@ export default function Checkout() {
             <PaymentOption
               icon={Truck}
               label="ক্যাশ অন ডেলিভারি"
-              sub="পণ্য হাতে পেয়ে পেমেন্ট"
+              sub="প্রোডাক্ট হাতে পেয়ে পেমেন্ট"
               active={paymentMethod === 'cod'}
               onClick={() => setPaymentMethod('cod')}
               disabled={advanceRequired}
@@ -421,7 +422,7 @@ export default function Checkout() {
 
           {paymentMethod === 'cod' && !advanceRequired && (
             <p className="mt-4 pt-4 border-t border-dashed border-ui-line text-sm text-ui-muted">
-              পণ্য হাতে পেয়ে ক্যাশে পেমেন্ট করুন। ডেলিভারিতে পরিশোধযোগ্য মোট টাকা:{' '}
+              প্রোডাক্ট হাতে পেয়ে ক্যাশে পেমেন্ট করুন। ডেলিভারিতে পরিশোধযোগ্য মোট টাকা:{' '}
               <span className="font-mono font-medium text-ui-ink">{formatMoney(grandTotal)}</span>।
             </p>
           )}
@@ -444,16 +445,14 @@ export default function Checkout() {
 }
 
 // A copy-to-clipboard button that briefly shows a checkmark + "কপি হয়েছে".
-function CopyChip({ value }) {
-  const [copied, setCopied] = useState(false);
+// `valueRef` is the element holding the visible text — used as a fallback
+// (select it) when the clipboard API is blocked (http on a phone).
+function CopyChip({ value, valueRef }) {
+  const [state, setState] = useState('idle'); // 'idle' | 'copied' | 'select'
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — ignore */
-    }
+    const ok = await copyText(value, valueRef?.current);
+    setState(ok ? 'copied' : 'select');
+    setTimeout(() => setState('idle'), ok ? 1500 : 2500);
   };
   return (
     <button
@@ -461,8 +460,8 @@ function CopyChip({ value }) {
       onClick={handleCopy}
       className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-white/90 hover:bg-white text-bkash px-2.5 py-1.5 text-xs font-semibold transition-colors"
     >
-      {copied ? <Check size={13} /> : <Copy size={13} />}
-      {copied ? 'কপি হয়েছে' : 'কপি করুন'}
+      {state === 'copied' ? <Check size={13} /> : <Copy size={13} />}
+      {state === 'copied' ? 'কপি হয়েছে' : state === 'select' ? 'সিলেক্ট হয়েছে — কপি করুন' : 'কপি করুন'}
     </button>
   );
 }
@@ -472,6 +471,8 @@ function CopyChip({ value }) {
 // site's own green brand.
 function BkashPanel({ grandTotal, advanceInfo, bkash, setBkash, onProofChange }) {
   const amountToSend = advanceInfo?.requiredAdvance > 0 ? advanceInfo.requiredAdvance : grandTotal;
+  const numRef = useRef(null);
+  const amtRef = useRef(null);
   return (
     <div className="mt-4 rounded-2xl overflow-hidden border border-bkash/30">
       <div className="bg-bkash px-4 py-3 flex items-center justify-between">
@@ -482,7 +483,7 @@ function BkashPanel({ grandTotal, advanceInfo, bkash, setBkash, onProofChange })
       <div className="p-4 sm:p-5 bg-bkash/[0.04] space-y-4">
         <ol className="text-sm text-ui-ink space-y-1.5 list-decimal list-inside">
           <li>আপনার বিকাশ অ্যাপ থেকে <b>Send Money</b> অপশনে যান</li>
-          <li>নিচের নম্বরে সঠিক টাকার পরিমাণ পাঠান</li>
+          <li>নিচের নম্বরে সঠিক টাকার কোয়ান্টিটি পাঠান</li>
           <li>কনফার্মেশন এসএমএস থেকে ট্রানজেকশন আইডি নিচে লিখুন</li>
         </ol>
 
@@ -490,18 +491,18 @@ function BkashPanel({ grandTotal, advanceInfo, bkash, setBkash, onProofChange })
           <div className="rounded-xl bg-bkash text-white p-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-white/70">এই নম্বরে পাঠান</div>
-              <div className="font-mono font-bold text-lg truncate">{BKASH_MERCHANT_NUMBER}</div>
+              <div ref={numRef} className="font-mono font-bold text-lg truncate select-all">{BKASH_MERCHANT_NUMBER}</div>
             </div>
-            <CopyChip value={BKASH_MERCHANT_NUMBER} />
+            <CopyChip value={BKASH_MERCHANT_NUMBER} valueRef={numRef} />
           </div>
           <div className="rounded-xl bg-bkash-dark text-white p-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-white/70">
-                {advanceInfo?.requiredAdvance > 0 ? 'অগ্রিম পাঠাতে হবে' : 'টাকার পরিমাণ'}
+                {advanceInfo?.requiredAdvance > 0 ? 'অগ্রিম পাঠাতে হবে' : 'টাকার কোয়ান্টিটি'}
               </div>
-              <div className="font-mono font-bold text-lg truncate">{formatMoney(amountToSend)}</div>
+              <div ref={amtRef} className="font-mono font-bold text-lg truncate select-all">{formatMoney(amountToSend)}</div>
             </div>
-            <CopyChip value={String(amountToSend)} />
+            <CopyChip value={String(amountToSend)} valueRef={amtRef} />
           </div>
         </div>
 
@@ -560,26 +561,33 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
   const [copied, setCopied] = useState(false);
   const trackingUrl = `${window.location.origin}/track/${order.trackingId}`;
 
-  const handleCopy = async () => {
+  // The order-done screen replaces the form in place (no route change), so
+  // glide back to the top instead of leaving the viewer mid-page.
+  useEffect(() => {
     try {
-      await navigator.clipboard.writeText(trackingUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
-      /* ignore */
+      window.scrollTo(0, 0);
     }
+  }, []);
+
+  const urlRef = useRef(null);
+  const handleCopy = async () => {
+    const ok = await copyText(trackingUrl, urlRef.current);
+    setCopied(true);
+    setTimeout(() => setCopied(false), ok ? 1500 : 2500);
   };
 
   let paymentSummary = {
-    cod: 'ক্যাশ অন ডেলিভারি — পণ্য হাতে পেয়ে পেমেন্ট করুন।',
-    bkash_manual: 'বিকাশ পেমেন্ট গ্রহণ করা হয়েছে — শীঘ্রই যাচাই করা হবে।',
+    cod: 'ক্যাশ অন ডেলিভারি — প্রোডাক্ট হাতে পেয়ে পেমেন্ট করুন।',
+    bkash_manual: 'বিকাশ পেমেন্ট গ্রহণ করা হয়েছে — শীঘ্রই ভেরিফাই করা হবে।',
   }[paymentMethod];
 
   if (paymentMethod === 'bkash_manual' && advanceInfo?.requiredAdvance > 0) {
     paymentSummary =
       advanceInfo.codRemainder > 0
-        ? `বিকাশে ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, যাচাইয়ের অপেক্ষায় — বাকি ${formatMoney(advanceInfo.codRemainder)} ডেলিভারিতে ক্যাশে দিতে হবে।`
-        : `বিকাশে সম্পূর্ণ ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, যাচাইয়ের অপেক্ষায় — ডেলিভারিতে আর কোনো টাকা লাগবে না।`;
+        ? `বিকাশে ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — বাকি ${formatMoney(advanceInfo.codRemainder)} ডেলিভারিতে ক্যাশে দিতে হবে।`
+        : `বিকাশে সম্পূর্ণ ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — ডেলিভারিতে আর কোনো টাকা লাগবে না।`;
   }
 
   return (
@@ -589,11 +597,18 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
           <CheckCircle2 size={30} />
         </div>
         <h1 className="font-display text-2xl sm:text-3xl text-ui-brand mb-2">অর্ডার সম্পন্ন হয়েছে!</h1>
-        <p className="text-sm text-ui-muted mb-6">
-          ধন্যবাদ, {order.customer?.name?.split(' ')[0] || 'প্রিয় গ্রাহক'} — আপনার অর্ডার পেয়েছি এবং
-          নিশ্চিত করতে <span className="font-medium text-ui-ink">{order.customer?.phone}</span> নম্বরে
+        <p className="text-sm text-ui-muted mb-4">
+          ধন্যবাদ, {order.customer?.name?.split(' ')[0] || 'প্রিয় কাস্টমার'} — আপনার অর্ডার পেয়েছি এবং
+          কনফার্ম করতে <span className="font-medium text-ui-ink">{order.customer?.phone}</span> নম্বরে
           যোগাযোগ করা হবে।
         </p>
+        {!isAuthed && (
+          <p className="text-xs bg-ui-brand/10 border border-ui-brand/30 text-ui-brand rounded-lg px-3 py-2 mb-6 font-bangla">
+            আপনার জন্য একটি অ্যাকাউন্ট তৈরি করা হয়েছে — লগইন পাসওয়ার্ড{' '}
+            <span className="font-medium">{order.customer?.phone}</span> নম্বরে এসএমএসে পাঠানো হয়েছে।
+            ফোন ও পাসওয়ার্ড দিয়ে লগইন করে অর্ডার ট্র্যাক করুন।
+          </p>
+        )}
 
         <div className="card p-5 text-left mb-6">
           <div className="flex justify-between text-sm mb-1">
@@ -601,7 +616,7 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
             <span className="font-mono font-medium">{order.orderNumber}</span>
           </div>
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-ui-muted">সর্বমোট</span>
+            <span className="text-ui-muted">গ্র্যান্ড টোটাল</span>
             <span className="font-mono font-medium">{formatMoney(order.pricing?.grandTotal)}</span>
           </div>
           {paymentSummary && (
@@ -613,7 +628,10 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
           <div className="border-t border-dashed border-ui-line pt-3">
             <div className="text-xs uppercase tracking-wide text-ui-muted mb-1.5">এই অর্ডার ট্র্যাক করুন</div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs font-mono bg-ui-surfaceAlt border border-ui-line rounded-lg px-2.5 py-2 truncate">
+              <code
+                ref={urlRef}
+                className="flex-1 text-xs font-mono bg-ui-surfaceAlt border border-ui-line rounded-lg px-2.5 py-2 truncate select-all"
+              >
                 {trackingUrl}
               </code>
               <button type="button" onClick={handleCopy} className="btn-secondary px-2.5 py-2 shrink-0" aria-label="কপি করুন">
@@ -630,7 +648,7 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
             </Link>
           ) : (
             <Link to={`/track/${order.trackingId}`} className="btn-primary">
-              অবস্থা দেখুন
+              স্ট্যাটাস দেখুন
             </Link>
           )}
           <Link to="/shop" className="btn-secondary">

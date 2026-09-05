@@ -4,12 +4,17 @@ import {
   MessageCircle, Phone, Instagram, Facebook, PhoneCall, MessageSquareText,
   MoreHorizontal, X, Plus,
 } from 'lucide-react';
-import { getCustomer, createCustomer, updateCustomer, getPoliceStations } from '../api/client';
+import {
+  getCustomer, createCustomer, updateCustomer, getPoliceStations,
+  getOtpStatus, resetOtpLimit,
+} from '../api/client';
 import RichTextEditor from '../components/RichTextEditor';
 import SearchableSelect from '../components/SearchableSelect';
 import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import { emitError } from '../lib/errorBus';
+import { useConfirm } from '../context/ConfirmContext';
+import { KeyRound, RotateCcw, Loader2 } from 'lucide-react';
 
 const empty = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '', channels: [], priority: 'medium', tags: [] };
 
@@ -297,6 +302,93 @@ export default function CustomerForm() {
           <button disabled={saving} className="btn-primary">{saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save customer'}</button>
         </div>
       </form>
+
+      {isEdit && /^01\d{9}$/.test((form.phone || '').replace(/\D/g, '')) && (
+        <OtpLimitCard phone={form.phone.replace(/\D/g, '')} />
+      )}
+    </div>
+  );
+}
+
+function OtpLimitCard({ phone }) {
+  const confirm = useConfirm();
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    getOtpStatus(phone)
+      .then(setStatus)
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, [phone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleReset = async () => {
+    if (!(await confirm(`Reset the login-OTP limit for ${phone}? They'll be able to request codes again immediately.`, { confirmLabel: 'Reset' }))) return;
+    setResetting(true);
+    try {
+      await resetOtpLimit(phone);
+      load();
+    } catch {
+      // Surfaced globally via the ErrorModal.
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const blockedFor = status?.blockedUntil
+    ? Math.max(1, Math.ceil((new Date(status.blockedUntil).getTime() - Date.now()) / 3600000))
+    : 0;
+
+  return (
+    <div className="mt-4 bg-ui-panel border border-ui-line rounded-xl shadow-card p-4 sm:p-5">
+      <h2 className="font-display text-base text-ui-ink flex items-center gap-2 mb-1">
+        <KeyRound size={16} className="text-ui-brand" /> Login OTP limit
+      </h2>
+      <p className="text-xs text-ui-muted mb-3">
+        SMS costs money, so login codes to this number are capped. Reset here if the customer is genuinely locked out.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-ui-muted inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking…</p>
+      ) : !status ? (
+        <p className="text-sm text-ui-muted">Couldn't load OTP status.</p>
+      ) : !status.exists ? (
+        <p className="text-sm text-ui-muted">No OTP activity for this number yet.</p>
+      ) : (
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-ui-muted">Requested today</span>
+            <span className={`font-mono ${status.sentToday >= status.maxPerDay ? 'text-ui-rust font-semibold' : 'text-ui-ink'}`}>
+              {status.sentToday} / {status.maxPerDay}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ui-muted">Lifetime</span>
+            <span className={`font-mono ${status.lifetimeExhausted ? 'text-ui-rust font-semibold' : 'text-ui-ink'}`}>
+              {status.lifetimeCount} / {status.maxLifetime}
+            </span>
+          </div>
+          {blockedFor > 0 && (
+            <p className="text-xs text-ui-rust">Throttled — no new codes for ~{blockedFor}h.</p>
+          )}
+          {status.lifetimeExhausted && (
+            <p className="text-xs text-ui-rust">Lifetime limit reached — only a reset frees this number.</p>
+          )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleReset}
+        disabled={resetting || loading}
+        className="btn-secondary text-sm gap-1.5 mt-3"
+      >
+        {resetting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+        Reset OTP limit
+      </button>
     </div>
   );
 }

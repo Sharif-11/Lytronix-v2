@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, MessageCircle, ShieldCheck, Truck, Banknote } from 'lucide-react';
-import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, COMPANY_WHATSAPP } from '../utils/company';
+import { Phone, Mail, MapPin, MessageCircle, ShieldCheck, Truck, Banknote, Navigation } from 'lucide-react';
+import {
+  COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, COMPANY_WHATSAPP,
+  COMPANY_MAPS_URL, COMPANY_MAPS_EMBED_URL,
+} from '../utils/company';
 import logo from '../assets/lytronix-logo.png';
 
 export default function Footer() {
@@ -10,7 +13,7 @@ export default function Footer() {
       <div className="bg-ui-brand/[0.04] border-b border-ui-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap justify-center sm:justify-between gap-x-8 gap-y-2 text-xs sm:text-sm text-ui-ink">
           <span className="inline-flex items-center gap-2">
-            <ShieldCheck size={15} className="text-ui-brand" /> ১০০% আসল পণ্যের নিশ্চয়তা
+            <ShieldCheck size={15} className="text-ui-brand" /> ১০০% আসল প্রোডাক্টের নিশ্চয়তা
           </span>
           <span className="inline-flex items-center gap-2">
             <Truck size={15} className="text-ui-brand" /> সারা বাংলাদেশে হোম ডেলিভারি
@@ -26,15 +29,16 @@ export default function Footer() {
           <div>
             <img src={logo} alt={COMPANY_NAME} className="h-8 w-auto mb-3" />
             <p className="text-sm text-ui-muted leading-relaxed max-w-xs">
-              পাওয়ার ব্যাংক, চার্জার, ব্যাটারি ও এক্সেসরিজ — সম্পূর্ণ আসল পণ্য, ক্যাশ অন ডেলিভারিসহ সারা
-              বাংলাদেশে ডেলিভারি সুবিধা।
+              আইপিএস ও ইউপিএস-এর জন্য BMS এবং লিথিয়াম ব্যাটারি সেল ও প্যাক — আসল প্রোডাক্ট, ক্যাশ অন
+              ডেলিভারিসহ সারা বাংলাদেশে ডেলিভারি।
             </p>
           </div>
 
           <FooterColumn title="শপিং">
-            <FooterLink to="/shop">সকল পণ্য</FooterLink>
+            <FooterLink to="/shop/products">সকল প্রোডাক্ট</FooterLink>
+            <FooterLink to="/shop/saved">পছন্দের প্রোডাক্ট</FooterLink>
             <FooterLink to="/shop/cart">কার্ট</FooterLink>
-            <FooterLink to="/shop/login">সাইন ইন</FooterLink>
+            <FooterLink to="/shop/login">লগইন</FooterLink>
           </FooterColumn>
 
           <FooterColumn title="কোম্পানি">
@@ -60,7 +64,31 @@ export default function Footer() {
             <span className="flex items-start gap-2 text-sm text-ui-muted font-bangla" dir="auto">
               <MapPin size={14} className="shrink-0 mt-0.5" /> {COMPANY_ADDRESS}
             </span>
+            <a
+              href={COMPANY_MAPS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-medium text-ui-brand hover:underline"
+            >
+              <Navigation size={14} /> Google Maps-এ ডিরেকশন
+            </a>
           </FooterColumn>
+        </div>
+
+        {/* Embedded location map */}
+        <div className="mt-10">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ui-faint mb-3">আমাদের অবস্থান</h3>
+          <div className="rounded-2xl overflow-hidden border border-ui-line">
+            <iframe
+              title={`${COMPANY_NAME} — Google Maps`}
+              src={COMPANY_MAPS_EMBED_URL}
+              className="w-full h-56 sm:h-72"
+              style={{ border: 0 }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-10 pt-6 border-t border-ui-line">

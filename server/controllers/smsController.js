@@ -28,13 +28,16 @@ exports.listSmsLogs = async (req, res) => {
 };
 
 // GET /api/sms-logs/balance — remaining BulkSMSBD credit (for the Marketing page).
+// `mocked: true` means SMS is being simulated (dev mode) — the balance is a
+// stand-in and no real messages go out. The admin UI badges this.
 exports.getSmsBalance = async (req, res) => {
-  if (!sms.isConfigured()) {
+  const mocked = sms.isMocked();
+  if (!mocked && !sms.isConfigured()) {
     return res.status(400).json({ message: 'SMS gateway is not configured.' });
   }
   const result = await sms.getBalance();
   if (result.balance === null) {
     return res.status(502).json({ message: result.error || 'Could not fetch SMS balance.' });
   }
-  res.json({ balance: result.balance });
+  res.json({ balance: result.balance, mocked });
 };

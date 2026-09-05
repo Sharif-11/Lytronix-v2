@@ -16,7 +16,7 @@ import { ChevronDown, Search, Check, X } from 'lucide-react';
  */
 export default function SearchableSelect({
   label,
-  placeholder = 'নির্বাচন করুন…',
+  placeholder = 'সিলেক্ট করুন…',
   value,
   onChange,
   options,
@@ -25,7 +25,7 @@ export default function SearchableSelect({
   disabledHint,
   required = false,
   clearable = true,
-  searchPlaceholder = 'খুঁজুন…',
+  searchPlaceholder = 'সার্চ করুন…',
   noMatchLabel = 'কোনো ফলাফল নেই।',
   className = '',
 }) {

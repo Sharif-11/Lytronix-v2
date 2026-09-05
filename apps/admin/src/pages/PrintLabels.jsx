@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getOrder, getSteadfastMeta } from '../api/client';
-import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, labelPageCss } from '../components/LabelSlip';
+import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, MERCHANT_ID, labelPageCss } from '../components/LabelSlip';
 
 const LS_LAST_SIZE = 'lytronix:lastLabelSize';
+const validSize = (k) => (LABEL_SIZES[k] ? k : null);
 
 /**
  * Bulk courier-label printing. Fetches each selected order and renders one
@@ -16,14 +17,16 @@ const LS_LAST_SIZE = 'lytronix:lastLabelSize';
 export default function PrintLabels() {
   const [searchParams] = useSearchParams();
   const ids = (searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const [sizeKey, setSizeKey] = useState(() => searchParams.get('size') || localStorage.getItem(LS_LAST_SIZE) || DEFAULT_LABEL_SIZE);
+  const [sizeKey, setSizeKey] = useState(
+    () => validSize(searchParams.get('size')) || validSize(localStorage.getItem(LS_LAST_SIZE)) || DEFAULT_LABEL_SIZE
+  );
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState([]);
-  const [merchantId, setMerchantId] = useState('');
+  const [merchantId, setMerchantId] = useState(MERCHANT_ID);
 
   useEffect(() => {
-    getSteadfastMeta().then((m) => setMerchantId(m.merchantId || '')).catch(() => {});
+    getSteadfastMeta().then((m) => setMerchantId(m.merchantId || MERCHANT_ID)).catch(() => {});
   }, []);
 
   useEffect(() => {

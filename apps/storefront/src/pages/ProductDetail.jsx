@@ -49,7 +49,7 @@ export default function ProductDetail() {
             .catch(() => {});
         }
       })
-      .catch(() => setError('এই পণ্যটি খুঁজে পাওয়া যায়নি।'));
+      .catch(() => setError('এই প্রোডাক্টটি খুঁজে পাওয়া যায়নি।'));
   }, [slug]);
 
   if (error) {
@@ -85,10 +85,7 @@ export default function ProductDetail() {
   };
 
   const handleSave = async () => {
-    if (!isAuthed) {
-      navigate(`/shop/login?next=${encodeURIComponent(window.location.pathname)}`);
-      return;
-    }
+    // Guests can save too — kept in localStorage, merged on sign-in.
     await toggleSaved(product._id);
   };
 
@@ -219,11 +216,11 @@ export default function ProductDetail() {
             className="mt-3 inline-flex items-center gap-2 text-sm text-ui-muted hover:text-ui-rust"
           >
             <Heart size={16} className={saved ? 'fill-ui-rust text-ui-rust' : ''} />
-            {saved ? 'পছন্দের তালিকায় আছে' : 'পরে কেনার জন্য সংরক্ষণ করুন'}
+            {saved ? 'পছন্দের তালিকায় আছে' : 'পরে কেনার জন্য সেভ করুন'}
           </button>
 
           <div className="mt-6 pt-5 border-t border-dashed border-ui-line grid grid-cols-3 gap-2 text-center">
-            <TrustItem icon={ShieldCheck} label="আসল পণ্য" />
+            <TrustItem icon={ShieldCheck} label="আসল প্রোডাক্ট" />
             <TrustItem icon={Truck} label="দ্রুত ডেলিভারি" />
             <TrustItem icon={Banknote} label={codAllowed ? 'ক্যাশ অন ডেলিভারি' : 'নিরাপদ অগ্রিম পেমেন্ট'} />
           </div>
@@ -232,7 +229,7 @@ export default function ProductDetail() {
 
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="font-display text-xl text-ui-ink mb-4">এই ক্যাটাগরিতে আরও পণ্য</h2>
+          <h2 className="font-display text-xl text-ui-ink mb-4">এই ক্যাটাগরিতে আরও প্রোডাক্ট</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {related.map((p) => (
               <ProductCard key={p._id} product={p} />

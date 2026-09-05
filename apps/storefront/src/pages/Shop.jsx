@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck, Truck, Banknote, RotateCcw, ArrowRight, Search, HeartHandshake, Zap,
 } from 'lucide-react';
 import Catalogue from '../components/Catalogue';
+import FeaturedStrip from '../components/FeaturedStrip';
 import { getCategories } from '../api/client';
 import { COMPANY_NAME, COMPANY_TAGLINE_BN } from '../utils/company';
 
 const BADGES = [
-  { icon: ShieldCheck, label: '১০০% আসল পণ্য' },
+  { icon: ShieldCheck, label: '১০০% আসল প্রোডাক্ট' },
   { icon: Banknote, label: 'ক্যাশ অন ডেলিভারি' },
   { icon: Truck, label: 'দ্রুত ডেলিভারি' },
   { icon: RotateCcw, label: 'সহজ রিটার্ন' },
@@ -17,8 +18,8 @@ const BADGES = [
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'নিশ্চিত আসল পণ্য',
-    body: 'প্রতিটি পণ্য যাচাই করে তালিকাভুক্ত করা হয় — কোনো নকল নয়।',
+    title: 'নিশ্চিত আসল প্রোডাক্ট',
+    body: 'প্রতিটি প্রোডাক্ট ভেরিফাই করে তালিকাভুক্ত করা হয় — কোনো নকল নয়।',
   },
   {
     icon: Zap,
@@ -38,7 +39,8 @@ const FEATURES = [
 ];
 
 export default function Shop() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
   const hasQuery = params.get('q') || params.get('category');
   const [categories, setCategories] = useState([]);
   const [heroQ, setHeroQ] = useState('');
@@ -49,7 +51,7 @@ export default function Shop() {
 
   const submitHeroSearch = (e) => {
     e.preventDefault();
-    if (heroQ.trim()) setParams({ q: heroQ.trim() });
+    if (heroQ.trim()) navigate(`/shop/products?q=${encodeURIComponent(heroQ.trim())}`);
   };
 
   return (
@@ -68,21 +70,20 @@ export default function Shop() {
                 {COMPANY_TAGLINE_BN}
               </h1>
               <p className="mt-4 text-white/70 max-w-xl mx-auto text-sm sm:text-base">
-                পাওয়ার ব্যাংক, চার্জার, ব্যাটারি ও এক্সেসরিজ — অনলাইনে অর্ডার করুন, ক্যাশ অন ডেলিভারি বা
-                বিকাশে পেমেন্ট করুন। ফোন নম্বর দিয়ে সাইন ইন করে অর্ডার ট্র্যাক করুন ও পছন্দের পণ্য সংরক্ষণ
-                করুন।
+                BMS (ব্যাটারি ম্যানেজমেন্ট সিস্টেম), লিথিয়াম ব্যাটারি সেল ও প্যাক — আইপিএস, ইউপিএস ও
+                সোলার সিস্টেমের জন্য। অনলাইনে অর্ডার করুন, ক্যাশ অন ডেলিভারি বা বিকাশে পেমেন্ট করুন।
               </p>
 
               <form onSubmit={submitHeroSearch} className="mt-7 max-w-lg mx-auto relative">
                 <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-ui-muted" />
                 <input
                   className="w-full rounded-2xl border-0 pl-11 pr-28 py-3.5 text-sm text-ui-ink placeholder:text-ui-faint shadow-floating outline-none ring-2 ring-transparent focus:ring-accent-lime/60 transition-shadow"
-                  placeholder="যে পণ্যটি খুঁজছেন তা লিখুন…"
+                  placeholder="যে প্রোডাক্টটি সার্চ করছেন তা লিখুন…"
                   value={heroQ}
                   onChange={(e) => setHeroQ(e.target.value)}
                 />
                 <button type="submit" className="absolute right-1.5 top-1.5 bottom-1.5 btn-primary px-4">
-                  খুঁজুন
+                  সার্চ করুন
                 </button>
               </form>
 
@@ -129,6 +130,10 @@ export default function Shop() {
             </section>
           )}
 
+          {/* Pull attention straight to products before the full grid */}
+          <FeaturedStrip title="জনপ্রিয় এখন" sort="popular" />
+          <FeaturedStrip title="নতুন এসেছে" sort="newest" />
+
           {/* Why shop with us */}
           <section className="bg-ui-surfaceAlt border-y border-ui-line">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
@@ -150,7 +155,7 @@ export default function Shop() {
           </section>
 
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <h2 className="font-display text-lg sm:text-xl text-ui-ink pt-8">সকল পণ্য</h2>
+            <h2 className="font-display text-lg sm:text-xl text-ui-ink pt-8">সকল প্রোডাক্ট</h2>
           </div>
         </>
       )}

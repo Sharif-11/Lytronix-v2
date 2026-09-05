@@ -320,12 +320,13 @@ export default function OrderForm() {
                 onBlur={addressPhonetic.onBlur}
               />
             </Field>
-            <Field label="Comments" full>
+            <Field label="কমেন্টস" full>
               <textarea
                 className="input font-bangla"
                 dir="auto"
                 lang="bn"
                 rows={2}
+                placeholder="আপনার কোনো কিছু বলার থাকলে বলুন"
                 value={customer.comments}
                 onChange={(e) => setCustomer({ ...customer, comments: e.target.value })}
                 onKeyDown={commentsPhonetic.onKeyDown}

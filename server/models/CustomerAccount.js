@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
-// A storefront customer login. Phone-only auth (OTP) — no password. This is
-// deliberately separate from the admin-side `Customer` rolodex model: this one
-// is owned by the customer, that one is an internal notebook. They're linked
-// by phone number (the order controller upserts the rolodex on checkout).
+// A storefront customer login. Phone is the identity; sign-in is either a
+// one-time OTP or an optional password the customer sets to skip OTP on
+// future logins. Sessions are a short access token + a long refresh token;
+// bumping `tokenVersion` invalidates every issued token (used on password
+// change / reset / block). Deliberately separate from the admin-side
+// `Customer` rolodex model — linked by phone number.
 const addressSchema = new mongoose.Schema(
   {
     label: { type: String, trim: true, default: 'Home' }, // "Home", "Office", ...
@@ -29,6 +32,20 @@ const customerAccountSchema = new mongoose.Schema(
     name: { type: String, trim: true, default: '' },
     addresses: { type: [addressSchema], default: [] },
 
+    // Optional password so the customer can log in without an OTP each time.
+    // `tempPassword` marks an auto-generated one (guest-checkout / forgot
+    // password) so the UI can nudge them to pick their own.
+    passwordHash: { type: String, default: '', select: false },
+    tempPassword: { type: Boolean, default: false },
+
+    // Bump to invalidate every access/refresh token already issued.
+    tokenVersion: { type: Number, default: 0 },
+
+    // forgot-password throttle (SMS costs money)
+    lastPasswordResetAt: { type: Date, default: null },
+    passwordResetCount: { type: Number, default: 0 },
+    passwordResetWindowStartedAt: { type: Date, default: null },
+
     isActive: { type: Boolean, default: true },
     isBlocked: { type: Boolean, default: false },
     lastLoginAt: { type: Date, default: null },
@@ -39,6 +56,29 @@ const customerAccountSchema = new mongoose.Schema(
 customerAccountSchema.virtual('profileComplete').get(function profileCompleteVirtual() {
   return Boolean(this.name && this.addresses && this.addresses.length > 0);
 });
+
+customerAccountSchema.virtual('hasPassword').get(function hasPasswordVirtual() {
+  return Boolean(this.passwordHash);
+});
+
+// A 6-digit numeric password, first digit never 0 — used for the
+// auto-generated guest-checkout and forgot-password passwords.
+customerAccountSchema.statics.generateNumericPassword = function generateNumericPassword() {
+  const first = 1 + Math.floor(Math.random() * 9);
+  let rest = '';
+  for (let i = 0; i < 5; i += 1) rest += Math.floor(Math.random() * 10);
+  return `${first}${rest}`;
+};
+
+customerAccountSchema.methods.setPassword = async function setPassword(plain, { temp = false } = {}) {
+  this.passwordHash = await bcrypt.hash(String(plain), 10);
+  this.tempPassword = temp;
+};
+
+customerAccountSchema.methods.comparePassword = function comparePassword(plain) {
+  if (!this.passwordHash) return Promise.resolve(false);
+  return bcrypt.compare(String(plain), this.passwordHash);
+};
 
 customerAccountSchema.virtual('defaultAddress').get(function defaultAddressVirtual() {
   if (!this.addresses || this.addresses.length === 0) return null;
@@ -54,6 +94,8 @@ customerAccountSchema.methods.toSafeJSON = function toSafeJSON() {
     addresses: this.addresses,
     profileComplete: this.profileComplete,
     defaultAddress: this.defaultAddress,
+    hasPassword: this.hasPassword,
+    tempPassword: this.tempPassword,
     createdAt: this.createdAt,
     lastLoginAt: this.lastLoginAt,
   };

@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getOrder, getSteadfastMeta } from '../api/client';
-import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, labelPageCss } from '../components/LabelSlip';
+import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, MERCHANT_ID, labelPageCss } from '../components/LabelSlip';
 
 const LS_LAST_SIZE = 'lytronix:lastLabelSize';
+const initialSize = () => {
+  const stored = localStorage.getItem(LS_LAST_SIZE);
+  return LABEL_SIZES[stored] ? stored : DEFAULT_LABEL_SIZE;
+};
 
 export default function PrintParcel() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
-  const [merchantId, setMerchantId] = useState('');
-  const [sizeKey, setSizeKey] = useState(() => localStorage.getItem(LS_LAST_SIZE) || DEFAULT_LABEL_SIZE);
+  const [merchantId, setMerchantId] = useState(MERCHANT_ID);
+  const [sizeKey, setSizeKey] = useState(initialSize);
 
   useEffect(() => {
     getOrder(id).then(setOrder);
-    getSteadfastMeta().then((m) => setMerchantId(m.merchantId || '')).catch(() => {});
+    getSteadfastMeta().then((m) => setMerchantId(m.merchantId || MERCHANT_ID)).catch(() => {});
   }, [id]);
 
   useEffect(() => {

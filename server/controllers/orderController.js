@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Payment = require('../models/Payment');
 const Customer = require('../models/Customer');
+const CustomerAccount = require('../models/CustomerAccount');
 const steadfast = require('../services/steadfast');
 const notifications = require('../services/notifications');
 const notificationCenter = require('../services/notificationCenter');
@@ -10,6 +11,41 @@ const ai = require('../services/ai');
 const logger = require('../services/logger');
 const { mapSteadfastStatus } = require('../utils/steadfastStatusMap');
 const { computeOrderAdvance } = require('../utils/paymentPolicy');
+const { transactionIdTakenBy } = require('../utils/transactionId');
+
+// Guest checkout auto-creates a storefront account (name + phone) so the
+// customer can sign in and track the order later. A brand-new account also
+// gets a random 6-digit password (first digit non-zero) texted to it, so no
+// OTP is needed for that first sign-in. Returns the account to link to the
+// order, or null on failure (checkout must not break over this).
+async function ensureCheckoutAccount(reqCustomer, customer) {
+  if (reqCustomer) return reqCustomer; // already signed in
+  const phone = String(customer?.phone || '').trim();
+  if (!/^01\d{9}$/.test(phone.replace(/\D/g, ''))) return null;
+
+  try {
+    let account = await CustomerAccount.findOne({ phone });
+    if (account) {
+      if (customer.name && !account.name) {
+        account.name = customer.name;
+        await account.save();
+      }
+      return account;
+    }
+    account = new CustomerAccount({ phone, name: customer.name || '', phoneVerified: false });
+    const password = CustomerAccount.generateNumericPassword();
+    await account.setPassword(password, { temp: true });
+    await account.save();
+    notifications
+      .notifyCustomerNewAccountPassword(phone, password)
+      .catch((err) => logger.error('notifyCustomerNewAccountPassword failed', { error: err.message }));
+    logger.info('account: auto-created at guest checkout', { phoneLast4: phone.slice(-4) });
+    return account;
+  } catch (err) {
+    logger.error('ensureCheckoutAccount failed', { error: err.message });
+    return null;
+  }
+}
 
 // Keep the admin-side Customer rolodex populated from every checkout, and —
 // for a signed-in shopper — make sure the address they just used is saved to
@@ -35,21 +71,38 @@ async function syncCustomerRecords(order, account) {
     logger.error('rolodex upsert failed', { error: err.message });
   }
 
-  if (account && c.address) {
+  // Save the checkout address to the customer's account: as the DEFAULT
+  // address if they have none yet, otherwise as an extra address. Skipped
+  // only when that exact address is already on file.
+  if (account && (c.address || '').trim()) {
     try {
-      const exists = (account.addresses || []).some(
-        (a) => a.address === c.address && a.zilla === c.zilla
+      const norm = (v) => (v || '').trim().toLowerCase();
+      const addrs = account.addresses || [];
+      const already = addrs.some(
+        (a) =>
+          norm(a.address) === norm(c.address) &&
+          norm(a.policeStation) === norm(c.thana) &&
+          norm(a.zilla) === norm(c.zilla)
       );
-      if (!exists) {
+
+      if (!already) {
+        const isFirst = addrs.length === 0;
         account.addresses.push({
-          label: account.addresses.length ? 'Other' : 'Home',
+          label: isFirst ? 'Home' : `Address ${addrs.length + 1}`,
+          name: norm(c.name) && norm(c.name) !== norm(account.name) ? c.name : '',
+          phone: norm(c.phone) && norm(c.phone) !== norm(account.phone) ? c.phone : '',
           zilla: c.zilla || '',
           policeStation: c.thana || '',
           address: c.address || '',
-          isDefault: account.addresses.length === 0,
+          isDefault: isFirst,
         });
         if (!account.name && c.name) account.name = c.name;
         await account.save();
+        logger.info('account: checkout address saved', {
+          phoneLast4: (account.phone || '').slice(-4),
+          asDefault: isFirst,
+          totalAddresses: account.addresses.length,
+        });
       }
     } catch (err) {
       logger.error('account address sync failed', { error: err.message });
@@ -222,6 +275,13 @@ exports.createOrder = async (req, res) => {
         message: 'For bKash payments, please include the sender number and the transaction ID from your SMS.',
       });
     }
+    // A transaction id belongs to exactly one payment, app-wide.
+    const takenBy = await transactionIdTakenBy(paymentDetails.transactionId);
+    if (takenBy) {
+      return res.status(409).json({
+        message: 'এই ট্রান্সেকশন আইডি ইতিমধ্যে ব্যবহৃত হয়েছে। আপনার এসএমএস থেকে সঠিক আইডিটি দিন।',
+      });
+    }
   }
 
   // Enforce each catalogue product's payment policy (some items can't be
@@ -275,6 +335,11 @@ exports.createOrder = async (req, res) => {
     ? 'unverified'
     : 'pending';
 
+  // Guest checkout → find or auto-create the customer's storefront account
+  // (and text them a login password if it's brand new). Admin-created orders
+  // never get an account attached this way.
+  const checkoutAccount = isAdminCreated ? null : await ensureCheckoutAccount(req.customer, customer);
+
   let order;
   try {
     order = await Order.create({
@@ -286,7 +351,7 @@ exports.createOrder = async (req, res) => {
       source,
       createdBy,
       weightKg: weightKg !== undefined ? weightKg : undefined,
-      customerAccount: req.customer ? req.customer._id : null,
+      customerAccount: checkoutAccount ? checkoutAccount._id : null,
     });
   } catch (err) {
     await Promise.all(
@@ -344,10 +409,15 @@ exports.createOrder = async (req, res) => {
     value: order.pricing.grandTotal,
   });
 
-  // Keep the rolodex + the shopper's saved addresses current.
-  syncCustomerRecords(order, req.customer).catch((err) =>
-    logger.error('syncCustomerRecords failed', { error: err.message })
-  );
+  // Keep the rolodex + the shopper's saved addresses current (uses the
+  // signed-in or auto-created account so a repeat order skips re-entry).
+  // Awaited so the address is on the account by the time the storefront
+  // refetches the profile after checkout — but never fatal to the order.
+  try {
+    await syncCustomerRecords(order, checkoutAccount);
+  } catch (err) {
+    logger.error('syncCustomerRecords failed', { error: err.message });
+  }
 
   // Admin notification bar. A storefront checkout is the "new customer
   // order" the admin wants to hear about, with a sound on the client. Orders
@@ -453,7 +523,30 @@ exports.addPayment = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Order not found' });
 
+  // Transaction IDs are unique app-wide — reject one already logged anywhere.
+  if (req.body.transactionId) {
+    const takenBy = await transactionIdTakenBy(req.body.transactionId, { exceptOrderId: order._id });
+    const dupOnThisOrder = (order.payments || []).some(
+      (p) => (p.transactionId || '').trim() === String(req.body.transactionId).trim()
+    );
+    if (takenBy || dupOnThisOrder) {
+      return res.status(409).json({
+        message: 'This transaction ID is already recorded on a payment. Each payment needs a unique transaction ID.',
+      });
+    }
+  }
+
   order.payments.push(req.body);
+
+  // Logging a payment against an order that's still waiting on payment
+  // verification confirms it — move it forward to "pending", the same
+  // transition the Payments review queue makes when an admin verifies
+  // there (see paymentController.mirrorIntoOrderLedger).
+  if (order.status.trim().toLowerCase() === 'unverified') {
+    order.status = 'pending';
+    order.statusHistory.push({ status: 'pending', note: 'Payment received / verified.', at: new Date() });
+  }
+
   await order.save();
 
   // If there's a still-pending COD/automated Payment record for this order,

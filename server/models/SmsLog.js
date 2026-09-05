@@ -12,6 +12,8 @@ const smsLogSchema = new mongoose.Schema(
         'customer_consignment_booked',
         'customer_delivered',
         'customer_otp',
+        'customer_account_created',
+        'customer_password_reset',
         'admin_password_reset',
         'marketing',
         'admin_manual',

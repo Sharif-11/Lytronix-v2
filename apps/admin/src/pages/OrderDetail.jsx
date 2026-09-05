@@ -18,6 +18,7 @@ import CourierTracker from '../components/CourierTracker';
 import SuggestInput from '../components/SuggestInput';
 import { useConfirm } from '../context/ConfirmContext';
 import { emitError } from '../lib/errorBus';
+import useSmsBalance from '../lib/useSmsBalance';
 import { formatMoney, formatDate } from '../utils/format';
 import { Printer, Pencil, Trash2, Copy, ExternalLink, MessageSquare, Send, Loader2 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const sms = useSmsBalance();
   const [order, setOrder] = useState(null);
   const [statuses, setStatuses] = useState([]);
   const [newStatus, setNewStatus] = useState('');
@@ -176,6 +178,14 @@ export default function OrderDetail() {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageText.trim()) return;
+    if (sms.unavailable) {
+      emitError(
+        sms.depleted
+          ? 'SMS credit is 0 — top up the gateway account before sending.'
+          : 'SMS balance is unavailable right now — cannot send. Try again shortly.'
+      );
+      return;
+    }
     setSendingMessage(true);
     setMessageSent(false);
     try {
@@ -395,7 +405,7 @@ export default function OrderDetail() {
                 <div className="flex items-center gap-2">
                   {messageSent && <span className="text-xs text-ui-brand">Sent ✓</span>}
                   <button
-                    disabled={sendingMessage || !messageText.trim()}
+                    disabled={sendingMessage || !messageText.trim() || sms.unavailable}
                     className="btn-secondary text-xs gap-1.5 py-1.5"
                   >
                     {sendingMessage ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
@@ -403,6 +413,18 @@ export default function OrderDetail() {
                   </button>
                 </div>
               </div>
+              {sms.mocked && (
+                <p className="text-[11px] font-medium text-amber-800 bg-amber-100 border border-amber-300 rounded-md px-2 py-1">
+                  SMS mock mode — this is logged only, nothing is actually sent.
+                </p>
+              )}
+              {sms.unavailable && (
+                <p className="text-[11px] text-ui-rust">
+                  {sms.depleted
+                    ? 'SMS credit is 0 — top up the gateway account to send.'
+                    : 'SMS balance unavailable — sending is disabled until it can be checked.'}
+                </p>
+              )}
             </form>
 
             {smsLogs.length === 0 ? (

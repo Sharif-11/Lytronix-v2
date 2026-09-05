@@ -45,7 +45,7 @@ function OrderList() {
           <div className="min-w-0">
             <div className="font-mono text-sm font-medium text-ui-ink">{o.orderNumber}</div>
             <div className="text-xs text-ui-muted">
-              {formatDate(o.createdAt)} · {o.items.length}টি পণ্য
+              {formatDate(o.createdAt)} · {o.items.length}টি প্রোডাক্ট
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -89,7 +89,7 @@ function OrderDetail({ id }) {
       </div>
 
       <div className="card p-4 sm:p-5">
-        <h3 className="text-xs uppercase tracking-wide text-ui-muted mb-2">পণ্যসমূহ</h3>
+        <h3 className="text-xs uppercase tracking-wide text-ui-muted mb-2">প্রোডাক্টসমূহ</h3>
         <ul className="text-sm space-y-1">
           {order.items.map((it, i) => (
             <li key={i} className="flex justify-between">
@@ -111,12 +111,12 @@ function OrderDetail({ id }) {
           </div>
           {order.pricing?.discount > 0 && (
             <div className="flex justify-between text-ui-muted">
-              <span>ছাড়</span>
+              <span>ডিসকাউন্ট</span>
               <span>−{formatMoney(order.pricing.discount)}</span>
             </div>
           )}
           <div className="flex justify-between text-ui-brand font-semibold pt-1">
-            <span>সর্বমোট</span>
+            <span>গ্র্যান্ড টোটাল</span>
             <span>{formatMoney(order.pricing?.grandTotal)}</span>
           </div>
           <div className="flex justify-between text-ui-muted">

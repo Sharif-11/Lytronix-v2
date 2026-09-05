@@ -136,6 +136,12 @@ export const sendCustomerMessage = (customerId, message) =>
 export const sendBroadcast = (customerIds, message) =>
   client.post('/customers/broadcast', { customerIds, message }).then((r) => r.data);
 
+// Storefront login-OTP rate-limit tools (keyed by phone number).
+export const getOtpStatus = (phone) =>
+  client.get('/customers/otp-status', { params: { phone }, skipErrorModal: true }).then((r) => r.data);
+export const resetOtpLimit = (phone) =>
+  client.post('/customers/otp-reset', { phone }).then((r) => r.data);
+
 // ---- Notifications ----
 export const getNotifications = (params) =>
   client.get('/notifications', { params }).then((r) => r.data);
@@ -202,7 +208,9 @@ export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/rejec
 
 // ---- SMS logs ----
 export const getSmsLogs = (orderId) => client.get('/sms-logs', { params: { order: orderId } }).then((r) => r.data);
-export const getSmsBalance = () => client.get('/sms-logs/balance').then((r) => r.data);
+// skipErrorModal: the SMS credit chip is passive background chrome — a
+// failed balance check is shown inline on the Marketing page, not as a modal.
+export const getSmsBalance = () => client.get('/sms-logs/balance', { skipErrorModal: true }).then((r) => r.data);
 
 // ---- Public tracking ----
 // skipErrorModal: a wrong/unknown tracking id is an expected outcome here,

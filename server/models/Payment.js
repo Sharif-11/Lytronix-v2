@@ -49,4 +49,13 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// A gateway/bank transaction id identifies exactly one real payment, so it
+// must never be reused. Partial unique index — empty strings (COD, automated
+// intents before a trx id exists) are exempt. The controllers also check
+// Order.payments[] before accepting a new one (see utils/transactionId.js).
+paymentSchema.index(
+  { transactionId: 1 },
+  { unique: true, partialFilterExpression: { transactionId: { $type: 'string', $gt: '' } } }
+);
+
 module.exports = mongoose.model('Payment', paymentSchema);

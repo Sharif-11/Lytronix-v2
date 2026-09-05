@@ -33,7 +33,7 @@ export default function StorefrontHeader() {
 
   const submitSearch = (e) => {
     e.preventDefault();
-    navigate(`/shop?q=${encodeURIComponent(q.trim())}`);
+    navigate(`/shop/products?q=${encodeURIComponent(q.trim())}`);
   };
 
   return (
@@ -98,6 +98,9 @@ export default function StorefrontHeader() {
             )}
           </div>
 
+          <Link to="/shop/products" className="hidden md:inline text-sm font-medium text-ui-ink px-2 py-2 hover:text-ui-brand">
+            সকল প্রোডাক্ট
+          </Link>
           <Link to="/shop/about" className="hidden lg:inline text-sm font-medium text-ui-ink px-2 py-2 hover:text-ui-brand">
             আমাদের সম্পর্কে
           </Link>
@@ -110,7 +113,7 @@ export default function StorefrontHeader() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ui-faint" />
             <input
               className="input pl-9 py-2"
-              placeholder="পণ্য খুঁজুন…"
+              placeholder="প্রোডাক্ট সার্চ করুন…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -118,7 +121,7 @@ export default function StorefrontHeader() {
 
           <div className="flex items-center gap-1.5 ml-auto">
             <Link
-              to="/shop/account/saved"
+              to="/shop/saved"
               className="relative w-10 h-10 rounded-xl flex items-center justify-center text-ui-muted hover:bg-ui-surfaceAlt hover:text-ui-ink transition-colors"
               aria-label="পছন্দের তালিকা"
             >
@@ -164,8 +167,8 @@ export default function StorefrontHeader() {
                     <MenuLink to="/shop/account/orders" icon={Package} onClick={() => setMenuOpen(false)}>
                       আমার অর্ডার
                     </MenuLink>
-                    <MenuLink to="/shop/account/saved" icon={Heart} onClick={() => setMenuOpen(false)}>
-                      পছন্দের পণ্য
+                    <MenuLink to="/shop/saved" icon={Heart} onClick={() => setMenuOpen(false)}>
+                      পছন্দের প্রোডাক্ট
                     </MenuLink>
                     <button
                       onClick={() => {
@@ -175,14 +178,14 @@ export default function StorefrontHeader() {
                       }}
                       className="w-full flex items-center gap-2.5 px-3.5 py-2 text-ui-rust hover:bg-red-50"
                     >
-                      <LogOut size={15} /> লগ আউট
+                      <LogOut size={15} /> লগআউট
                     </button>
                   </div>
                 )}
               </div>
             ) : (
               <Link to="/shop/login" className="btn-secondary py-2">
-                <User size={16} /> <span className="hidden sm:inline">সাইন ইন</span>
+                <User size={16} /> <span className="hidden sm:inline">লগইন</span>
               </Link>
             )}
           </div>

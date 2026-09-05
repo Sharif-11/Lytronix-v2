@@ -54,7 +54,7 @@ export default function Contact() {
             external
           />
           <ContactCard icon={Mail} label="ইমেইল" value={COMPANY_EMAIL} href={`mailto:${COMPANY_EMAIL}`} />
-          <ContactCard icon={MapPin} label="ঠিকানা" value={COMPANY_ADDRESS} wrap />
+          <ContactCard icon={MapPin} label="অ্যাড্রেস" value={COMPANY_ADDRESS} wrap />
         </div>
 
         {/* Message form */}

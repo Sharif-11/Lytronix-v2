@@ -16,8 +16,8 @@ export default function LanguageToggle() {
     >
       <Languages size={13} className="text-ui-brand shrink-0" />
       <span className={language === 'en' ? 'text-ui-ink font-semibold' : ''}>EN</span>
-      <span>/</span>
-      <span className={`font-bangla ${language === 'bn' ? 'text-ui-ink font-semibold' : ''}`}>বাং</span>
+      <span className="text-ui-faint">/</span>
+      <span className={`font-bangla ${language === 'bn' ? 'text-ui-ink font-semibold' : ''}`}>বাংলা</span>
     </button>
   );
 }

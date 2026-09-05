@@ -6,10 +6,10 @@ import ProductCard from './ProductCard';
 import SearchableSelect from './SearchableSelect';
 
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'নতুন পণ্য' },
+  { value: 'newest', label: 'নতুন প্রোডাক্ট' },
   { value: 'popular', label: 'জনপ্রিয়তা' },
-  { value: 'price_asc', label: 'দাম: কম থেকে বেশি' },
-  { value: 'price_desc', label: 'দাম: বেশি থেকে কম' },
+  { value: 'price_asc', label: 'প্রাইস: কম থেকে বেশি' },
+  { value: 'price_desc', label: 'প্রাইস: বেশি থেকে কম' },
   { value: 'name_asc', label: 'নাম: A–Z' },
 ];
 
@@ -96,7 +96,7 @@ export default function Catalogue({ lockedCategorySlug = null }) {
               <SlidersHorizontal size={15} /> ফিল্টার
             </button>
             <p className="text-sm text-ui-muted">
-              {loading ? 'লোড হচ্ছে…' : `${data.total}টি পণ্য`}
+              {loading ? 'লোড হচ্ছে…' : `${data.total}টি প্রোডাক্ট`}
             </p>
             <SearchableSelect
               className="w-40 sm:max-w-[12rem] ml-auto"
@@ -144,11 +144,11 @@ export default function Catalogue({ lockedCategorySlug = null }) {
             </div>
           ) : data.products.length === 0 ? (
             <div className="text-center py-20 text-ui-muted">
-              এই ফিল্টার অনুযায়ী কোনো পণ্য পাওয়া যায়নি।
+              এই ফিল্টার অনুযায়ী কোনো প্রোডাক্ট পাওয়া যায়নি।
               {hasFilters && (
                 <div className="mt-3">
                   <Link to={lockedCategorySlug ? `/shop/c/${lockedCategorySlug}` : '/shop'} className="btn-secondary">
-                    ফিল্টার মুছুন
+                    ফিল্টার রিমুভ
                   </Link>
                 </div>
               )}
@@ -201,7 +201,7 @@ function Chip({ children, onClear }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-ui-brand/10 text-ui-brand px-2.5 py-1">
       {children}
-      <button onClick={onClear} aria-label="ফিল্টার সরান">
+      <button onClick={onClear} aria-label="ফিল্টার রিমুভ">
         <X size={12} />
       </button>
     </span>
@@ -219,7 +219,7 @@ function CategoryTree({ tree, activeSlug, locked, onPick }) {
             !activeSlug ? 'text-ui-brand font-medium' : 'text-ui-ink hover:text-ui-brand'
           }`}
         >
-          সকল পণ্য
+          সকল প্রোডাক্ট
         </button>
       )}
       <ul className="space-y-0.5">
@@ -284,7 +284,7 @@ function FilterPanel({ min, max, inStock, onChange, className = '' }) {
 
   return (
     <div className={className}>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-ui-faint mb-2">দাম (৳)</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-ui-faint mb-2">প্রাইস (৳)</h3>
       <div className="flex items-center gap-2">
         <input
           className="input py-2"
@@ -315,7 +315,7 @@ function FilterPanel({ min, max, inStock, onChange, className = '' }) {
           checked={inStock}
           onChange={(e) => onChange({ inStock: e.target.checked })}
         />
-        শুধু স্টকে থাকা পণ্য
+        শুধু স্টকে থাকা প্রোডাক্ট
       </label>
     </div>
   );
