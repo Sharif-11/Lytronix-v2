@@ -152,3 +152,9 @@ export const getPoliceStations = async () => {
 
 // ---- Public order tracking ----
 export const trackOrder = (trackingId) => client.get(`/track/${trackingId}`).then((r) => r.data);
+
+// ---- Live chat (storefront widget) ----
+export const chatStart = (phone, name) => client.post('/chat/start', { phone, name }).then((r) => r.data);
+export const chatMessages = (params) =>
+  client.get('/chat/messages', { params, _noRetry: true }).then((r) => r.data);
+export const chatSend = (payload) => client.post('/chat/send', payload).then((r) => r.data);

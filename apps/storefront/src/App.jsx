@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import StorefrontHeader from './components/StorefrontHeader';
 import Footer from './components/Footer';
 import ShopBottomNav from './components/ShopBottomNav';
+import ChatWidget from './components/ChatWidget';
 import RequireCustomer from './components/RequireCustomer';
 import ScrollToTop from './components/ScrollToTop';
 import { trackVisitOnce } from './lib/analytics';
@@ -33,6 +34,7 @@ function ShopLayout({ children }) {
       <div className="pb-20 sm:pb-0 flex-1">{children}</div>
       <Footer />
       <ShopBottomNav />
+      <ChatWidget />
     </div>
   );
 }

@@ -27,6 +27,7 @@ const PAGE_TITLES = [
   { match: /^\/customers/, key: 'nav.customers' },
   { match: /^\/marketing/, key: 'nav.marketing' },
   { match: /^\/messages/, key: 'nav.messages' },
+  { match: /^\/chat/, key: 'nav.chat' },
   { match: /^\/staff/, key: 'nav.staff' },
   { match: /^\/roles/, key: 'nav.roles' },
   { match: /^\/profile/, key: 'nav.myProfile' },

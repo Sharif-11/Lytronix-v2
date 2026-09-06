@@ -57,3 +57,15 @@ export function playChime() {
 export function playCourierChime() {
   playNotes([{ f: 520, t: 0 }], { peak: 0.18, tail: 0.5, noteGain: 0.5, noteLen: 0.4, type: 'triangle' });
 }
+
+// New live-chat message from a customer — a quick two-note "ping", brighter
+// and shorter than the order chime so it reads as a chat, not an order.
+export function playChatChime() {
+  playNotes(
+    [
+      { f: 1046, t: 0 },
+      { f: 1568, t: 0.09 },
+    ],
+    { peak: 0.16, tail: 0.35, noteGain: 0.5, noteLen: 0.18, type: 'sine' }
+  );
+}

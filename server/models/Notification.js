@@ -5,6 +5,7 @@ const NOTIFICATION_TYPES = [
   'courier_status', // Steadfast delivery_status webhook
   'courier_tracking', // Steadfast tracking_update webhook
   'payment_review', // a manual bKash payment needs verification
+  'chat', // a customer sent a message in live chat
   'system', // anything else worth surfacing (e.g. webhook for an unknown parcel)
 ];
 

@@ -217,6 +217,16 @@ export const getContactMessages = (params) => client.get('/contact', { params })
 export const updateContactMessage = (id, status) => client.patch(`/contact/${id}`, { status }).then((r) => r.data);
 export const deleteContactMessage = (id) => client.delete(`/contact/${id}`).then((r) => r.data);
 
+// ---- Live chat (customer ↔ admin, grouped by phone) ----
+export const getChatThreads = (params) =>
+  client.get('/chat/threads', { params, skipErrorModal: true }).then((r) => r.data);
+export const getChatMessages = (phone, params) =>
+  client.get(`/chat/threads/${phone}/messages`, { params, skipErrorModal: true }).then((r) => r.data);
+export const sendChatMessage = (phone, body) =>
+  client.post(`/chat/threads/${phone}/messages`, { body }).then((r) => r.data);
+export const updateChatThread = (phone, status) =>
+  client.patch(`/chat/threads/${phone}`, { status }).then((r) => r.data);
+
 // ---- Public tracking ----
 // skipErrorModal: a wrong/unknown tracking id is an expected outcome here,
 // shown inline on the page itself — not a failure worth a popup.

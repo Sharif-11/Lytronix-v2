@@ -7,6 +7,7 @@ import BottomNav from './components/BottomNav';
 import MoreSheet from './components/MoreSheet';
 import BanglaKeyboard from './components/BanglaKeyboard';
 import ScrollToTop from './components/ScrollToTop';
+import ChatToaster from './components/ChatToaster';
 import RequireAuth from './components/RequireAuth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -28,6 +29,7 @@ import RoleManagement from './pages/RoleManagement';
 import Payments from './pages/Payments';
 import Marketing from './pages/Marketing';
 import Messages from './pages/Messages';
+import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
@@ -65,6 +67,7 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      <ChatToaster />
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/track/:trackingId" element={<TrackOrder />} />
@@ -96,6 +99,7 @@ export default function App() {
 
       <Route path="/marketing" element={<RequireAuth permission="customers:manage"><AdminLayout><Marketing /></AdminLayout></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth permission="customers:manage"><AdminLayout><Messages /></AdminLayout></RequireAuth>} />
+      <Route path="/chat" element={<RequireAuth permission="customers:manage"><AdminLayout><Chat /></AdminLayout></RequireAuth>} />
 
       <Route path="/staff" element={<RequireAuth permission="users:manage"><AdminLayout><UserManagement /></AdminLayout></RequireAuth>} />
       <Route path="/roles" element={<RequireAuth permission="roles:manage"><AdminLayout><RoleManagement /></AdminLayout></RequireAuth>} />
