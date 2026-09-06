@@ -14,25 +14,55 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// If the token is missing/expired, bounce to login instead of showing
-// confusing "permission" errors everywhere.
+function forceLogout() {
+  localStorage.removeItem('lytronix_token');
+  localStorage.removeItem('lytronix_user');
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login';
+  }
+}
+
+// A single 401 is not proof the session is dead — under load the API can
+// briefly 401 on a transient DB/infra hiccup, and with many background polls
+// running that used to boot the admin to /login mid-task. So on a 401 we
+// verify once against /auth/me (deduped across concurrent failures): only if
+// that ALSO 401s do we actually log out. A network error on the check leaves
+// the session intact.
+let sessionCheck = null;
+
 client.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('lytronix_token');
-      localStorage.removeItem('lytronix_user');
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+  async (err) => {
+    const cfg = err.config || {};
+    const status = err.response?.status;
+
+    if (status === 401 && !cfg._authCheck) {
+      // No token at all → nothing to salvage. Opt-out flag skips the redirect
+      // entirely (used by passive pollers that must never yank the page).
+      if (!localStorage.getItem('lytronix_token')) {
+        if (!cfg.skipAuthLogout) forceLogout();
+        return Promise.reject(err);
       }
-      return Promise.reject(err);
+      try {
+        sessionCheck =
+          sessionCheck || client.get('/auth/me', { _authCheck: true, skipErrorModal: true });
+        await sessionCheck;
+        sessionCheck = null;
+        // Session still good — surface the original error but stay logged in.
+        return Promise.reject(err);
+      } catch (checkErr) {
+        sessionCheck = null;
+        if (checkErr.response?.status === 401 && !cfg.skipAuthLogout) forceLogout();
+        return Promise.reject(err);
+      }
     }
+
     // Every other failed request surfaces as a proper modal (see
     // ErrorModalHost) instead of a bare inline red box — a call site can
     // opt out with { skipErrorModal: true } in the axios config when it
     // wants to handle the error entirely on its own (e.g. inline field
     // validation from the server).
-    if (!err.config?.skipErrorModal && !axios.isCancel(err)) {
+    if (!cfg.skipErrorModal && !cfg._authCheck && !axios.isCancel(err)) {
       const message =
         err.response?.data?.message ||
         (err.request && !err.response ? 'Could not reach the server. Check your connection and try again.' : 'Something went wrong. Please try again.');
