@@ -222,10 +222,17 @@ export const getChatThreads = (params) =>
   client.get('/chat/threads', { params, skipErrorModal: true }).then((r) => r.data);
 export const getChatMessages = (phone, params) =>
   client.get(`/chat/threads/${phone}/messages`, { params, skipErrorModal: true }).then((r) => r.data);
-export const sendChatMessage = (phone, body) =>
-  client.post(`/chat/threads/${phone}/messages`, { body }).then((r) => r.data);
+export const sendChatMessage = (phone, payload) =>
+  client.post(`/chat/threads/${phone}/messages`, payload).then((r) => r.data);
 export const updateChatThread = (phone, status) =>
   client.patch(`/chat/threads/${phone}`, { status }).then((r) => r.data);
+export const uploadChatMedia = (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  return client
+    .post('/chat/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .then((r) => r.data);
+};
 
 // ---- Public tracking ----
 // skipErrorModal: a wrong/unknown tracking id is an expected outcome here,

@@ -70,6 +70,13 @@ function uploadVideoBuffer(buffer, folder) {
   });
 }
 
+// Chat attachment (image or voice note). Audio goes in as a Cloudinary
+// "video" resource, same as product clips.
+function uploadChatMedia(buffer, mime, folder = 'lytronix/chat') {
+  const isAudio = String(mime || '').startsWith('audio/');
+  return isAudio ? uploadVideoBuffer(buffer, folder) : uploadBuffer(buffer, folder);
+}
+
 function destroy(publicId, resourceType = 'image') {
   if (!isConfigured() || !publicId) return Promise.resolve();
   ensureConfigured();
@@ -107,7 +114,9 @@ module.exports = {
   isConfigured,
   uploadBuffer,
   uploadVideoBuffer,
+  uploadChatMedia,
   destroy,
   destroyByUrl,
   extractPublicId,
+  resourceTypeFromUrl,
 };

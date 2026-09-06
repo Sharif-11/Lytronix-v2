@@ -94,5 +94,9 @@ app.use('/api/uploads', uploadRoutes);
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 app.use(errorHandler);
 
+// Periodically trims old chat messages + their Cloudinary media (keeps each
+// thread + its first message).
+require('./services/chatCleanup').scheduleChatCleanup();
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`API server running on port ${PORT}`));

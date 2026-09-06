@@ -58,14 +58,18 @@ export function playCourierChime() {
   playNotes([{ f: 520, t: 0 }], { peak: 0.18, tail: 0.5, noteGain: 0.5, noteLen: 0.4, type: 'triangle' });
 }
 
-// New live-chat message from a customer — a quick two-note "ping", brighter
-// and shorter than the order chime so it reads as a chat, not an order.
+// New live-chat message from a customer — a clear "ping-ping" that's easy
+// to hear across the room. Two rising notes, fired twice with a fresh
+// envelope each time so the second ping is just as loud as the first.
 export function playChatChime() {
-  playNotes(
-    [
-      { f: 1046, t: 0 },
-      { f: 1568, t: 0.09 },
-    ],
-    { peak: 0.16, tail: 0.35, noteGain: 0.5, noteLen: 0.18, type: 'sine' }
-  );
+  const burst = () =>
+    playNotes(
+      [
+        { f: 1046, t: 0 },
+        { f: 1568, t: 0.11 },
+      ],
+      { peak: 0.65, tail: 0.55, noteGain: 1, noteLen: 0.24, type: 'sine' }
+    );
+  burst();
+  setTimeout(burst, 300);
 }

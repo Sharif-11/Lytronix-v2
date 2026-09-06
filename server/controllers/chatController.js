@@ -21,6 +21,25 @@ function forCustomer(messages) {
   );
 }
 
+// Pull the media/text fields off a send request into a message payload.
+function contentFrom(reqBody) {
+  const type = ['image', 'voice'].includes(reqBody.type) ? reqBody.type : 'text';
+  const body = String(reqBody.body || '').trim().slice(0, MAX_BODY);
+  const mediaUrl = type === 'text' ? '' : String(reqBody.mediaUrl || '').trim();
+  if (type !== 'text' && !/^https?:\/\//.test(mediaUrl)) return { error: 'A valid attachment URL is required.' };
+  if (type === 'text' && !body) return { error: 'মেসেজ লিখুন।' };
+  return {
+    type,
+    body,
+    mediaUrl,
+    mediaMime: type === 'text' ? '' : String(reqBody.mediaMime || '').slice(0, 80),
+    durationSec: type === 'voice' ? Math.max(0, Math.min(600, Number(reqBody.durationSec) || 0)) : 0,
+  };
+}
+
+const previewFor = (c) =>
+  c.type === 'image' ? '📷 ছবি' : c.type === 'voice' ? '🎤 ভয়েস মেসেজ' : c.body.slice(0, 120);
+
 // Rows since `after` (a message _id or an ISO timestamp), oldest first.
 async function messagesSince(thread, after) {
   const q = { thread: thread._id };
@@ -97,10 +116,10 @@ exports.customerMessages = async (req, res) => {
   res.json({ messages, unreadForCustomer: 0 });
 };
 
-// POST /api/chat/send   { phone?, guestKey?, body }
+// POST /api/chat/send   { phone?, guestKey?, body?, type?, mediaUrl?, mediaMime?, durationSec? }
 exports.customerSend = async (req, res) => {
-  const body = String(req.body.body || '').trim().slice(0, MAX_BODY);
-  if (!body) return res.status(400).json({ message: 'মেসেজ লিখুন।' });
+  const c = contentFrom(req.body);
+  if (c.error) return res.status(400).json({ message: c.error });
 
   const r = await customerThread(req);
   if (r.error) return res.status(r.error).json({ message: r.message });
@@ -111,12 +130,12 @@ exports.customerSend = async (req, res) => {
     phone: thread.phone,
     from: 'customer',
     senderName: thread.name || '',
-    body,
+    ...c,
     readByCustomer: true,
   });
 
   thread.lastMessageAt = msg.createdAt;
-  thread.lastMessagePreview = body.slice(0, 120);
+  thread.lastMessagePreview = previewFor(c);
   thread.lastMessageFrom = 'customer';
   thread.unreadForAdmin += 1;
   if (thread.status === 'closed') thread.status = 'open';
@@ -129,14 +148,60 @@ exports.customerSend = async (req, res) => {
       type: 'chat',
       severity: 'info',
       title: `নতুন চ্যাট মেসেজ${thread.name ? ` — ${thread.name}` : ''}`,
-      body: `${thread.phone}: ${body.slice(0, 120)}`,
+      body: `${thread.phone}: ${previewFor(c)}`,
       link: `/chat?phone=${thread.phone}`,
       meta: { phone: thread.phone },
     });
   }
 
-  logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4) });
+  logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4), type: c.type });
   res.status(201).json({ message: msg });
+};
+
+// POST /api/chat/upload  (multipart: file) — image or voice note.
+// Scoped: an admin bearer token, a customer bearer token whose phone
+// matches, or a guestKey that matches an existing thread.
+exports.uploadMedia = async (req, res) => {
+  const cloudinary = require('../services/cloudinary');
+  if (!req.file) return res.status(400).json({ message: 'No file received.' });
+
+  let allowed = false;
+
+  // 1) admin bearer token
+  try {
+    const jwt = require('jsonwebtoken');
+    const User = require('../models/User');
+    const hdr = req.headers.authorization || '';
+    const tok = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
+    if (tok) {
+      const d = jwt.verify(tok, process.env.JWT_SECRET);
+      if (d && d.id) {
+        const u = await User.findById(d.id);
+        if (u && u.isActive) allowed = true;
+      }
+    }
+  } catch {
+    /* not an admin token — fall through */
+  }
+
+  // 2) customer token / guestKey
+  if (!allowed) {
+    const phone = req.customer?.phone || normPhone(req.body.phone);
+    if (phone) {
+      const thread = await ChatThread.findOne({ phone });
+      allowed =
+        (req.customer && req.customer.phone === phone) ||
+        (thread && req.body.guestKey && req.body.guestKey === thread.guestKey);
+    }
+  }
+  if (!allowed) return res.status(403).json({ message: 'অননুমোদিত।' });
+
+  try {
+    const { url } = await cloudinary.uploadChatMedia(req.file.buffer, req.file.mimetype, 'lytronix/chat');
+    res.status(201).json({ url, mime: req.file.mimetype });
+  } catch (err) {
+    res.status(err.statusCode || 502).json({ message: err.message || 'Upload failed.' });
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -189,20 +254,20 @@ exports.adminSend = async (req, res) => {
   const thread = await adminThread(req.params.phone);
   if (!thread) return res.status(404).json({ message: 'Thread not found.' });
 
-  const body = String(req.body.body || '').trim().slice(0, MAX_BODY);
-  if (!body) return res.status(400).json({ message: 'Message body is required.' });
+  const c = contentFrom(req.body);
+  if (c.error) return res.status(400).json({ message: c.error });
 
   const msg = await ChatMessage.create({
     thread: thread._id,
     phone: thread.phone,
     from: 'admin',
     senderName: req.user?.name || 'Support',
-    body,
+    ...c,
     readByAdmin: true,
   });
 
   thread.lastMessageAt = msg.createdAt;
-  thread.lastMessagePreview = body.slice(0, 120);
+  thread.lastMessagePreview = previewFor(c);
   thread.lastMessageFrom = 'admin';
   thread.unreadForCustomer += 1;
   await thread.save();

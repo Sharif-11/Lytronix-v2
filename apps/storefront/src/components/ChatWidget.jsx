@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Loader2, ArrowLeft } from 'lucide-react';
-import { chatStart, chatMessages, chatSend } from '../api/client';
+import { MessageCircle, X, Send, Loader2, ArrowLeft, Paperclip, Mic } from 'lucide-react';
+import { chatStart, chatMessages, chatSend, chatUploadMedia } from '../api/client';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
+import { playChatChime } from '../lib/chime';
 import logoMark from '../assets/lytronix-logo.png';
 
 const LS_KEY = 'lytronix_chat_v1';
@@ -22,6 +23,10 @@ function saveSession(s) {
     /* ignore */
   }
 }
+
+const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+const previewOf = (m) =>
+  m.type === 'image' ? '📷 ছবি' : m.type === 'voice' ? '🎤 ভয়েস মেসেজ' : (m.body || '').slice(0, 120);
 
 const dayKey = (d) => new Date(d).toDateString();
 const timeStr = (d) =>
@@ -47,10 +52,21 @@ export default function ChatWidget() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [unseen, setUnseen] = useState(0);
+  const [toast, setToast] = useState(null); // { text } — small popup when a reply arrives with the panel closed
+  const [attaching, setAttaching] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null);
   const seenAtRef = useRef(Number(localStorage.getItem(`${LS_KEY}:seen`)) || 0);
+  const fileRef = useRef(null);
+  const recRef = useRef(null);
+  const recTimerRef = useRef(null);
+  const recChunksRef = useRef([]);
+  const recStartRef = useRef(0);
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const phone = session?.phone || (isAuthed ? customer?.phone : '') || '';
   const hasSession = Boolean(session?.phone && (session?.guestKey || isAuthed));
@@ -101,11 +117,23 @@ export default function ChatWidget() {
           return merged;
         });
         lastIdRef.current = fresh[fresh.length - 1]._id;
-        if (!open) {
-          const adminNew = fresh.filter(
+        if (!openRef.current) {
+          const adminNewMsgs = fresh.filter(
             (m) => m.from === 'admin' && new Date(m.createdAt).getTime() > seenAtRef.current
-          ).length;
-          if (adminNew) setUnseen((u) => u + adminNew);
+          );
+          if (adminNewMsgs.length) {
+            setUnseen((u) => u + adminNewMsgs.length);
+            const latest = adminNewMsgs[adminNewMsgs.length - 1];
+            setToast({
+              id: latest._id,
+              text: previewOf(latest),
+            });
+            try {
+              playChatChime();
+            } catch {
+              /* audio not allowed yet */
+            }
+          }
         }
       }
     } catch {
@@ -142,29 +170,149 @@ export default function ChatWidget() {
     }
   }, [messages, open]);
 
-  const send = async (e) => {
-    e?.preventDefault();
-    const body = draft.trim();
-    if (!body || sending || !session?.phone) return;
-    setSending(true);
-    setDraft('');
+  // The little "new reply" popup near the launcher — clears on open, and
+  // auto-dismisses after a few seconds otherwise.
+  useEffect(() => {
+    if (open) {
+      setToast(null);
+      return undefined;
+    }
+    if (!toast) return undefined;
+    const id = setTimeout(() => setToast(null), 12000);
+    return () => clearTimeout(id);
+  }, [toast, open]);
+
+  // Drop any half-finished recording if the widget unmounts.
+  useEffect(
+    () => () => {
+      clearInterval(recTimerRef.current);
+      const rec = recRef.current;
+      if (rec && rec.state !== 'inactive') {
+        rec._cancelled = true;
+        rec.stop();
+      }
+    },
+    []
+  );
+
+  // One code path for text and media — an optimistic bubble, then the real
+  // row from the server (or a ⚠ marker if it never lands).
+  const pushMessage = async (payload) => {
+    if (!session?.phone) return;
     const optimistic = {
       _id: `tmp-${Date.now()}`,
       from: 'customer',
-      body,
+      type: payload.type || 'text',
+      body: payload.body || '',
+      mediaUrl: payload.mediaUrl || '',
+      mediaMime: payload.mediaMime || '',
+      durationSec: payload.durationSec || 0,
       createdAt: new Date().toISOString(),
       pending: true,
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      const { message } = await chatSend({ phone: session.phone, guestKey: session.guestKey, body });
+      const { message } = await chatSend({
+        phone: session.phone,
+        guestKey: session.guestKey,
+        ...payload,
+      });
       setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
       lastIdRef.current = message._id;
     } catch (err) {
       setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
       setError(err.response?.data?.message || 'মেসেজ পাঠানো যায়নি।');
+    }
+  };
+
+  const send = async (e) => {
+    e?.preventDefault();
+    const body = draft.trim();
+    if (!body || sending || !session?.phone) return;
+    setSending(true);
+    setError('');
+    setDraft('');
+    await pushMessage({ type: 'text', body });
+    setSending(false);
+  };
+
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('শুধু ছবি পাঠানো যাবে।');
+      return;
+    }
+    if (file.size > MEDIA_MAX_BYTES) {
+      setError('ছবিটি অনেক বড় (সর্বোচ্চ ৮ MB)।');
+      return;
+    }
+    setAttaching(true);
+    setError('');
+    try {
+      const { url, mime } = await chatUploadMedia(file, session?.phone, session?.guestKey);
+      await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+    } catch (err) {
+      setError(err.response?.data?.message || 'ছবি আপলোড করা যায়নি।');
     } finally {
-      setSending(false);
+      setAttaching(false);
+    }
+  };
+
+  const startRec = async () => {
+    if (recording) return;
+    setError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      recChunksRef.current = [];
+      rec.ondataavailable = (ev) => {
+        if (ev.data?.size) recChunksRef.current.push(ev.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        clearInterval(recTimerRef.current);
+        const secs = Math.max(1, Math.round((Date.now() - recStartRef.current) / 1000));
+        setRecording(false);
+        setRecSecs(0);
+        if (rec._cancelled) return;
+        const blob = new Blob(recChunksRef.current, { type: rec.mimeType || 'audio/webm' });
+        if (blob.size < 800) return;
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type });
+        setAttaching(true);
+        try {
+          const { url, mime } = await chatUploadMedia(file, session?.phone, session?.guestKey);
+          await pushMessage({ type: 'voice', mediaUrl: url, mediaMime: mime, durationSec: secs });
+        } catch (err) {
+          setError(err.response?.data?.message || 'ভয়েস মেসেজ পাঠানো যায়নি।');
+        } finally {
+          setAttaching(false);
+        }
+      };
+      recRef.current = rec;
+      recStartRef.current = Date.now();
+      rec.start();
+      setRecording(true);
+      setRecSecs(0);
+      recTimerRef.current = setInterval(
+        () => setRecSecs(Math.round((Date.now() - recStartRef.current) / 1000)),
+        250
+      );
+    } catch {
+      setError('মাইক্রোফোন ব্যবহার করা যায়নি।');
+    }
+  };
+
+  const stopRec = () => {
+    const rec = recRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+  };
+  const cancelRec = () => {
+    const rec = recRef.current;
+    if (rec && rec.state !== 'inactive') {
+      rec._cancelled = true;
+      rec.stop();
     }
   };
 
@@ -186,18 +334,35 @@ export default function ChatWidget() {
     <>
       {/* Launcher */}
       {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="চ্যাট করুন"
-          className="fixed right-4 bottom-20 sm:bottom-6 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-floating flex items-center justify-center active:scale-95 transition-transform"
-        >
-          <MessageCircle size={26} />
-          {unseen > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-ui-rust text-white text-[11px] font-mono leading-5 text-center border-2 border-white">
-              {unseen}
-            </span>
+        <>
+          {toast && (
+            <button
+              onClick={() => setOpen(true)}
+              className="fixed right-4 bottom-36 sm:bottom-24 z-40 max-w-[16rem] text-left bg-white rounded-2xl shadow-floating border border-black/5 px-3.5 py-2.5 active:scale-[0.98] transition-transform"
+            >
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#075E54] mb-0.5">
+                <span className="w-4 h-4 rounded-full bg-[#25D366]/20 flex items-center justify-center overflow-hidden">
+                  <img src={logoMark} alt="" className="w-3 h-3 object-contain" />
+                </span>
+                Lytronix
+              </div>
+              <p className="text-[13px] text-ui-ink leading-snug line-clamp-2 font-bangla">{toast.text}</p>
+              <span className="text-[11px] text-[#075E54] font-medium">উত্তর দিন →</span>
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => setOpen(true)}
+            aria-label="চ্যাট করুন"
+            className="fixed right-4 bottom-20 sm:bottom-6 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-floating flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <MessageCircle size={26} />
+            {unseen > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-ui-rust text-white text-[11px] font-mono leading-5 text-center border-2 border-white">
+                {unseen}
+              </span>
+            )}
+          </button>
+        </>
       )}
 
       {/* Panel */}
@@ -268,29 +433,81 @@ export default function ChatWidget() {
               </div>
 
               {/* Composer */}
-              <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-2">
-                <textarea
-                  rows={1}
-                  className="flex-1 resize-none max-h-24 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
-                  placeholder="মেসেজ লিখুন…"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!draft.trim() || sending}
-                  className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-50"
-                  aria-label="পাঠান"
-                >
-                  {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </form>
+              {error && (
+                <div className="shrink-0 bg-ui-rust/10 text-ui-rust text-[12px] px-3 py-1.5 text-center font-bangla">
+                  {error}
+                </div>
+              )}
+              {recording ? (
+                <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-ui-rust animate-pulse shrink-0" />
+                  <span className="text-sm text-ui-ink flex-1 font-mono">
+                    রেকর্ড হচ্ছে · {String(Math.floor(recSecs / 60)).padStart(2, '0')}:
+                    {String(recSecs % 60).padStart(2, '0')}
+                  </span>
+                  <button
+                    onClick={cancelRec}
+                    className="text-[13px] text-ui-rust font-medium px-2 py-1"
+                    type="button"
+                  >
+                    বাতিল
+                  </button>
+                  <button
+                    onClick={stopRec}
+                    className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0"
+                    type="button"
+                    aria-label="পাঠান"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-1.5">
+                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={attaching}
+                    className="w-10 h-10 rounded-full text-[#075E54] flex items-center justify-center shrink-0 disabled:opacity-50 hover:bg-black/5"
+                    aria-label="ছবি যোগ করুন"
+                  >
+                    {attaching ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
+                  </button>
+                  <textarea
+                    rows={1}
+                    className="flex-1 resize-none max-h-24 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
+                    placeholder="মেসেজ লিখুন…"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                  {draft.trim() ? (
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-50"
+                      aria-label="পাঠান"
+                    >
+                      {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startRec}
+                      disabled={attaching}
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-50"
+                      aria-label="ভয়েস মেসেজ"
+                    >
+                      <Mic size={16} />
+                    </button>
+                  )}
+                </form>
+              )}
             </>
           )}
         </div>
@@ -312,7 +529,20 @@ function Bubble({ m }) {
         {!mine && m.senderName && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
         )}
-        <span>{m.body}</span>
+        {m.type === 'image' && m.mediaUrl && (
+          <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={m.mediaUrl}
+              alt="ছবি"
+              className="rounded-md max-h-56 w-auto object-cover"
+              loading="lazy"
+            />
+          </a>
+        )}
+        {m.type === 'voice' && m.mediaUrl && (
+          <audio src={m.mediaUrl} controls preload="none" className="h-9 w-52 max-w-full mt-0.5" />
+        )}
+        {m.body && <span>{m.body}</span>}
         <span className="inline-block align-bottom text-[10px] text-black/45 ml-2 -mb-0.5 float-right pl-1">
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
         </span>

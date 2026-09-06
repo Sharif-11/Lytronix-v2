@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { MessagesSquare, Search, Send, Loader2, ArrowLeft, Phone, Check } from 'lucide-react';
-import { getChatThreads, getChatMessages, sendChatMessage, updateChatThread } from '../api/client';
+import { MessagesSquare, Search, Send, Loader2, ArrowLeft, Phone, Check, Paperclip, Mic, Square } from 'lucide-react';
+import { getChatThreads, getChatMessages, sendChatMessage, updateChatThread, uploadChatMedia } from '../api/client';
 
 const POLL_THREADS_MS = 8000;
 const POLL_MESSAGES_MS = 3000;
@@ -101,24 +101,107 @@ export default function Chat() {
 
   const openThread = (phone) => setParams(phone ? { phone } : {}, { replace: true });
 
+  const [attaching, setAttaching] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const fileRef = useRef(null);
+  const recRef = useRef(null);
+  const recTimerRef = useRef(null);
+  const recChunksRef = useRef([]);
+  const recStartRef = useRef(0);
+
+  const pushMessage = async (payload) => {
+    if (!activePhone) return;
+    const optimistic = {
+      _id: `tmp-${Date.now()}`,
+      from: 'admin',
+      createdAt: new Date().toISOString(),
+      pending: true,
+      ...payload,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    try {
+      const { message } = await sendChatMessage(activePhone, payload);
+      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
+      lastIdRef.current = message._id;
+      loadThreads();
+    } catch {
+      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
+    }
+  };
+
   const send = async (e) => {
     e?.preventDefault();
     const body = draft.trim();
     if (!body || sending || !activePhone) return;
     setSending(true);
     setDraft('');
-    const optimistic = { _id: `tmp-${Date.now()}`, from: 'admin', body, createdAt: new Date().toISOString(), pending: true };
-    setMessages((prev) => [...prev, optimistic]);
+    await pushMessage({ type: 'text', body });
+    setSending(false);
+  };
+
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || attaching) return;
+    if (file.size > 8 * 1024 * 1024) return alert('Attachment must be under 8MB.');
+    setAttaching(true);
     try {
-      const { message } = await sendChatMessage(activePhone, body);
-      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
-      lastIdRef.current = message._id;
-      loadThreads();
+      const { url, mime } = await uploadChatMedia(file);
+      await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
     } catch {
-      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
+      /* surfaced globally */
     } finally {
-      setSending(false);
+      setAttaching(false);
     }
+  };
+
+  const startRec = async () => {
+    if (recording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recChunksRef.current = [];
+      mr.ondataavailable = (ev) => ev.data.size && recChunksRef.current.push(ev.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        clearInterval(recTimerRef.current);
+        setRecording(false);
+        const secs = Math.round((Date.now() - recStartRef.current) / 1000);
+        setRecSecs(0);
+        const blob = new Blob(recChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        if (blob.size < 800) return; // too short / silent
+        setAttaching(true);
+        try {
+          const file = new File([blob], 'voice.webm', { type: blob.type });
+          const { url, mime } = await uploadChatMedia(file);
+          await pushMessage({ type: 'voice', mediaUrl: url, mediaMime: mime, durationSec: secs });
+        } catch {
+          /* surfaced */
+        } finally {
+          setAttaching(false);
+        }
+      };
+      recRef.current = mr;
+      recStartRef.current = Date.now();
+      mr.start();
+      setRecording(true);
+      setRecSecs(0);
+      recTimerRef.current = setInterval(() => setRecSecs((s) => s + 1), 1000);
+    } catch {
+      alert('Microphone permission is needed to record a voice note.');
+    }
+  };
+  const stopRec = () => recRef.current?.state === 'recording' && recRef.current.stop();
+  const cancelRec = () => {
+    if (recRef.current?.state === 'recording') {
+      recRef.current.onstop = null;
+      recRef.current.stop();
+      recRef.current.stream?.getTracks?.().forEach((t) => t.stop());
+    }
+    clearInterval(recTimerRef.current);
+    setRecording(false);
+    setRecSecs(0);
   };
 
   const toggleClosed = async () => {
@@ -148,9 +231,9 @@ export default function Chat() {
 
   return (
     <div className="max-w-6xl mx-auto sm:px-5 sm:py-6">
-      <div className="sm:flex sm:gap-0 sm:border sm:border-ui-line sm:rounded-2xl sm:overflow-hidden sm:shadow-card h-[calc(100vh-8rem)] sm:h-[calc(100vh-9rem)] bg-white">
+      <div className="flex sm:border sm:border-ui-line sm:rounded-2xl sm:overflow-hidden sm:shadow-card bg-white h-[calc(100dvh-8.5rem)] sm:h-[calc(100dvh-7rem)]">
         {/* Thread list */}
-        <aside className={`w-full sm:w-[20rem] sm:border-r border-ui-line flex flex-col ${activePhone ? 'hidden sm:flex' : 'flex'}`}>
+        <aside className={`w-full sm:w-[20rem] sm:border-r border-ui-line flex-col min-h-0 ${activePhone ? 'hidden sm:flex' : 'flex'}`}>
           <div className="p-3 border-b border-ui-line">
             <h1 className="font-display text-lg text-ui-brand flex items-center gap-2 mb-2 px-1">
               <MessagesSquare size={20} /> Chat
@@ -165,7 +248,7 @@ export default function Chat() {
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {threads.length === 0 && (
               <p className="text-sm text-ui-muted text-center py-10">No conversations yet.</p>
             )}
@@ -203,7 +286,7 @@ export default function Chat() {
         </aside>
 
         {/* Conversation */}
-        <section className={`flex-1 flex flex-col min-w-0 ${activePhone ? 'flex' : 'hidden sm:flex'}`} style={{ backgroundColor: '#ECE5DD' }}>
+        <section className={`flex-1 flex-col min-w-0 min-h-0 ${activePhone ? 'flex' : 'hidden sm:flex'}`} style={{ backgroundColor: '#ECE5DD' }}>
           {!activePhone ? (
             <div className="flex-1 flex items-center justify-center text-sm text-ui-muted">
               Pick a conversation to start replying.
@@ -231,7 +314,7 @@ export default function Chat() {
                 </button>
               </div>
 
-              <div ref={bodyRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
+              <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5">
                 {loadingMsgs && (
                   <p className="text-center text-xs text-black/40 mt-4">
                     <Loader2 size={14} className="animate-spin inline" /> Loading…
@@ -253,29 +336,67 @@ export default function Chat() {
                 )}
               </div>
 
-              <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-2">
-                <textarea
-                  rows={1}
-                  className="flex-1 resize-none max-h-28 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
-                  placeholder="Type a reply…"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!draft.trim() || sending}
-                  className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-50"
-                  aria-label="Send"
-                >
-                  {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                </button>
-              </form>
+              {recording ? (
+                <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-ui-rust animate-pulse" />
+                  <span className="text-sm font-mono text-ui-ink flex-1">
+                    রেকর্ডিং {String(Math.floor(recSecs / 60)).padStart(1, '0')}:{String(recSecs % 60).padStart(2, '0')}
+                  </span>
+                  <button onClick={cancelRec} className="text-xs text-ui-muted px-2 py-1">Cancel</button>
+                  <button
+                    onClick={stopRec}
+                    className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center"
+                    aria-label="Stop & send"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-1.5">
+                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={attaching}
+                    className="w-10 h-10 rounded-full text-ui-muted hover:bg-black/5 flex items-center justify-center shrink-0"
+                    aria-label="Attach image"
+                  >
+                    {attaching ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={18} />}
+                  </button>
+                  <textarea
+                    rows={1}
+                    className="flex-1 resize-none max-h-28 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
+                    placeholder="Type a reply…"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                  {draft.trim() ? (
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-50"
+                      aria-label="Send"
+                    >
+                      {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startRec}
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0"
+                      aria-label="Record voice"
+                    >
+                      <Mic size={18} />
+                    </button>
+                  )}
+                </form>
+              )}
             </>
           )}
         </section>
@@ -297,7 +418,15 @@ function Bubble({ m }) {
         {mine && m.senderName && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
         )}
-        <span>{m.body}</span>
+        {m.type === 'image' && m.mediaUrl && (
+          <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+            <img src={m.mediaUrl} alt="" className="rounded-md max-h-56 max-w-full object-cover" />
+          </a>
+        )}
+        {m.type === 'voice' && m.mediaUrl && (
+          <audio src={m.mediaUrl} controls className="h-9 w-52 max-w-full mt-0.5" />
+        )}
+        {m.body && <span>{m.body}</span>}
         <span className="inline-flex items-center gap-0.5 align-bottom text-[10px] text-black/45 ml-2 -mb-0.5 float-right pl-1">
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
           {mine && !m.pending && !m.failed && <Check size={11} className="text-black/40" />}
