@@ -8,6 +8,7 @@ import { getProduct, deleteProduct } from '../api/client';
 import { formatMoney } from '../utils/format';
 import { useConfirm } from '../context/ConfirmContext';
 import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
+import RichText from '../components/RichText';
 
 function policyText(p) {
   if (!p) return 'Full Cash on Delivery';
@@ -161,11 +162,7 @@ export default function ProductDetail() {
       {product.description && (
         <div className="mt-8">
           <h2 className="label mb-2">Description</h2>
-          <div
-            className="prose prose-sm max-w-none text-ui-ink/90 font-bangla whitespace-pre-wrap [&_ul]:list-disc [&_ul]:pl-5"
-            dir="auto"
-            dangerouslySetInnerHTML={{ __html: product.description }}
-          />
+          <RichText html={product.description} />
         </div>
       )}
     </div>

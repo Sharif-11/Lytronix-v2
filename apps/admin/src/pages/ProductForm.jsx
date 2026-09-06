@@ -8,6 +8,7 @@ import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import { ImagePlus, VideoIcon, X, Star, Loader2, Play } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect';
+import RichTextEditor from '../components/RichTextEditor';
 import { emitError } from '../lib/errorBus';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -55,11 +56,6 @@ export default function ProductForm() {
     enabled: phoneticOn,
     value: form.name,
     onChangeValue: (v) => setForm((f) => ({ ...f, name: v })),
-  });
-  const descPhonetic = usePhoneticField({
-    enabled: phoneticOn,
-    value: form.description,
-    onChangeValue: (v) => setForm((f) => ({ ...f, description: v })),
   });
 
   useEffect(() => {
@@ -330,15 +326,10 @@ export default function ProductForm() {
         </div>
 
         <Field label="Description">
-          <textarea
-            rows={3}
-            className="input font-bangla"
-            dir="auto"
+          <RichTextEditor
             value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            onKeyDown={descPhonetic.onKeyDown}
-            onClick={descPhonetic.onClick}
-            onBlur={descPhonetic.onBlur}
+            onChange={(html) => setForm((f) => ({ ...f, description: html }))}
+            placeholder="Product details, specs, what's in the box…"
           />
         </Field>
 

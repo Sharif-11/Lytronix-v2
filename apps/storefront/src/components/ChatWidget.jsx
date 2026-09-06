@@ -74,9 +74,12 @@ const dateLabel = (d) => {
   return t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-export default function ChatWidget() {
+const HINT_DISMISS_KEY = 'lytronix_chat_hint_dismissed';
+
+export default function ChatWidget({ hint = '' }) {
   const { customer, isAuthed } = useCustomerAuth();
   const [open, setOpen] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [session, setSession] = useState(loadSession);
   const [phoneInput, setPhoneInput] = useState('');
   const [starting, setStarting] = useState(false);
@@ -237,6 +240,33 @@ export default function ChatWidget() {
     const id = setTimeout(() => setToast(null), 12000);
     return () => clearTimeout(id);
   }, [toast, open]);
+
+  // Optional one-line prompt beside the launcher (e.g. on a product page:
+  // "প্রোডাক্ট সম্পর্কে প্রশ্ন থাকলে জিজ্ঞেস করুন"). Shows once per tab, a
+  // moment after load, and auto-fades.
+  useEffect(() => {
+    if (!hint) return undefined;
+    try {
+      if (sessionStorage.getItem(HINT_DISMISS_KEY)) return undefined;
+    } catch {
+      /* ignore */
+    }
+    const showT = setTimeout(() => setShowHint(true), 1000);
+    const hideT = setTimeout(() => setShowHint(false), 13000);
+    return () => {
+      clearTimeout(showT);
+      clearTimeout(hideT);
+    };
+  }, [hint]);
+
+  const dismissHint = () => {
+    setShowHint(false);
+    try {
+      sessionStorage.setItem(HINT_DISMISS_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Drop any half-finished recording if the widget unmounts.
   useEffect(
@@ -466,18 +496,42 @@ export default function ChatWidget() {
               <span className="text-[11px] text-[#075E54] font-medium">উত্তর দিন →</span>
             </button>
           )}
-          <button
-            onClick={() => setOpen(true)}
-            aria-label="চ্যাট করুন"
-            className="fixed right-4 bottom-20 sm:bottom-6 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-floating flex items-center justify-center active:scale-95 transition-transform"
-          >
-            <MessageCircle size={26} />
-            {unseen > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-ui-rust text-white text-[11px] font-mono leading-5 text-center border-2 border-white">
-                {unseen}
-              </span>
+          <div className="fixed right-4 bottom-20 sm:bottom-6 z-40 flex items-center gap-2.5 flex-row-reverse">
+            <button
+              onClick={() => {
+                setOpen(true);
+                dismissHint();
+              }}
+              aria-label="চ্যাট করুন"
+              className="relative w-14 h-14 rounded-full bg-[#25D366] text-white shadow-floating flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <MessageCircle size={26} />
+              {unseen > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-ui-rust text-white text-[11px] font-mono leading-5 text-center border-2 border-white">
+                  {unseen}
+                </span>
+              )}
+            </button>
+
+            {hint && showHint && !toast && (
+              <div className="relative max-w-[13.5rem] bg-white rounded-2xl shadow-floating border border-black/5 pl-3 pr-7 py-2">
+                <button
+                  onClick={() => setOpen(true)}
+                  className="text-[12px] leading-snug text-ui-ink font-bangla text-left"
+                >
+                  {hint}
+                </button>
+                <button
+                  onClick={dismissHint}
+                  aria-label="বন্ধ করুন"
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full text-ui-faint hover:text-ui-muted flex items-center justify-center"
+                >
+                  <X size={12} />
+                </button>
+                <span className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 rotate-45 bg-white border-r border-t border-black/5" />
+              </div>
             )}
-          </button>
+          </div>
         </>
       )}
 

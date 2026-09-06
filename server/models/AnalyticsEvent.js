@@ -29,6 +29,9 @@ const analyticsEventSchema = new mongoose.Schema(
 
     path: { type: String, trim: true, default: '' },
     referrer: { type: String, trim: true, default: '' },
+    // Salted SHA-256 of the client IP (never the raw IP) — used only to
+    // de-duplicate repeat views from the same device/network.
+    ipHash: { type: String, trim: true, default: '' },
     // Order revenue snapshot, only on `order_placed`, so revenue trends don't
     // need a second collection join per bucket.
     value: { type: Number, default: 0 },
@@ -40,6 +43,9 @@ const analyticsEventSchema = new mongoose.Schema(
 
 analyticsEventSchema.index({ type: 1, at: -1 });
 analyticsEventSchema.index({ product: 1, at: -1 });
+// Speeds up the view-dedupe lookup (type + identity within a short window).
+analyticsEventSchema.index({ type: 1, sessionId: 1, at: -1 });
+analyticsEventSchema.index({ type: 1, ipHash: 1, at: -1 });
 
 const ttlDays = Number(process.env.ANALYTICS_EVENT_TTL_DAYS || 180);
 analyticsEventSchema.index({ at: 1 }, { expireAfterSeconds: ttlDays * 24 * 60 * 60 });

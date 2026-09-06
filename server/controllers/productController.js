@@ -126,21 +126,27 @@ exports.getProduct = async (req, res) => {
 // POST /api/products/:id/view   (public — storefront product detail page)
 // Debounced per session on the client so this is ~one call per real view.
 exports.recordProductView = async (req, res) => {
-  const product = await Product.findByIdAndUpdate(
-    req.params.id,
-    { $inc: { viewCount: 1 } },
-    { new: true }
-  ).select('viewCount category');
+  const product = await Product.findById(req.params.id).select('viewCount category');
   if (!product) return res.status(404).json({ message: 'Product not found' });
 
-  analytics.record({
-    type: 'product_view',
-    product: product._id,
-    category: product.category || null,
-    sessionId: req.body.sessionId || '',
-    customer: req.customer ? req.customer._id : null,
-    path: req.body.path || '',
-  });
+  // Repeat views from the same visitor (sessionId / customer / IP) inside the
+  // dedupe window don't bump the counter or log another event.
+  const { deduped } = await analytics.recordView(
+    {
+      type: 'product_view',
+      product: product._id,
+      category: product.category || null,
+      sessionId: req.body.sessionId || '',
+      customer: req.customer ? req.customer._id : null,
+      path: req.body.path || '',
+    },
+    req
+  );
+
+  if (!deduped) {
+    await Product.updateOne({ _id: product._id }, { $inc: { viewCount: 1 } });
+    product.viewCount += 1;
+  }
 
   res.json({ viewCount: product.viewCount });
 };

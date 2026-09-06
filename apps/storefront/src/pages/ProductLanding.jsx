@@ -11,6 +11,8 @@ import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import SearchableSelect from '../components/SearchableSelect';
 import ProductGallery from '../components/ProductGallery';
+import ChatWidget from '../components/ChatWidget';
+import RichText from '../components/RichText';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, BKASH_MERCHANT_NUMBER } from '../utils/company';
@@ -237,11 +239,7 @@ export default function ProductLanding() {
               </p>
             ) : null}
 
-            {product.description && (
-              <p className="mt-4 text-sm text-ui-ink/80 leading-relaxed whitespace-pre-wrap break-words font-bangla" dir="auto">
-                {product.description}
-              </p>
-            )}
+            <RichText html={product.description} className="mt-4 text-sm" />
 
             <div className="mt-5 grid grid-cols-3 gap-2 text-center">
               <Trust icon={ShieldCheck} label="আসল প্রোডাক্ট" />
@@ -418,6 +416,7 @@ function Shell({ children }) {
           <span>{COMPANY_PHONE} · {COMPANY_EMAIL}</span>
         </div>
       </footer>
+      <ChatWidget hint="প্রোডাক্ট সম্পর্কে প্রশ্ন থাকলে জিজ্ঞেস করুন" />
     </div>
   );
 }

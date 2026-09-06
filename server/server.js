@@ -37,6 +37,25 @@ connectDB();
 
 const app = express();
 
+// Behind nginx / Cloudflare in production so req.ip is the real client (used
+// for analytics view de-duplication and HTTP logs). TRUST_PROXY overrides:
+// a number of proxy hops, "true", "false", or a comma-list of trusted IPs.
+const trustProxy = process.env.TRUST_PROXY;
+app.set(
+  'trust proxy',
+  trustProxy === undefined
+    ? process.env.NODE_ENV === 'production'
+      ? 1
+      : false
+    : /^\d+$/.test(trustProxy)
+    ? Number(trustProxy)
+    : trustProxy === 'true'
+    ? true
+    : trustProxy === 'false'
+    ? false
+    : trustProxy
+);
+
 // Allow both frontends (storefront + admin) to call this one API.
 // Set ALLOWED_ORIGINS in .env as a comma-separated list for production.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')

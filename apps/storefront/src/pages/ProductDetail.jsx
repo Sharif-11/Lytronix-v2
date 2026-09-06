@@ -12,6 +12,7 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { getSessionId, shouldLogProductView, track } from '../lib/analytics';
 import ProductCard from '../components/ProductCard';
 import ProductGallery from '../components/ProductGallery';
+import RichText from '../components/RichText';
 
 const POLICY_TONE_CLASSES = {
   rust: 'bg-red-50 text-ui-rust border-red-100',
@@ -151,13 +152,7 @@ export default function ProductDetail() {
             {policyBadge.text}
           </div>
 
-          {product.description && (
-            <div
-              className="prose prose-sm max-w-none mt-4 text-ui-ink/90 font-bangla [&_ul]:list-disc [&_ul]:pl-5 [&_a]:text-ui-brand"
-              dir="auto"
-              dangerouslySetInnerHTML={{ __html: product.description }}
-            />
-          )}
+          <RichText html={product.description} className="mt-4" />
 
           {!outOfStock && (
             <div className="mt-6 flex items-center gap-3">

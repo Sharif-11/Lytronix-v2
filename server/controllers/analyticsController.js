@@ -2,8 +2,12 @@ const mongoose = require('mongoose');
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const analytics = require('../services/analytics');
 
 const TRACKABLE = new Set(['site_visit', 'product_view', 'category_view', 'add_to_cart', 'checkout_started']);
+// Passive page views get de-duplicated per visitor+window; intentful actions
+// (add_to_cart, checkout_started) are always recorded.
+const DEDUPE_VIEWS = new Set(['site_visit', 'product_view', 'category_view']);
 
 // POST /api/analytics/track   { type, sessionId, productId?, categoryId?, path?, referrer? }
 // Public. `order_placed` is emitted server-side by the order controller, never
@@ -12,7 +16,7 @@ exports.track = async (req, res) => {
   const { type, sessionId, productId, categoryId, path, referrer } = req.body || {};
   if (!TRACKABLE.has(type)) return res.status(400).json({ message: 'Unknown event type.' });
 
-  await AnalyticsEvent.create({
+  const event = {
     type,
     sessionId: String(sessionId || '').slice(0, 64),
     product: mongoose.isValidObjectId(productId) ? productId : null,
@@ -20,8 +24,13 @@ exports.track = async (req, res) => {
     customer: req.customer ? req.customer._id : null,
     path: String(path || '').slice(0, 200),
     referrer: String(referrer || '').slice(0, 200),
-    at: new Date(),
-  });
+  };
+
+  if (DEDUPE_VIEWS.has(type)) {
+    await analytics.recordView(event, req);
+  } else {
+    await analytics.record(event);
+  }
 
   res.status(202).json({ ok: true });
 };
