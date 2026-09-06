@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ChevronRight, Home, Minus, Plus, Heart, ShoppingBag, Check, ImageOff, ArrowLeft,
+  ChevronRight, Home, Minus, Plus, Heart, ShoppingBag, Check, ArrowLeft,
   ShieldCheck, Truck, Banknote,
 } from 'lucide-react';
 import { getProduct, getProducts, recordProductView } from '../api/client';
@@ -11,6 +11,7 @@ import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { getSessionId, shouldLogProductView, track } from '../lib/analytics';
 import ProductCard from '../components/ProductCard';
+import ProductGallery from '../components/ProductGallery';
 
 const POLICY_TONE_CLASSES = {
   rust: 'bg-red-50 text-ui-rust border-red-100',
@@ -27,7 +28,6 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [qty, setQty] = useState(1);
-  const [activeImg, setActiveImg] = useState(0);
   const [added, setAdded] = useState(false);
   const [related, setRelated] = useState([]);
 
@@ -35,7 +35,6 @@ export default function ProductDetail() {
     setProduct(null);
     setError('');
     setQty(1);
-    setActiveImg(0);
     getProduct(slug)
       .then((p) => {
         setProduct(p);
@@ -105,38 +104,14 @@ export default function ProductDetail() {
         ))}
       </nav>
 
-      <div className="grid md:grid-cols-2 gap-6 sm:gap-10">
+      <div className="grid md:grid-cols-2 gap-5 sm:gap-8 md:gap-10">
         {/* Gallery */}
-        <div>
-          <div className="aspect-square rounded-2xl border border-ui-line bg-ui-surfaceAlt overflow-hidden flex items-center justify-center">
-            {images[activeImg] ? (
-              <img src={images[activeImg]} alt={product.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="text-ui-faint flex flex-col items-center gap-2">
-                <ImageOff size={40} />
-                <span className="text-xs">ছবি নেই</span>
-              </div>
-            )}
-          </div>
-          {images.length > 1 && (
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {images.map((src, i) => (
-                <button
-                  key={src}
-                  onClick={() => setActiveImg(i)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 ${
-                    i === activeImg ? 'border-ui-brand' : 'border-ui-line'
-                  }`}
-                >
-                  <img src={src} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="md:sticky md:top-6 self-start min-w-0">
+          <ProductGallery images={images} videos={product.videos} name={product.name} />
         </div>
 
         {/* Info */}
-        <div>
+        <div className="min-w-0">
           {product.category?.name && (
             <Link
               to={`/shop/c/${product.category.slug}`}
@@ -145,7 +120,7 @@ export default function ProductDetail() {
               {product.category.name}
             </Link>
           )}
-          <h1 className="font-display text-2xl sm:text-3xl text-ui-ink mt-1">{product.name}</h1>
+          <h1 className="font-display text-xl sm:text-2xl md:text-3xl text-ui-ink mt-1 break-words">{product.name}</h1>
 
           <div className="mt-3 flex items-baseline gap-3">
             <span className="font-mono text-2xl text-ui-brand font-semibold">

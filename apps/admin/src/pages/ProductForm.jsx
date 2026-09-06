@@ -9,6 +9,7 @@ import { usePhonetic } from '../context/PhoneticContext';
 import { ImagePlus, VideoIcon, X, Star, Loader2, Play } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect';
 import { emitError } from '../lib/errorBus';
+import { useConfirm } from '../context/ConfirmContext';
 
 const empty = {
   name: '',
@@ -26,7 +27,7 @@ const empty = {
   paymentPolicy: { codAllowed: true, advanceType: 'none', advanceAmount: '', advancePercent: '' },
 };
 
-const MAX_IMAGE_BYTES = 1 * 1024 * 1024; // 1MB
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB — server resizes + re-encodes to WebP
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50MB
 
 export default function ProductForm() {
@@ -42,6 +43,7 @@ export default function ProductForm() {
   const [preview, setPreview] = useState(null); // { type: 'image'|'video', url }
   const fileInputRef = useRef(null);
   const { phoneticOn } = usePhonetic();
+  const confirm = useConfirm();
 
   useEffect(() => {
     getCategories({ includeInactive: 'true' })
@@ -105,7 +107,7 @@ export default function ProductForm() {
           continue;
         }
         if (!isVideo && file.size > MAX_IMAGE_BYTES) {
-          emitError(`"${file.name}" is over 1MB — please use a smaller image.`);
+          emitError(`"${file.name}" is over 15MB — please use a smaller image.`);
           continue;
         }
 
@@ -131,11 +133,13 @@ export default function ProductForm() {
   }
 
   async function removeImage(url) {
+    if (!(await confirm('Remove this photo from the product?', { danger: true, confirmLabel: 'Remove' }))) return;
     setForm((f) => ({ ...f, images: f.images.filter((i) => i !== url) }));
     deleteCloudinaryAsset(url).catch(() => {}); // best-effort, mirrors the backend's own cleanup
   }
 
   async function removeVideo(url) {
+    if (!(await confirm('Remove this video from the product?', { danger: true, confirmLabel: 'Remove' }))) return;
     setForm((f) => ({ ...f, videos: f.videos.filter((v) => v !== url) }));
     deleteCloudinaryAsset(url).catch(() => {});
   }
@@ -194,6 +198,7 @@ export default function ProductForm() {
                 key={url}
                 className="relative aspect-square rounded-xl overflow-hidden border border-ui-line group bg-ui-surfaceAlt"
               >
+                {/* Tapping the photo body previews it — never deletes. */}
                 <button
                   type="button"
                   onClick={() => setPreview({ type: 'image', url })}
@@ -202,31 +207,40 @@ export default function ProductForm() {
                 >
                   <img src={url} alt="" loading="lazy" className="w-full h-full object-cover" />
                 </button>
+
                 {idx === 0 && (
                   <span className="absolute bottom-0 inset-x-0 bg-ui-brand text-white text-[9px] sm:text-[10px] text-center py-0.5 pointer-events-none">
                     Cover
                   </span>
                 )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 sm:group-active:opacity-100 transition-opacity flex items-center justify-center gap-1.5 pointer-events-none">
-                  {idx !== 0 && (
-                    <button
-                      type="button"
-                      onClick={() => makeCover(url)}
-                      title="Set as cover"
-                      className="pointer-events-auto w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-ui-ink"
-                    >
-                      <Star size={12} />
-                    </button>
-                  )}
+
+                {/* Actions live in the corners, clear of the tap-to-preview area. */}
+                {idx !== 0 && (
                   <button
                     type="button"
-                    onClick={() => removeImage(url)}
-                    title="Remove"
-                    className="pointer-events-auto w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-ui-rust"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      makeCover(url);
+                    }}
+                    title="Set as cover"
+                    aria-label="Set as cover"
+                    className="absolute top-1 left-1 w-7 h-7 rounded-full bg-white/95 shadow-sm border border-black/5 flex items-center justify-center text-ui-ink"
                   >
-                    <X size={12} />
+                    <Star size={13} />
                   </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeImage(url);
+                  }}
+                  title="Remove"
+                  aria-label="Remove photo"
+                  className="absolute top-1 right-1 w-7 h-7 rounded-full bg-white/95 shadow-sm border border-black/5 flex items-center justify-center text-ui-rust"
+                >
+                  <X size={13} />
+                </button>
               </div>
             ))}
 
@@ -248,11 +262,15 @@ export default function ProductForm() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => removeVideo(url)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeVideo(url);
+                  }}
                   title="Remove"
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-ui-rust opacity-0 group-hover:opacity-100 sm:group-active:opacity-100 transition-opacity"
+                  aria-label="Remove video"
+                  className="absolute top-1 right-1 w-7 h-7 rounded-full bg-white/95 shadow-sm border border-black/5 flex items-center justify-center text-ui-rust"
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
               </div>
             ))}
@@ -285,8 +303,8 @@ export default function ProductForm() {
             />
           </div>
           <p className="text-xs text-ui-muted mt-1.5">
-            First photo is the cover shown in the catalogue. Select multiple photos and videos at once — images up to
-            1MB each, videos up to 50MB each. Tap a thumbnail to preview.
+            First photo is the cover shown in the catalogue. Select multiple photos and videos at once — upload photos
+            straight from your phone (up to 15MB, auto-optimized), videos up to 50MB each. Tap a thumbnail to preview.
           </p>
         </div>
 

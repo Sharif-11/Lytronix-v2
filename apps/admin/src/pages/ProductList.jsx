@@ -205,7 +205,7 @@ export default function ProductList() {
                 : null;
             return (
               <div key={p._id} className="card overflow-hidden flex flex-col group">
-                <div className="aspect-square bg-ui-surfaceAlt relative overflow-hidden">
+                <Link to={`/products/${p._id}`} className="aspect-square bg-ui-surfaceAlt relative overflow-hidden block">
                   {p.imageUrl ? (
                     <img
                       src={p.imageUrl}
@@ -233,12 +233,15 @@ export default function ProductList() {
                       {t('products.lowStock')}
                     </span>
                   )}
-                </div>
+                </Link>
 
                 <div className="p-2.5 sm:p-4 flex flex-col flex-1">
-                  <h3 className="font-display font-bold text-ui-ink text-xs sm:text-base leading-snug line-clamp-2">
+                  <Link
+                    to={`/products/${p._id}`}
+                    className="font-display font-bold text-ui-ink text-xs sm:text-base leading-snug line-clamp-2 hover:text-ui-brand"
+                  >
                     {p.name}
-                  </h3>
+                  </Link>
                   <p className="text-[10px] sm:text-xs text-ui-faint mt-0.5 truncate">
                     {p.category?.name || t('products.uncategorised')}
                     {p.viewCount ? ` · ${t('products.views', { n: p.viewCount })}` : ''}

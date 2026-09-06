@@ -11,7 +11,10 @@ const {
   deleteAsset,
 } = require('../controllers/uploadController');
 
-const IMAGE_MAX_BYTES = 1 * 1024 * 1024; // 1MB
+// Images are resized + re-encoded to WebP server-side (see
+// services/imageProcessing.js), so we accept a straight-from-phone photo
+// here and shrink it, rather than rejecting anything over ~1MB.
+const IMAGE_MAX_BYTES = 15 * 1024 * 1024; // 15MB
 const VIDEO_MAX_BYTES = 50 * 1024 * 1024; // 50MB
 
 const imageUpload = multer({
@@ -49,12 +52,12 @@ function handleUploadError(limitLabel) {
   };
 }
 
-// Admin-only: catalogue photos. Images must be under 1MB.
+// Admin-only: catalogue photos. Up to 15MB in; stored as an optimized WebP.
 router.post(
   '/product-image',
   protect,
   authorize('products:manage'),
-  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('1MB')(err, req, res, next)),
+  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('15MB')(err, req, res, next)),
   asyncHandler(uploadProductImage)
 );
 
@@ -73,7 +76,7 @@ router.post(
   '/image',
   protect,
   authorize('products:manage', 'categories:manage'),
-  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('1MB')(err, req, res, next)),
+  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('15MB')(err, req, res, next)),
   asyncHandler(uploadImage)
 );
 
@@ -86,7 +89,7 @@ router.delete('/', protect, authorize('products:manage', 'categories:manage'), a
 // before they're logged in to anything — there's no admin session at that point.
 router.post(
   '/payment-proof',
-  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('1MB')(err, req, res, next)),
+  (req, res, next) => imageUpload.single('image')(req, res, (err) => handleUploadError('15MB')(err, req, res, next)),
   asyncHandler(uploadPaymentProof)
 );
 

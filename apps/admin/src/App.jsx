@@ -16,6 +16,7 @@ import OrderForm from './pages/OrderForm';
 import OrderDetail from './pages/OrderDetail';
 import ProductList from './pages/ProductList';
 import ProductForm from './pages/ProductForm';
+import ProductDetail from './pages/ProductDetail';
 import CategoryManagement from './pages/CategoryManagement';
 import Analytics from './pages/Analytics';
 import CustomerList from './pages/CustomerList';
@@ -85,6 +86,7 @@ export default function App() {
 
       <Route path="/products" element={<RequireAuth><AdminLayout><ProductList /></AdminLayout></RequireAuth>} />
       <Route path="/products/new" element={<RequireAuth permission="products:manage"><AdminLayout><ProductForm /></AdminLayout></RequireAuth>} />
+      <Route path="/products/:id" element={<RequireAuth><AdminLayout><ProductDetail /></AdminLayout></RequireAuth>} />
       <Route path="/products/:id/edit" element={<RequireAuth permission="products:manage"><AdminLayout><ProductForm /></AdminLayout></RequireAuth>} />
 
       <Route path="/categories" element={<RequireAuth permission="categories:manage"><AdminLayout><CategoryManagement /></AdminLayout></RequireAuth>} />

@@ -10,6 +10,7 @@ import {
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import SearchableSelect from '../components/SearchableSelect';
+import ProductGallery from '../components/ProductGallery';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, BKASH_MERCHANT_NUMBER } from '../utils/company';
@@ -33,7 +34,6 @@ export default function ProductLanding() {
   const [form, setForm] = useState(emptyForm);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [bkash, setBkash] = useState(emptyBkash);
-  const [activeMedia, setActiveMedia] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [error, setError] = useState('');
@@ -63,14 +63,6 @@ export default function ProductLanding() {
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
   }, []);
-
-  const media = useMemo(() => {
-    if (!product) return [];
-    return [
-      ...(product.images || []).map((url) => ({ type: 'image', url })),
-      ...(product.videos || []).map((url) => ({ type: 'video', url })),
-    ];
-  }, [product]);
 
   const unitPrice = product?.price || 0;
   const perUnitDelivery = product?.deliveryCharge || 0;
@@ -211,53 +203,20 @@ export default function ProductLanding() {
     );
   }
 
-  const cover = media[activeMedia];
-
   return (
     <Shell>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-10 overflow-x-clip">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
           {/* Gallery */}
-          <div className="lg:sticky lg:top-6 self-start">
-            <div className="rounded-2xl overflow-hidden border border-ui-line bg-white aspect-square flex items-center justify-center">
-              {cover ? (
-                cover.type === 'video' ? (
-                  <video src={cover.url} controls className="w-full h-full object-contain bg-black" />
-                ) : (
-                  <img src={cover.url} alt={product.name} className="w-full h-full object-contain" />
-                )
-              ) : (
-                <div className="text-ui-faint text-sm">ছবি নেই</div>
-              )}
-            </div>
-            {media.length > 1 && (
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                {media.map((m, i) => (
-                  <button
-                    key={m.url}
-                    onClick={() => setActiveMedia(i)}
-                    className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 bg-white ${
-                      i === activeMedia ? 'border-ui-brand' : 'border-ui-line'
-                    }`}
-                  >
-                    {m.type === 'video' ? (
-                      <div className="w-full h-full flex items-center justify-center bg-ui-ink/5 text-ui-muted text-[10px]">
-                        ভিডিও
-                      </div>
-                    ) : (
-                      <img src={m.url} alt="" className="w-full h-full object-cover" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="md:sticky md:top-6 self-start min-w-0">
+            <ProductGallery images={product.images} videos={product.videos} name={product.name} />
           </div>
 
           {/* Details + order */}
-          <div>
-            <h1 className="font-display text-2xl sm:text-3xl text-ui-brand leading-tight">{product.name}</h1>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl md:text-3xl text-ui-brand leading-tight">{product.name}</h1>
 
-            <div className="mt-3 flex items-baseline gap-3 flex-wrap">
+            <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
               <span className="font-mono text-2xl sm:text-3xl font-semibold text-ui-ink">
                 {formatMoney(unitPrice)}
               </span>
@@ -411,7 +370,11 @@ export default function ProductLanding() {
                 </div>
               </div>
 
-              <button type="submit" disabled={submitting || outOfStock} className="btn-primary w-full py-3 text-base gap-2">
+              <button
+                type="submit"
+                disabled={submitting || outOfStock}
+                className="btn-primary w-full min-w-0 py-3 text-sm sm:text-base gap-2 text-center leading-tight"
+              >
                 {uploadingProof ? (
                   <><Loader2 size={16} className="animate-spin" /> স্ক্রিনশট আপলোড হচ্ছে…</>
                 ) : submitting ? (
@@ -494,7 +457,7 @@ function PayOption({ icon: Icon, label, active, onClick, disabled, accent }) {
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-sm text-left transition-colors ${
+      className={`flex flex-col items-center text-center gap-1.5 rounded-xl border px-2 py-3 min-w-0 transition-colors ${
         disabled
           ? 'border-ui-line opacity-50 cursor-not-allowed'
           : active
@@ -511,7 +474,7 @@ function PayOption({ icon: Icon, label, active, onClick, disabled, accent }) {
       >
         <Icon size={15} />
       </span>
-      <span className="font-medium text-ui-ink leading-tight">{label}</span>
+      <span className="text-xs sm:text-sm font-medium text-ui-ink leading-tight break-words min-w-0">{label}</span>
     </button>
   );
 }
