@@ -1,8 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { MessagesSquare, Search, Send, Loader2, ArrowLeft, Phone, Check, Paperclip, Mic, Square } from 'lucide-react';
-import { getChatThreads, getChatMessages, sendChatMessage, updateChatThread, uploadChatMedia } from '../api/client';
+import {
+  MessagesSquare,
+  Search,
+  Send,
+  Loader2,
+  ArrowLeft,
+  Phone,
+  Check,
+  CheckCheck,
+  Paperclip,
+  Mic,
+  MoreVertical,
+  Copy,
+  Pencil,
+  Trash2,
+  X,
+} from 'lucide-react';
+import {
+  getChatThreads,
+  getChatMessages,
+  sendChatMessage,
+  editChatMessage,
+  deleteChatMessage,
+  updateChatThread,
+  uploadChatMedia,
+} from '../api/client';
 import ProgressRing from '../components/ProgressRing';
+import { useConfirm } from '../context/ConfirmContext';
 
 const POLL_THREADS_MS = 8000;
 const POLL_MESSAGES_MS = 3000;
@@ -27,9 +52,44 @@ const dateLabel = (d) => {
   return t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+const isRealId = (id) => /^[a-f\d]{24}$/i.test(String(id || ''));
+
+// Fold freshly-fetched rows into the list: replace any we already hold (so
+// delivery/read/edit/delete updates land), append the rest, keep time order.
+function mergeMessages(prev, fresh) {
+  const map = new Map(prev.map((m) => [m._id, m]));
+  for (const m of fresh) map.set(m._id, m);
+  return [...map.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function Chat() {
   const [params, setParams] = useSearchParams();
   const activePhone = params.get('phone') || '';
+  const confirm = useConfirm();
 
   const [threads, setThreads] = useState([]);
   const [search, setSearch] = useState('');
@@ -37,9 +97,12 @@ export default function Chat() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [editing, setEditing] = useState(null); // { id, body }
+  const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
 
   const bodyRef = useRef(null);
-  const lastIdRef = useRef(null);
+  const lastIdRef = useRef(null); // newest real message _id (cursor for brand-new rows)
+  const updatedAtRef = useRef(null); // newest updatedAt seen (cursor for changed rows)
 
   const activeThread = threads.find((t) => t.phone === activePhone) || null;
 
@@ -55,31 +118,42 @@ export default function Chat() {
     return () => clearInterval(id);
   }, [loadThreads]);
 
+  const absorb = useCallback((fresh) => {
+    if (!fresh?.length) return;
+    for (const m of fresh) {
+      if (isRealId(m._id) && (!lastIdRef.current || m._id > lastIdRef.current)) lastIdRef.current = m._id;
+      const u = new Date(m.updatedAt || m.createdAt).getTime();
+      if (!updatedAtRef.current || u > new Date(updatedAtRef.current).getTime()) {
+        updatedAtRef.current = new Date(u).toISOString();
+      }
+    }
+    setMessages((prev) => mergeMessages(prev, fresh));
+  }, []);
+
   // Load / poll the open conversation.
   useEffect(() => {
     if (!activePhone) {
       setMessages([]);
       lastIdRef.current = null;
+      updatedAtRef.current = null;
       return undefined;
     }
     let alive = true;
     setLoadingMsgs(true);
+    setEditing(null);
+    setMenuFor(null);
     lastIdRef.current = null;
+    updatedAtRef.current = null;
     setMessages([]);
 
     const tick = async (initial) => {
       try {
         const { messages: fresh } = await getChatMessages(activePhone, {
           after: lastIdRef.current || undefined,
+          updatedAfter: updatedAtRef.current || undefined,
         });
         if (!alive) return;
-        if (fresh?.length) {
-          setMessages((prev) => {
-            const seen = new Set(prev.map((m) => m._id));
-            return [...prev, ...fresh.filter((m) => !seen.has(m._id))];
-          });
-          lastIdRef.current = fresh[fresh.length - 1]._id;
-        }
+        absorb(fresh);
         if (initial) loadThreads(); // reflect the now-zeroed unread badge
       } catch {
         /* transient */
@@ -94,7 +168,7 @@ export default function Chat() {
       alive = false;
       clearInterval(id);
     };
-  }, [activePhone, loadThreads]);
+  }, [activePhone, loadThreads, absorb]);
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -124,8 +198,12 @@ export default function Chat() {
     setMessages((prev) => [...prev, optimistic]);
     try {
       const { message } = await sendChatMessage(activePhone, payload);
-      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
-      lastIdRef.current = message._id;
+      setMessages((prev) => {
+        const swapped = prev.map((m) => (m._id === optimistic._id ? message : m));
+        const seen = new Set();
+        return swapped.filter((m) => !seen.has(m._id) && seen.add(m._id));
+      });
+      absorb([message]);
       loadThreads();
     } catch {
       setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
@@ -140,6 +218,53 @@ export default function Chat() {
     setDraft('');
     await pushMessage({ type: 'text', body });
     setSending(false);
+  };
+
+  const copyMsg = async (m) => {
+    setMenuFor(null);
+    if (m.body) await copyToClipboard(m.body);
+  };
+
+  const startEdit = (m) => {
+    setMenuFor(null);
+    setEditing({ id: m._id, body: m.body || '' });
+  };
+
+  const submitEdit = async (e) => {
+    e?.preventDefault();
+    if (!editing) return;
+    const body = editing.body.trim();
+    const target = messages.find((m) => m._id === editing.id);
+    if (!body || !target) return setEditing(null);
+    if (body === (target.body || '')) return setEditing(null);
+    setEditing(null);
+    setMessages((prev) =>
+      prev.map((m) => (m._id === target._id ? { ...m, body, editedAt: new Date().toISOString(), pending: true } : m))
+    );
+    try {
+      const { message } = await editChatMessage(activePhone, target._id, body);
+      absorb([message]);
+      loadThreads();
+    } catch {
+      setMessages((prev) => prev.map((m) => (m._id === target._id ? { ...target } : m)));
+    }
+  };
+
+  const deleteMsg = async (m) => {
+    setMenuFor(null);
+    const ok = await confirm('Delete this message for everyone?', {
+      title: 'Delete message',
+      danger: true,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      const { message } = await deleteChatMessage(activePhone, m._id);
+      absorb([message]);
+      loadThreads();
+    } catch {
+      /* surfaced globally */
+    }
   };
 
   const onPickFile = async (e) => {
@@ -193,8 +318,7 @@ export default function Chat() {
         try {
           const file = new File([blob], 'voice.webm', { type: blob.type });
           const { url, mime } = await uploadChatMedia(file, {
-            onUploadProgress: (ev) =>
-              ev.total && setUploadPct(Math.round((ev.loaded / ev.total) * 100)),
+            onUploadProgress: (ev) => ev.total && setUploadPct(Math.round((ev.loaded / ev.total) * 100)),
           });
           await pushMessage({ type: 'voice', mediaUrl: url, mediaMime: mime, durationSec: secs });
         } catch {
@@ -336,7 +460,11 @@ export default function Chat() {
                 </button>
               </div>
 
-              <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5">
+              <div
+                ref={bodyRef}
+                className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5"
+                onClick={() => menuFor && setMenuFor(null)}
+              >
                 {loadingMsgs && (
                   <p className="text-center text-xs text-black/40 mt-4">
                     <Loader2 size={14} className="animate-spin inline" /> Loading…
@@ -353,12 +481,54 @@ export default function Chat() {
                       </span>
                     </div>
                   ) : (
-                    <Bubble key={row.key} m={row.m} />
+                    <Bubble
+                      key={row.key}
+                      m={row.m}
+                      menuOpen={menuFor === row.m._id}
+                      onToggleMenu={() => setMenuFor((cur) => (cur === row.m._id ? null : row.m._id))}
+                      onCopy={() => copyMsg(row.m)}
+                      onEdit={() => startEdit(row.m)}
+                      onDelete={() => deleteMsg(row.m)}
+                    />
                   )
                 )}
               </div>
 
-              {recording ? (
+              {editing ? (
+                <form onSubmit={submitEdit} className="shrink-0 bg-[#F0F0F0] px-2 py-2">
+                  <div className="flex items-center justify-between px-1.5 pb-1 text-[11px] text-[#075E54]">
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      <Pencil size={11} /> Editing message
+                    </span>
+                    <button type="button" onClick={() => setEditing(null)} aria-label="Cancel edit">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="flex items-end gap-1.5">
+                    <textarea
+                      rows={1}
+                      autoFocus
+                      className="flex-1 resize-none max-h-28 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
+                      value={editing.body}
+                      onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          submitEdit();
+                        }
+                        if (e.key === 'Escape') setEditing(null);
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0"
+                      aria-label="Save"
+                    >
+                      <Check size={16} />
+                    </button>
+                  </div>
+                </form>
+              ) : recording ? (
                 <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-full bg-ui-rust animate-pulse" />
                   <span className="text-sm font-mono text-ui-ink flex-1">
@@ -427,32 +597,106 @@ export default function Chat() {
   );
 }
 
-function Bubble({ m }) {
+// Sent → single grey · delivered → double grey · read → double blue.
+function Ticks({ m }) {
+  if (m.readByCustomer) return <CheckCheck size={14} className="text-[#53BDEB]" />;
+  if (m.deliveredToCustomer) return <CheckCheck size={14} className="text-black/40" />;
+  return <Check size={14} className="text-black/40" />;
+}
+
+function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
   const mine = m.from === 'admin';
+  const deleted = Boolean(m.deletedAt);
+  const canAct = mine && !deleted && !m.pending && !m.failed;
+
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[78%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
+        className={`relative max-w-[78%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
           mine ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'
         }`}
         dir="auto"
       >
-        {mine && m.senderName && (
+        {mine && m.senderName && !deleted && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
         )}
-        {m.type === 'image' && m.mediaUrl && (
-          <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
-            <img src={m.mediaUrl} alt="" className="rounded-md max-h-56 max-w-full object-cover" />
-          </a>
+
+        {deleted ? (
+          <span className="italic text-black/45">🚫 This message was deleted</span>
+        ) : (
+          <>
+            {m.type === 'image' && m.mediaUrl && (
+              <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                <img src={m.mediaUrl} alt="" className="rounded-md max-h-56 max-w-full object-cover" />
+              </a>
+            )}
+            {m.type === 'voice' && m.mediaUrl && (
+              <audio src={m.mediaUrl} controls className="h-9 w-52 max-w-full mt-0.5" />
+            )}
+            {m.body && <span>{m.body}</span>}
+          </>
         )}
-        {m.type === 'voice' && m.mediaUrl && (
-          <audio src={m.mediaUrl} controls className="h-9 w-52 max-w-full mt-0.5" />
-        )}
-        {m.body && <span>{m.body}</span>}
+
         <span className="inline-flex items-center gap-0.5 align-bottom text-[10px] text-black/45 ml-2 -mb-0.5 float-right pl-1">
+          {m.editedAt && !deleted && <span className="italic mr-0.5">edited</span>}
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
-          {mine && !m.pending && !m.failed && <Check size={11} className="text-black/40" />}
+          {mine && !m.pending && !m.failed && !deleted && <Ticks m={m} />}
         </span>
+
+        {canAct && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu();
+            }}
+            className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white shadow border border-black/5 text-ui-muted flex items-center justify-center transition-opacity ${
+              menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}
+            aria-label="Message actions"
+          >
+            <MoreVertical size={13} />
+          </button>
+        )}
+
+        {canAct && menuOpen && (
+          <div className="absolute z-20 top-5 right-0 min-w-[9rem] bg-white rounded-xl shadow-floating border border-ui-line py-1 text-[13px] text-ui-ink">
+            {m.body && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopy();
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2"
+              >
+                <Copy size={13} /> Copy
+              </button>
+            )}
+            {m.type === 'text' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2"
+              >
+                <Pencil size={13} /> Edit
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2 text-ui-rust"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

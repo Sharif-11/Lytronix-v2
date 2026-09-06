@@ -28,6 +28,8 @@ const onUploadError = (err, req, res, next) => {
 router.post('/start', attachCustomer, asyncHandler(ctrl.startChat));
 router.get('/messages', attachCustomer, asyncHandler(ctrl.customerMessages));
 router.post('/send', attachCustomer, asyncHandler(ctrl.customerSend));
+router.patch('/messages/:id', attachCustomer, asyncHandler(ctrl.customerEditMessage));
+router.delete('/messages/:id', attachCustomer, asyncHandler(ctrl.customerDeleteMessage));
 
 // Attachment upload — used by both sides (auth handled in the controller).
 router.post(
@@ -41,6 +43,8 @@ router.post(
 router.get('/threads', protect, authorize('customers:manage'), asyncHandler(ctrl.listThreads));
 router.get('/threads/:phone/messages', protect, authorize('customers:manage'), asyncHandler(ctrl.adminMessages));
 router.post('/threads/:phone/messages', protect, authorize('customers:manage'), asyncHandler(ctrl.adminSend));
+router.patch('/threads/:phone/messages/:id', protect, authorize('customers:manage'), asyncHandler(ctrl.adminEditMessage));
+router.delete('/threads/:phone/messages/:id', protect, authorize('customers:manage'), asyncHandler(ctrl.adminDeleteMessage));
 router.patch('/threads/:phone', protect, authorize('customers:manage'), asyncHandler(ctrl.updateThread));
 
 module.exports = router;

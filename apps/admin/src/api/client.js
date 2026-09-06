@@ -224,6 +224,10 @@ export const getChatMessages = (phone, params) =>
   client.get(`/chat/threads/${phone}/messages`, { params, skipErrorModal: true }).then((r) => r.data);
 export const sendChatMessage = (phone, payload) =>
   client.post(`/chat/threads/${phone}/messages`, payload).then((r) => r.data);
+export const editChatMessage = (phone, id, body) =>
+  client.patch(`/chat/threads/${phone}/messages/${id}`, { body }).then((r) => r.data);
+export const deleteChatMessage = (phone, id) =>
+  client.delete(`/chat/threads/${phone}/messages/${id}`).then((r) => r.data);
 export const updateChatThread = (phone, status) =>
   client.patch(`/chat/threads/${phone}`, { status }).then((r) => r.data);
 export const uploadChatMedia = (file, config) => {

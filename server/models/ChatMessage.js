@@ -13,14 +13,22 @@ const chatMessageSchema = new mongoose.Schema(
     mediaMime: { type: String, trim: true, default: '' },
     durationSec: { type: Number, default: 0 }, // voice length
 
+    // WhatsApp-style receipts. "delivered" = the other side's client has
+    // pulled the message; "read" = they actually had the conversation open.
+    deliveredToAdmin: { type: Boolean, default: false },
+    deliveredToCustomer: { type: Boolean, default: false },
     readByAdmin: { type: Boolean, default: false },
     readByCustomer: { type: Boolean, default: false },
+
+    editedAt: { type: Date },
+    deletedAt: { type: Date }, // soft delete — the row stays as a tombstone
   },
   { timestamps: true }
 );
 
-// A message must carry either text or media.
+// A message must carry either text or media — unless it's a deleted tombstone.
 chatMessageSchema.pre('validate', function requireContent(next) {
+  if (this.deletedAt) return next();
   if (!String(this.body || '').trim() && !this.mediaUrl) {
     return next(new Error('A chat message needs text or an attachment.'));
   }

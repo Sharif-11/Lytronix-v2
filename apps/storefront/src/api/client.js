@@ -158,6 +158,10 @@ export const chatStart = (phone, name) => client.post('/chat/start', { phone, na
 export const chatMessages = (params) =>
   client.get('/chat/messages', { params, _noRetry: true }).then((r) => r.data);
 export const chatSend = (payload) => client.post('/chat/send', payload).then((r) => r.data);
+export const chatEditMessage = (id, payload) =>
+  client.patch(`/chat/messages/${id}`, payload).then((r) => r.data);
+export const chatDeleteMessage = (id, payload) =>
+  client.delete(`/chat/messages/${id}`, { data: payload }).then((r) => r.data);
 export const chatUploadMedia = (file, phone, guestKey, config) => {
   const form = new FormData();
   form.append('file', file);

@@ -37,20 +37,80 @@ function contentFrom(reqBody) {
   };
 }
 
-const previewFor = (c) =>
-  c.type === 'image' ? '📷 ছবি' : c.type === 'voice' ? '🎤 ভয়েস মেসেজ' : c.body.slice(0, 120);
+const previewFor = (c) => {
+  if (c.deletedAt) return 'এই মেসেজটি মুছে ফেলা হয়েছে';
+  return c.type === 'image' ? '📷 ছবি' : c.type === 'voice' ? '🎤 ভয়েস মেসেজ' : String(c.body || '').slice(0, 120);
+};
 
-// Rows since `after` (a message _id or an ISO timestamp), oldest first.
-async function messagesSince(thread, after) {
-  const q = { thread: thread._id };
-  if (after) {
-    if (/^[a-f\d]{24}$/i.test(String(after))) q._id = { $gt: after };
-    else {
-      const d = new Date(after);
-      if (!Number.isNaN(d.getTime())) q.createdAt = { $gt: d };
-    }
+// Rows the caller doesn't have yet: brand-new ones (`_id > after`) plus any
+// whose delivery/read/edit/delete state changed since (`updatedAt > updatedAfter`).
+// Both cursors optional; with neither, returns the whole thread (capped).
+async function messagesSince(thread, { after, updatedAfter } = {}) {
+  const ors = [];
+  if (after && /^[a-f\d]{24}$/i.test(String(after))) ors.push({ _id: { $gt: after } });
+  if (updatedAfter) {
+    const d = new Date(updatedAfter);
+    if (!Number.isNaN(d.getTime())) ors.push({ updatedAt: { $gt: d } });
   }
+  const q = { thread: thread._id };
+  if (ors.length === 1) Object.assign(q, ors[0]);
+  else if (ors.length > 1) q.$or = ors;
   return ChatMessage.find(q).sort({ createdAt: 1 }).limit(200).lean();
+}
+
+// Re-derive a thread's list-preview fields from its newest live message.
+async function refreshThreadPreview(thread) {
+  const newest = await ChatMessage.findOne({ thread: thread._id, deletedAt: null })
+    .sort({ createdAt: -1 })
+    .lean();
+  if (newest) {
+    thread.lastMessageAt = newest.createdAt;
+    thread.lastMessagePreview = previewFor(newest);
+    thread.lastMessageFrom = newest.from;
+  } else {
+    thread.lastMessagePreview = '';
+    thread.lastMessageFrom = '';
+  }
+  await thread.save();
+}
+
+// Load a message the caller is allowed to edit/delete: it must be in this
+// thread and sent by this side, and not already deleted.
+async function loadOwnMessage({ threadId, id, from }) {
+  if (!/^[a-f\d]{24}$/i.test(String(id || ''))) return { error: 400, message: 'Invalid message id.' };
+  const msg = await ChatMessage.findById(id);
+  if (!msg || String(msg.thread) !== String(threadId)) return { error: 404, message: 'Message not found.' };
+  if (msg.from !== from) return { error: 403, message: 'You can only change your own messages.' };
+  if (msg.deletedAt) return { error: 409, message: 'This message was already deleted.' };
+  return { msg };
+}
+
+async function applyEdit(msg, thread, rawBody) {
+  if (msg.type !== 'text') return { error: 400, message: 'Only text messages can be edited.' };
+  const body = String(rawBody || '').trim().slice(0, MAX_BODY);
+  if (!body) return { error: 400, message: 'মেসেজ লিখুন।' };
+  msg.body = body;
+  msg.editedAt = new Date();
+  await msg.save();
+  const newest = await ChatMessage.findOne({ thread: thread._id, deletedAt: null }).sort({ createdAt: -1 }).select('_id').lean();
+  if (newest && String(newest._id) === String(msg._id)) {
+    thread.lastMessagePreview = previewFor(msg);
+    await thread.save();
+  }
+  return {};
+}
+
+async function applyDelete(msg, thread) {
+  if (msg.mediaUrl) {
+    await require('../services/cloudinary').destroyByUrl(msg.mediaUrl).catch(() => {});
+  }
+  msg.deletedAt = new Date();
+  msg.body = '';
+  msg.mediaUrl = '';
+  msg.mediaMime = '';
+  msg.durationSec = 0;
+  await msg.save();
+  await refreshThreadPreview(thread);
 }
 
 // ---------------------------------------------------------------------------
@@ -94,26 +154,34 @@ async function customerThread(req) {
   return { thread };
 }
 
-// GET /api/chat/messages?phone=&guestKey=&after=
+// GET /api/chat/messages?phone=&guestKey=&after=&updatedAfter=&seen=1
 exports.customerMessages = async (req, res) => {
   const r = await customerThread(req);
   if (r.error) return res.status(r.error).json({ message: r.message });
+  const thread = r.thread;
+  const seen = req.query.seen === '1' || req.query.seen === 'true';
 
-  const messages = forCustomer(await messagesSince(r.thread, req.query.after));
-
-  // Opening the widget = the customer has seen everything so far.
-  if (!req.query.after || r.thread.unreadForCustomer > 0) {
+  // The customer's device now holds every admin message up to now → delivered.
+  await ChatMessage.updateMany(
+    { thread: thread._id, from: 'admin', deliveredToCustomer: false },
+    { deliveredToCustomer: true }
+  );
+  // Widget actually open (seen=1) → read, so the admin gets blue ticks.
+  if (seen) {
     await ChatMessage.updateMany(
-      { thread: r.thread._id, from: 'admin', readByCustomer: false },
+      { thread: thread._id, from: 'admin', readByCustomer: false },
       { readByCustomer: true }
     );
-    if (r.thread.unreadForCustomer !== 0) {
-      r.thread.unreadForCustomer = 0;
-      await r.thread.save();
+    if (thread.unreadForCustomer !== 0) {
+      thread.unreadForCustomer = 0;
+      await thread.save();
     }
   }
 
-  res.json({ messages, unreadForCustomer: 0 });
+  const messages = forCustomer(
+    await messagesSince(thread, { after: req.query.after, updatedAfter: req.query.updatedAfter })
+  );
+  res.json({ messages, unreadForCustomer: thread.unreadForCustomer });
 };
 
 // POST /api/chat/send   { phone?, guestKey?, body?, type?, mediaUrl?, mediaMime?, durationSec? }
@@ -132,6 +200,7 @@ exports.customerSend = async (req, res) => {
     senderName: thread.name || '',
     ...c,
     readByCustomer: true,
+    deliveredToCustomer: true,
   });
 
   thread.lastMessageAt = msg.createdAt;
@@ -228,24 +297,27 @@ async function adminThread(phone) {
   return ChatThread.findOne({ phone: p });
 }
 
-// GET /api/chat/threads/:phone/messages?after=
+// GET /api/chat/threads/:phone/messages?after=&updatedAfter=
+// The admin only polls this while the conversation is on screen, so a
+// customer message returned here is both delivered and read.
 exports.adminMessages = async (req, res) => {
   const thread = await adminThread(req.params.phone);
   if (!thread) return res.status(404).json({ message: 'Thread not found.' });
 
-  const messages = await messagesSince(thread, req.query.after);
-
-  if (!req.query.after || thread.unreadForAdmin > 0) {
-    await ChatMessage.updateMany(
-      { thread: thread._id, from: 'customer', readByAdmin: false },
-      { readByAdmin: true }
-    );
-    if (thread.unreadForAdmin !== 0) {
-      thread.unreadForAdmin = 0;
-      await thread.save();
-    }
+  await ChatMessage.updateMany(
+    { thread: thread._id, from: 'customer', deliveredToAdmin: false },
+    { deliveredToAdmin: true }
+  );
+  await ChatMessage.updateMany(
+    { thread: thread._id, from: 'customer', readByAdmin: false },
+    { readByAdmin: true }
+  );
+  if (thread.unreadForAdmin !== 0) {
+    thread.unreadForAdmin = 0;
+    await thread.save();
   }
 
+  const messages = await messagesSince(thread, { after: req.query.after, updatedAfter: req.query.updatedAfter });
   res.json({ messages, thread: { phone: thread.phone, name: thread.name, status: thread.status, unreadForAdmin: 0 } });
 };
 
@@ -264,6 +336,7 @@ exports.adminSend = async (req, res) => {
     senderName: req.user?.name || 'Support',
     ...c,
     readByAdmin: true,
+    deliveredToAdmin: true,
   });
 
   thread.lastMessageAt = msg.createdAt;
@@ -273,6 +346,48 @@ exports.adminSend = async (req, res) => {
   await thread.save();
 
   res.status(201).json({ message: msg });
+};
+
+// PATCH /api/chat/threads/:phone/messages/:id   { body }   — edit own text
+exports.adminEditMessage = async (req, res) => {
+  const thread = await adminThread(req.params.phone);
+  if (!thread) return res.status(404).json({ message: 'Thread not found.' });
+  const m = await loadOwnMessage({ threadId: thread._id, id: req.params.id, from: 'admin' });
+  if (m.error) return res.status(m.error).json({ message: m.message });
+  const out = await applyEdit(m.msg, thread, req.body.body);
+  if (out.error) return res.status(out.error).json({ message: out.message });
+  res.json({ message: m.msg.toObject() });
+};
+
+// DELETE /api/chat/threads/:phone/messages/:id   — soft-delete own message
+exports.adminDeleteMessage = async (req, res) => {
+  const thread = await adminThread(req.params.phone);
+  if (!thread) return res.status(404).json({ message: 'Thread not found.' });
+  const m = await loadOwnMessage({ threadId: thread._id, id: req.params.id, from: 'admin' });
+  if (m.error) return res.status(m.error).json({ message: m.message });
+  await applyDelete(m.msg, thread);
+  res.json({ message: m.msg.toObject() });
+};
+
+// PATCH /api/chat/messages/:id   { phone?, guestKey?, body }   — customer edits own text
+exports.customerEditMessage = async (req, res) => {
+  const r = await customerThread(req);
+  if (r.error) return res.status(r.error).json({ message: r.message });
+  const m = await loadOwnMessage({ threadId: r.thread._id, id: req.params.id, from: 'customer' });
+  if (m.error) return res.status(m.error).json({ message: m.message });
+  const out = await applyEdit(m.msg, r.thread, req.body.body);
+  if (out.error) return res.status(out.error).json({ message: out.message });
+  res.json({ message: forCustomer([m.msg.toObject()])[0] });
+};
+
+// DELETE /api/chat/messages/:id   { phone?, guestKey? }   — customer deletes own message
+exports.customerDeleteMessage = async (req, res) => {
+  const r = await customerThread(req);
+  if (r.error) return res.status(r.error).json({ message: r.message });
+  const m = await loadOwnMessage({ threadId: r.thread._id, id: req.params.id, from: 'customer' });
+  if (m.error) return res.status(m.error).json({ message: m.message });
+  await applyDelete(m.msg, r.thread);
+  res.json({ message: m.msg.toObject() });
 };
 
 // PATCH /api/chat/threads/:phone   { status }

@@ -1,8 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Loader2, ArrowLeft, Paperclip, Mic } from 'lucide-react';
-import { chatStart, chatMessages, chatSend, chatUploadMedia } from '../api/client';
+import {
+  MessageCircle,
+  X,
+  Send,
+  Loader2,
+  ArrowLeft,
+  Paperclip,
+  Mic,
+  Check,
+  CheckCheck,
+  MoreVertical,
+  Copy,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import {
+  chatStart,
+  chatMessages,
+  chatSend,
+  chatUploadMedia,
+  chatEditMessage,
+  chatDeleteMessage,
+} from '../api/client';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { playChatChime } from '../lib/chime';
+import { copyText } from '../lib/clipboard';
 import ProgressRing from './ProgressRing';
 import logoMark from '../assets/lytronix-logo.png';
 
@@ -28,6 +50,16 @@ function saveSession(s) {
 const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
 const previewOf = (m) =>
   m.type === 'image' ? '📷 ছবি' : m.type === 'voice' ? '🎤 ভয়েস মেসেজ' : (m.body || '').slice(0, 120);
+
+const isRealId = (id) => /^[a-f\d]{24}$/i.test(String(id || ''));
+
+// Fold freshly-fetched rows in: replace ones we already hold (so tick/edit/
+// delete changes land), append the rest, keep chronological order.
+function mergeMessages(prev, fresh) {
+  const map = new Map(prev.map((m) => [m._id, m]));
+  for (const m of fresh) map.set(m._id, m);
+  return [...map.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
 
 const dayKey = (d) => new Date(d).toDateString();
 const timeStr = (d) =>
@@ -58,9 +90,13 @@ export default function ChatWidget() {
   const [uploadPct, setUploadPct] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
+  const [editing, setEditing] = useState(null); // { id, body }
+  const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null);
+  const updatedAtRef = useRef(null);
+  const knownIdsRef = useRef(new Set());
   const seenAtRef = useRef(Number(localStorage.getItem(`${LS_KEY}:seen`)) || 0);
   const fileRef = useRef(null);
   const recRef = useRef(null);
@@ -96,6 +132,8 @@ export default function ChatWidget() {
       setSession(next);
       saveSession(next);
       lastIdRef.current = null;
+      updatedAtRef.current = null;
+      knownIdsRef.current = new Set();
       await poll(next);
     } catch (err) {
       setError(err.response?.data?.message || 'চ্যাট শুরু করা যায়নি। আবার চেষ্টা করুন।');
@@ -111,30 +149,38 @@ export default function ChatWidget() {
         phone: s.phone,
         guestKey: s.guestKey,
         after: lastIdRef.current || undefined,
+        updatedAfter: updatedAtRef.current || undefined,
+        seen: openRef.current ? 1 : undefined,
       });
-      if (fresh?.length) {
-        setMessages((prev) => {
-          const seen = new Set(prev.map((m) => m._id));
-          const merged = [...prev, ...fresh.filter((m) => !seen.has(m._id))];
-          return merged;
-        });
-        lastIdRef.current = fresh[fresh.length - 1]._id;
-        if (!openRef.current) {
-          const adminNewMsgs = fresh.filter(
-            (m) => m.from === 'admin' && new Date(m.createdAt).getTime() > seenAtRef.current
-          );
-          if (adminNewMsgs.length) {
-            setUnseen((u) => u + adminNewMsgs.length);
-            const latest = adminNewMsgs[adminNewMsgs.length - 1];
-            setToast({
-              id: latest._id,
-              text: previewOf(latest),
-            });
-            try {
-              playChatChime();
-            } catch {
-              /* audio not allowed yet */
-            }
+      if (!fresh?.length) return;
+
+      // Which of these are genuinely new (not just a receipt/edit update)?
+      const brandNew = fresh.filter((m) => !knownIdsRef.current.has(m._id));
+
+      for (const m of fresh) {
+        knownIdsRef.current.add(m._id);
+        if (isRealId(m._id) && (!lastIdRef.current || m._id > lastIdRef.current)) lastIdRef.current = m._id;
+        const u = new Date(m.updatedAt || m.createdAt).getTime();
+        if (!updatedAtRef.current || u > new Date(updatedAtRef.current).getTime()) {
+          updatedAtRef.current = new Date(u).toISOString();
+        }
+      }
+      setMessages((prev) => mergeMessages(prev, fresh));
+
+      if (!openRef.current) {
+        const adminNewMsgs = brandNew.filter(
+          (m) => m.from === 'admin' && new Date(m.createdAt).getTime() > seenAtRef.current
+        );
+        if (adminNewMsgs.length) {
+          setUnseen((u) => u + adminNewMsgs.length);
+          setToast({
+            id: adminNewMsgs[adminNewMsgs.length - 1]._id,
+            text: previewOf(adminNewMsgs[adminNewMsgs.length - 1]),
+          });
+          try {
+            playChatChime();
+          } catch {
+            /* audio not allowed yet */
           }
         }
       }
@@ -171,6 +217,14 @@ export default function ChatWidget() {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
   }, [messages, open]);
+
+  // Don't keep a half-finished edit / open action menu around once the panel closes.
+  useEffect(() => {
+    if (!open) {
+      setEditing(null);
+      setMenuFor(null);
+    }
+  }, [open]);
 
   // The little "new reply" popup near the launcher — clears on open, and
   // auto-dismisses after a few seconds otherwise.
@@ -219,8 +273,13 @@ export default function ChatWidget() {
         guestKey: session.guestKey,
         ...payload,
       });
-      setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
-      lastIdRef.current = message._id;
+      knownIdsRef.current.add(message._id);
+      setMessages((prev) => {
+        const swapped = prev.map((m) => (m._id === optimistic._id ? message : m));
+        const seen = new Set();
+        return swapped.filter((m) => !seen.has(m._id) && seen.add(m._id));
+      });
+      if (isRealId(message._id)) lastIdRef.current = message._id;
     } catch (err) {
       setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
       setError(err.response?.data?.message || 'মেসেজ পাঠানো যায়নি।');
@@ -236,6 +295,49 @@ export default function ChatWidget() {
     setDraft('');
     await pushMessage({ type: 'text', body });
     setSending(false);
+  };
+
+  const auth = () => ({ phone: session?.phone, guestKey: session?.guestKey });
+
+  const copyMsg = async (m) => {
+    setMenuFor(null);
+    if (m.body) await copyText(m.body);
+  };
+
+  const startEdit = (m) => {
+    setMenuFor(null);
+    setEditing({ id: m._id, body: m.body || '' });
+  };
+
+  const submitEdit = async (e) => {
+    e?.preventDefault();
+    if (!editing) return;
+    const body = editing.body.trim();
+    const target = messages.find((m) => m._id === editing.id);
+    if (!body || !target || body === (target.body || '')) return setEditing(null);
+    setEditing(null);
+    setMessages((prev) =>
+      prev.map((m) => (m._id === target._id ? { ...m, body, editedAt: new Date().toISOString(), pending: true } : m))
+    );
+    try {
+      const { message } = await chatEditMessage(target._id, { ...auth(), body });
+      setMessages((prev) => mergeMessages(prev, [message]));
+    } catch (err) {
+      setMessages((prev) => prev.map((m) => (m._id === target._id ? { ...target } : m)));
+      setError(err.response?.data?.message || 'মেসেজ এডিট করা যায়নি।');
+    }
+  };
+
+  const deleteMsg = async (m) => {
+    setMenuFor(null);
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('এই মেসেজটি ডিলিট করবেন?')) return;
+    try {
+      const { message } = await chatDeleteMessage(m._id, auth());
+      setMessages((prev) => mergeMessages(prev, [message]));
+    } catch (err) {
+      setError(err.response?.data?.message || 'মেসেজ ডিলিট করা যায়নি।');
+    }
   };
 
   const onPickFile = async (e) => {
@@ -427,6 +529,7 @@ export default function ChatWidget() {
                 ref={bodyRef}
                 className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5"
                 style={{ backgroundColor: '#ECE5DD' }}
+                onClick={() => menuFor && setMenuFor(null)}
               >
                 {messages.length === 0 && (
                   <p className="text-center text-[12px] text-black/40 mt-6">
@@ -441,7 +544,15 @@ export default function ChatWidget() {
                       </span>
                     </div>
                   ) : (
-                    <Bubble key={row.key} m={row.m} />
+                    <Bubble
+                      key={row.key}
+                      m={row.m}
+                      menuOpen={menuFor === row.m._id}
+                      onToggleMenu={() => setMenuFor((cur) => (cur === row.m._id ? null : row.m._id))}
+                      onCopy={() => copyMsg(row.m)}
+                      onEdit={() => startEdit(row.m)}
+                      onDelete={() => deleteMsg(row.m)}
+                    />
                   )
                 )}
               </div>
@@ -452,7 +563,41 @@ export default function ChatWidget() {
                   {error}
                 </div>
               )}
-              {recording ? (
+              {editing ? (
+                <form onSubmit={submitEdit} className="shrink-0 bg-[#F0F0F0] px-2 py-2">
+                  <div className="flex items-center justify-between px-1.5 pb-1 text-[11px] text-[#075E54]">
+                    <span className="inline-flex items-center gap-1 font-medium font-bangla">
+                      <Pencil size={11} /> মেসেজ এডিট
+                    </span>
+                    <button type="button" onClick={() => setEditing(null)} aria-label="বাতিল">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="flex items-end gap-1.5">
+                    <textarea
+                      rows={1}
+                      autoFocus
+                      className="flex-1 resize-none max-h-24 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
+                      value={editing.body}
+                      onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          submitEdit();
+                        }
+                        if (e.key === 'Escape') setEditing(null);
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0"
+                      aria-label="সেভ"
+                    >
+                      <Check size={16} />
+                    </button>
+                  </div>
+                </form>
+              ) : recording ? (
                 <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-full bg-ui-rust animate-pulse shrink-0" />
                   <span className="text-sm text-ui-ink flex-1 font-mono">
@@ -530,36 +675,111 @@ export default function ChatWidget() {
   );
 }
 
-function Bubble({ m }) {
+// Sent → single grey · delivered → double grey · read → double blue.
+function Ticks({ m }) {
+  if (m.readByAdmin) return <CheckCheck size={14} className="text-[#53BDEB]" />;
+  if (m.deliveredToAdmin) return <CheckCheck size={14} className="text-black/40" />;
+  return <Check size={14} className="text-black/40" />;
+}
+
+function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
   const mine = m.from === 'customer';
+  const deleted = Boolean(m.deletedAt);
+  const canAct = mine && !deleted && !m.pending && !m.failed;
+
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[80%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
+        className={`relative max-w-[80%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
           mine ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'
         }`}
         dir="auto"
       >
-        {!mine && m.senderName && (
+        {!mine && m.senderName && !deleted && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
         )}
-        {m.type === 'image' && m.mediaUrl && (
-          <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
-            <img
-              src={m.mediaUrl}
-              alt="ছবি"
-              className="rounded-md max-h-56 w-auto object-cover"
-              loading="lazy"
-            />
-          </a>
+
+        {deleted ? (
+          <span className="italic text-black/45">🚫 এই মেসেজটি মুছে ফেলা হয়েছে</span>
+        ) : (
+          <>
+            {m.type === 'image' && m.mediaUrl && (
+              <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={m.mediaUrl}
+                  alt="ছবি"
+                  className="rounded-md max-h-56 w-auto object-cover"
+                  loading="lazy"
+                />
+              </a>
+            )}
+            {m.type === 'voice' && m.mediaUrl && (
+              <audio src={m.mediaUrl} controls preload="none" className="h-9 w-52 max-w-full mt-0.5" />
+            )}
+            {m.body && <span>{m.body}</span>}
+          </>
         )}
-        {m.type === 'voice' && m.mediaUrl && (
-          <audio src={m.mediaUrl} controls preload="none" className="h-9 w-52 max-w-full mt-0.5" />
-        )}
-        {m.body && <span>{m.body}</span>}
-        <span className="inline-block align-bottom text-[10px] text-black/45 ml-2 -mb-0.5 float-right pl-1">
+
+        <span className="inline-flex items-center gap-0.5 align-bottom text-[10px] text-black/45 ml-2 -mb-0.5 float-right pl-1">
+          {m.editedAt && !deleted && <span className="italic mr-0.5">এডিটেড</span>}
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
+          {mine && !m.pending && !m.failed && !deleted && <Ticks m={m} />}
         </span>
+
+        {canAct && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu();
+            }}
+            className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white shadow border border-black/5 text-black/50 flex items-center justify-center transition-opacity ${
+              menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}
+            aria-label="মেসেজ অপশন"
+          >
+            <MoreVertical size={13} />
+          </button>
+        )}
+
+        {canAct && menuOpen && (
+          <div className="absolute z-20 top-5 right-0 min-w-[8.5rem] bg-white rounded-xl shadow-floating border border-black/10 py-1 text-[13px] text-ui-ink font-bangla">
+            {m.body && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopy();
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2"
+              >
+                <Copy size={13} /> কপি
+              </button>
+            )}
+            {m.type === 'text' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2"
+              >
+                <Pencil size={13} /> এডিট
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2 text-ui-rust"
+            >
+              <Trash2 size={13} /> ডিলিট
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
