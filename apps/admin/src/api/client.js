@@ -77,10 +77,16 @@ export default client;
 // ---- Auth ----
 // `identifier` is an email or a phone number — phone is the one field every
 // admin account is guaranteed to have.
+// The login screen renders its own inline errors, so suppress the global
+// error modal and the 401 auto-logout dance for these two calls.
 export const login = (identifier, password) =>
-  client.post('/auth/login', { identifier, password }).then((r) => r.data);
+  client
+    .post('/auth/login', { identifier, password }, { skipErrorModal: true, skipAuthLogout: true })
+    .then((r) => r.data);
 export const forgotPassword = (identifier) =>
-  client.post('/auth/forgot-password', { identifier }).then((r) => r.data);
+  client
+    .post('/auth/forgot-password', { identifier }, { skipErrorModal: true, skipAuthLogout: true })
+    .then((r) => r.data);
 export const getMe = () => client.get('/auth/me').then((r) => r.data);
 export const changePassword = (data) => client.post('/auth/change-password', data).then((r) => r.data);
 

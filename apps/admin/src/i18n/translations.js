@@ -73,6 +73,10 @@ const en = {
   'login.forgotSend': 'Send new password',
   'login.forgotSending': 'Sending…',
   'login.backToSignIn': 'Back to sign in',
+  'login.needIdentifier': 'Enter your email or phone number.',
+  'login.needPassword': 'Enter your password.',
+  'login.errorGeneric': 'Could not sign you in. Please try again.',
+  'login.offline': 'Can’t reach the server. Check your connection and try again.',
 
   // ---- Dashboard ----
   'dashboard.welcome': 'Welcome back',
@@ -164,6 +168,7 @@ const en = {
   'products.uncategorised': 'Uncategorised',
   'products.inStock': '{n} in stock',
   'products.deliveryShort': 'delivery',
+  'products.shareLink': 'Copy public order link',
   'products.inactive': 'Inactive',
   'products.outOfStock': 'Out of stock',
   'products.lowStock': 'Low stock',
@@ -380,6 +385,10 @@ const bn = {
   'login.forgotSend': 'নতুন পাসওয়ার্ড পাঠান',
   'login.forgotSending': 'পাঠানো হচ্ছে…',
   'login.backToSignIn': 'লগইনে ফিরে যান',
+  'login.needIdentifier': 'আপনার ইমেইল বা ফোন নম্বর দিন।',
+  'login.needPassword': 'আপনার পাসওয়ার্ড দিন।',
+  'login.errorGeneric': 'লগইন করা যায়নি। আবার চেষ্টা করুন।',
+  'login.offline': 'সার্ভারে পৌঁছানো যাচ্ছে না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।',
 
   // ---- Dashboard ----
   'dashboard.welcome': 'ফিরে আসার জন্য স্বাগতম',
@@ -471,6 +480,7 @@ const bn = {
   'products.uncategorised': 'ক্যাটাগরিহীন',
   'products.inStock': 'স্টকে {n}টি আছে',
   'products.deliveryShort': 'ডেলিভারি',
+  'products.shareLink': 'পাবলিক অর্ডার লিংক কপি করুন',
   'products.inactive': 'ইনঅ্যাক্টিভ',
   'products.outOfStock': 'স্টক নেই',
   'products.lowStock': 'লো স্টক',

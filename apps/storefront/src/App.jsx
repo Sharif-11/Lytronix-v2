@@ -12,6 +12,7 @@ import Shop from './pages/Shop';
 import Products from './pages/Products';
 import Category from './pages/Category';
 import ProductDetail from './pages/ProductDetail';
+import ProductLanding from './pages/ProductLanding';
 import Cart from './pages/Cart';
 import SavedPage from './pages/SavedPage';
 import Checkout from './pages/Checkout';
@@ -48,6 +49,10 @@ export default function App() {
     <>
       <ScrollToTop />
     <Routes>
+      {/* Shareable single-product landing page — its own minimal chrome,
+          order + checkout right on the page, no shop nav. */}
+      <Route path="/p/:slug" element={<ProductLanding />} />
+
       {/* Public order tracking — inside the normal shop layout (header/footer) */}
       <Route path="/track/:trackingId" element={<ShopLayout><TrackOrder /></ShopLayout>} />
 

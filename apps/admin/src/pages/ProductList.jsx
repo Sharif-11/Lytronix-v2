@@ -2,10 +2,43 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listProducts, deleteProduct, getCategories } from '../api/client';
 import { formatMoney } from '../utils/format';
-import { PackageX, ImageOff, Loader2 } from 'lucide-react';
+import { PackageX, ImageOff, Loader2, Link2, Check, Pencil, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
+import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
+
+// Compact, evenly-split card action. Icon-only on phones (where a product
+// card is only ~half the viewport wide); icon + label from `sm` up.
+const cardActionClass =
+  'btn-secondary flex-1 min-w-0 justify-center px-1.5 sm:px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs';
+
+function ShareLinkButton({ slug, label }) {
+  const [copied, setCopied] = useState(false);
+  if (!slug) return null;
+  const onClick = async () => {
+    const ok = await copyToClipboard(productLandingUrl(slug));
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    }
+  };
+  return (
+    <button onClick={onClick} title={productLandingUrl(slug)} className={cardActionClass} aria-label={label}>
+      {copied ? (
+        <>
+          <Check size={13} className="text-ui-brand" />
+          <span className="hidden sm:inline text-ui-brand">Copied</span>
+        </>
+      ) : (
+        <>
+          <Link2 size={13} />
+          <span className="hidden sm:inline">Link</span>
+        </>
+      )}
+    </button>
+  );
+}
 
 export default function ProductList() {
   const { t } = useLanguage();
@@ -245,15 +278,20 @@ export default function ProductList() {
                   <div className="mt-2 sm:mt-4 flex gap-1.5 sm:gap-2 pt-2 sm:pt-3 border-t border-dashed border-ui-line">
                     <Link
                       to={`/products/${p._id}/edit`}
-                      className="btn-secondary text-[11px] sm:text-xs py-1.5 sm:py-2 flex-1 text-center"
+                      className={cardActionClass}
+                      aria-label={t('common.edit')}
                     >
-                      {t('common.edit')}
+                      <Pencil size={13} />
+                      <span className="hidden sm:inline">{t('common.edit')}</span>
                     </Link>
+                    <ShareLinkButton slug={p.slug} label={t('products.shareLink')} />
                     <button
                       onClick={() => handleDelete(p._id, p.name)}
-                      className="btn-secondary text-[11px] sm:text-xs py-1.5 sm:py-2 text-ui-rust flex-1"
+                      className={`${cardActionClass} text-ui-rust`}
+                      aria-label={t('common.delete')}
                     >
-                      {t('common.delete')}
+                      <Trash2 size={13} />
+                      <span className="hidden sm:inline">{t('common.delete')}</span>
                     </button>
                   </div>
                 </div>

@@ -8,7 +8,12 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node seed/seed.js",
-    "migrate:categories": "node scripts/migrateCategories.js"
+    "migrate:categories": "node scripts/migrateCategories.js",
+    "reset:db": "node scripts/resetDb.js",
+    "seed:demo-product": "node scripts/seedDemoProduct.js",
+    "restore:customers": "node scripts/restoreCustomers.js",
+    "cleanup:cloudinary": "node scripts/cleanupCloudinary.js",
+    "purge:chat": "node scripts/purgeChat.js"
   },
   "dependencies": {
     "axios": "^1.7.4",
