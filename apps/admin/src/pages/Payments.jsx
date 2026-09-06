@@ -211,24 +211,26 @@ export default function Payments() {
             {p.status === 'pending_verification' && verifyingId === p._id && (
               <div className="mt-3 pt-3 border-t border-ui-line">
                 <p className="text-xs font-medium text-ui-ink mb-1.5">{t('payments.confirmTxnTitle')}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     autoFocus
-                    className="input font-mono text-sm py-1.5 flex-1"
+                    className="input font-mono text-sm py-1.5 w-full sm:flex-1"
                     placeholder={t('payments.confirmTxnPlaceholder')}
                     value={txnInput}
                     onChange={(e) => setTxnInput(e.target.value)}
                   />
-                  <button
-                    onClick={() => confirmVerify(p._id)}
-                    disabled={busyId === p._id || !txnInput.trim()}
-                    className="btn-primary gap-1.5 shrink-0"
-                  >
-                    <CheckCircle2 size={15} /> {t('payments.confirmAndVerify')}
-                  </button>
-                  <button onClick={() => setVerifyingId(null)} className="btn-secondary shrink-0">
-                    {t('common.cancel')}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => confirmVerify(p._id)}
+                      disabled={busyId === p._id || !txnInput.trim()}
+                      className="btn-primary gap-1.5 flex-1 sm:flex-none sm:shrink-0"
+                    >
+                      <CheckCircle2 size={15} /> {t('payments.confirmAndVerify')}
+                    </button>
+                    <button onClick={() => setVerifyingId(null)} className="btn-secondary shrink-0">
+                      {t('common.cancel')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -236,24 +238,26 @@ export default function Payments() {
             {p.status === 'pending_verification' && rejectingId === p._id && (
               <div className="mt-3 pt-3 border-t border-ui-line">
                 <p className="text-xs font-medium text-ui-ink mb-1.5">{t('payments.rejectPrompt')}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     autoFocus
-                    className="input text-sm py-1.5 flex-1"
+                    className="input text-sm py-1.5 w-full sm:flex-1"
                     placeholder={t('payments.rejectPrompt')}
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
                   />
-                  <button
-                    onClick={() => confirmReject(p._id)}
-                    disabled={busyId === p._id}
-                    className="btn-danger gap-1.5 shrink-0"
-                  >
-                    <XCircle size={15} /> {t('payments.reject')}
-                  </button>
-                  <button onClick={() => setRejectingId(null)} className="btn-secondary shrink-0">
-                    {t('common.cancel')}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => confirmReject(p._id)}
+                      disabled={busyId === p._id}
+                      className="btn-danger gap-1.5 flex-1 sm:flex-none sm:shrink-0"
+                    >
+                      <XCircle size={15} /> {t('payments.reject')}
+                    </button>
+                    <button onClick={() => setRejectingId(null)} className="btn-secondary shrink-0">
+                      {t('common.cancel')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
