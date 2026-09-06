@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { MessagesSquare, Search, Send, Loader2, ArrowLeft, Phone, Check, Paperclip, Mic, Square } from 'lucide-react';
 import { getChatThreads, getChatMessages, sendChatMessage, updateChatThread, uploadChatMedia } from '../api/client';
+import ProgressRing from '../components/ProgressRing';
 
 const POLL_THREADS_MS = 8000;
 const POLL_MESSAGES_MS = 3000;
@@ -102,6 +103,7 @@ export default function Chat() {
   const openThread = (phone) => setParams(phone ? { phone } : {}, { replace: true });
 
   const [attaching, setAttaching] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
   const fileRef = useRef(null);
@@ -141,18 +143,33 @@ export default function Chat() {
   };
 
   const onPickFile = async (e) => {
-    const file = e.target.files?.[0];
+    const picked = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!file || attaching) return;
-    if (file.size > 8 * 1024 * 1024) return alert('Attachment must be under 8MB.');
+    if (!picked.length || attaching) return;
+    const images = picked.filter((f) => f.type.startsWith('image/') && f.size <= 8 * 1024 * 1024);
+    const skipped = picked.length - images.length;
+    if (skipped) alert(`${skipped} file(s) skipped — images only, under 8MB each.`);
+    if (!images.length) return;
     setAttaching(true);
+    setUploadPct(0);
     try {
-      const { url, mime } = await uploadChatMedia(file);
-      await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+      for (let i = 0; i < images.length; i += 1) {
+        const base = i / images.length;
+        // eslint-disable-next-line no-await-in-loop
+        const { url, mime } = await uploadChatMedia(images[i], {
+          onUploadProgress: (ev) => {
+            if (!ev.total) return;
+            setUploadPct(Math.round((base + ev.loaded / ev.total / images.length) * 100));
+          },
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+      }
     } catch {
       /* surfaced globally */
     } finally {
       setAttaching(false);
+      setUploadPct(0);
     }
   };
 
@@ -172,14 +189,19 @@ export default function Chat() {
         const blob = new Blob(recChunksRef.current, { type: mr.mimeType || 'audio/webm' });
         if (blob.size < 800) return; // too short / silent
         setAttaching(true);
+        setUploadPct(0);
         try {
           const file = new File([blob], 'voice.webm', { type: blob.type });
-          const { url, mime } = await uploadChatMedia(file);
+          const { url, mime } = await uploadChatMedia(file, {
+            onUploadProgress: (ev) =>
+              ev.total && setUploadPct(Math.round((ev.loaded / ev.total) * 100)),
+          });
           await pushMessage({ type: 'voice', mediaUrl: url, mediaMime: mime, durationSec: secs });
         } catch {
           /* surfaced */
         } finally {
           setAttaching(false);
+          setUploadPct(0);
         }
       };
       recRef.current = mr;
@@ -353,15 +375,15 @@ export default function Chat() {
                 </div>
               ) : (
                 <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-1.5">
-                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
+                  <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onPickFile} />
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     disabled={attaching}
                     className="w-10 h-10 rounded-full text-ui-muted hover:bg-black/5 flex items-center justify-center shrink-0"
-                    aria-label="Attach image"
+                    aria-label="Attach images"
                   >
-                    {attaching ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={18} />}
+                    {attaching ? <ProgressRing value={uploadPct} size={18} /> : <Paperclip size={18} />}
                   </button>
                   <textarea
                     rows={1}

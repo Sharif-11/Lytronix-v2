@@ -158,12 +158,12 @@ export const chatStart = (phone, name) => client.post('/chat/start', { phone, na
 export const chatMessages = (params) =>
   client.get('/chat/messages', { params, _noRetry: true }).then((r) => r.data);
 export const chatSend = (payload) => client.post('/chat/send', payload).then((r) => r.data);
-export const chatUploadMedia = (file, phone, guestKey) => {
+export const chatUploadMedia = (file, phone, guestKey, config) => {
   const form = new FormData();
   form.append('file', file);
   if (phone) form.append('phone', phone);
   if (guestKey) form.append('guestKey', guestKey);
   return client
-    .post('/chat/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .post('/chat/upload', form, { headers: { 'Content-Type': 'multipart/form-data' }, ...config })
     .then((r) => r.data);
 };

@@ -226,11 +226,11 @@ export const sendChatMessage = (phone, payload) =>
   client.post(`/chat/threads/${phone}/messages`, payload).then((r) => r.data);
 export const updateChatThread = (phone, status) =>
   client.patch(`/chat/threads/${phone}`, { status }).then((r) => r.data);
-export const uploadChatMedia = (file) => {
+export const uploadChatMedia = (file, config) => {
   const form = new FormData();
   form.append('file', file);
   return client
-    .post('/chat/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .post('/chat/upload', form, { headers: { 'Content-Type': 'multipart/form-data' }, ...config })
     .then((r) => r.data);
 };
 

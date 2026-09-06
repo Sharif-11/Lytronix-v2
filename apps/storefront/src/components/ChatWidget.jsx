@@ -3,6 +3,7 @@ import { MessageCircle, X, Send, Loader2, ArrowLeft, Paperclip, Mic } from 'luci
 import { chatStart, chatMessages, chatSend, chatUploadMedia } from '../api/client';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { playChatChime } from '../lib/chime';
+import ProgressRing from './ProgressRing';
 import logoMark from '../assets/lytronix-logo.png';
 
 const LS_KEY = 'lytronix_chat_v1';
@@ -54,6 +55,7 @@ export default function ChatWidget() {
   const [unseen, setUnseen] = useState(0);
   const [toast, setToast] = useState(null); // { text } — small popup when a reply arrives with the panel closed
   const [attaching, setAttaching] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
 
@@ -237,26 +239,33 @@ export default function ChatWidget() {
   };
 
   const onPickFile = async (e) => {
-    const file = e.target.files?.[0];
+    const picked = Array.from(e.target.files || []);
     if (e.target) e.target.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('শুধু ছবি পাঠানো যাবে।');
-      return;
-    }
-    if (file.size > MEDIA_MAX_BYTES) {
-      setError('ছবিটি অনেক বড় (সর্বোচ্চ ৮ MB)।');
-      return;
-    }
+    if (!picked.length || attaching) return;
+    const images = picked.filter((f) => f.type.startsWith('image/') && f.size <= MEDIA_MAX_BYTES);
+    const skipped = picked.length - images.length;
+    setError(skipped ? `${skipped}টি ফাইল বাদ দেওয়া হয়েছে — শুধু ছবি, সর্বোচ্চ ৮ MB।` : '');
+    if (!images.length) return;
     setAttaching(true);
-    setError('');
+    setUploadPct(0);
     try {
-      const { url, mime } = await chatUploadMedia(file, session?.phone, session?.guestKey);
-      await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+      for (let i = 0; i < images.length; i += 1) {
+        const base = i / images.length;
+        // eslint-disable-next-line no-await-in-loop
+        const { url, mime } = await chatUploadMedia(images[i], session?.phone, session?.guestKey, {
+          onUploadProgress: (ev) => {
+            if (!ev.total) return;
+            setUploadPct(Math.round((base + ev.loaded / ev.total / images.length) * 100));
+          },
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'ছবি আপলোড করা যায়নি।');
     } finally {
       setAttaching(false);
+      setUploadPct(0);
     }
   };
 
@@ -281,13 +290,18 @@ export default function ChatWidget() {
         if (blob.size < 800) return;
         const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type });
         setAttaching(true);
+        setUploadPct(0);
         try {
-          const { url, mime } = await chatUploadMedia(file, session?.phone, session?.guestKey);
+          const { url, mime } = await chatUploadMedia(file, session?.phone, session?.guestKey, {
+            onUploadProgress: (ev) =>
+              ev.total && setUploadPct(Math.round((ev.loaded / ev.total) * 100)),
+          });
           await pushMessage({ type: 'voice', mediaUrl: url, mediaMime: mime, durationSec: secs });
         } catch (err) {
           setError(err.response?.data?.message || 'ভয়েস মেসেজ পাঠানো যায়নি।');
         } finally {
           setAttaching(false);
+          setUploadPct(0);
         }
       };
       recRef.current = rec;
@@ -463,7 +477,7 @@ export default function ChatWidget() {
                 </div>
               ) : (
                 <form onSubmit={send} className="shrink-0 bg-[#F0F0F0] px-2 py-2 flex items-end gap-1.5">
-                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
+                  <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onPickFile} />
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
@@ -471,7 +485,7 @@ export default function ChatWidget() {
                     className="w-10 h-10 rounded-full text-[#075E54] flex items-center justify-center shrink-0 disabled:opacity-50 hover:bg-black/5"
                     aria-label="ছবি যোগ করুন"
                   >
-                    {attaching ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
+                    {attaching ? <ProgressRing value={uploadPct} size={18} /> : <Paperclip size={18} />}
                   </button>
                   <textarea
                     rows={1}
