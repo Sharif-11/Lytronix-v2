@@ -331,7 +331,7 @@ exports.createOrder = async (req, res) => {
   // (manual bKash), otherwise "pending".
   const initialStatus = isAdminCreated
     ? status || 'pending'
-    : method === 'bkash_manual'
+    : method === 'bkash_manual' || method === 'bkash_automated'
     ? 'unverified'
     : 'pending';
 
@@ -611,7 +611,18 @@ exports.trackOrder = async (req, res) => {
     'orderNumber trackingId status statusHistory courierEvents courier.trackingCode courier.status courier.lastMessage items pricing.grandTotal pricing.due createdAt customer.name'
   );
   if (!order) return res.status(404).json({ message: 'Tracking ID not found' });
-  res.json(order);
+
+  // Just enough payment context for the storefront to offer a "retry bKash"
+  // button when an automated payment didn't go through.
+  const bkashPayment = await Payment.findOne({ order: order._id, method: 'bkash_automated' })
+    .select('status')
+    .lean();
+  const canRetryBkash =
+    Boolean(bkashPayment) &&
+    bkashPayment.status !== 'verified' &&
+    !['cancelled', 'completed', 'refunded', 'returned'].includes(order.status);
+
+  res.json({ ...order.toObject(), bkashPayment: bkashPayment || null, canRetryBkash });
 };
 
 // Builds the single-string address Steadfast expects, within their 250 char limit.

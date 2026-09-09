@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getOrder, getSteadfastMeta } from '../api/client';
 import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, MERCHANT_ID, labelPageCss } from '../components/LabelSlip';
+import Loader from '../components/Loader';
 
 const LS_LAST_SIZE = 'lytronix:lastLabelSize';
 const initialSize = () => {
@@ -28,7 +29,7 @@ export default function PrintParcel() {
     localStorage.setItem(LS_LAST_SIZE, sizeKey);
   }, [sizeKey]);
 
-  if (!order) return <div className="p-8 font-mono text-sm text-ui-muted">Loading…</div>;
+  if (!order) return <Loader />;
 
   return (
     <div className="min-h-screen bg-ui-bg no-ruled">

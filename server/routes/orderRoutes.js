@@ -27,7 +27,8 @@ router.post('/', attachCustomer, asyncHandler(createOrder));
 
 // Public: automated bKash checkout flow for an order the customer just created.
 router.post('/:id/payments/bkash/initiate', asyncHandler(initiateBkash));
-router.post('/:id/payments/bkash/callback', asyncHandler(bkashCallback));
+// bKash redirects the shopper's browser here (GET) after payment.
+router.get('/:id/payments/bkash/callback', asyncHandler(bkashCallback));
 
 // Everything else is admin-only order management.
 router.use(protect, authorize('orders:view', 'orders:manage'));

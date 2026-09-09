@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getOrder, getSteadfastMeta } from '../api/client';
 import LabelSlip, { LABEL_SIZES, DEFAULT_LABEL_SIZE, MERCHANT_ID, labelPageCss } from '../components/LabelSlip';
+import Loader from '../components/Loader';
 
 const LS_LAST_SIZE = 'lytronix:lastLabelSize';
 const validSize = (k) => (LABEL_SIZES[k] ? k : null);
@@ -102,7 +103,7 @@ export default function PrintLabels() {
         </p>
       </div>
 
-      {loading && <p className="text-ui-muted text-sm py-10 text-center">Loading orders…</p>}
+      {loading && <Loader label="Loading orders…" />}
       {!loading && ids.length === 0 && (
         <p className="text-ui-muted text-sm py-10 text-center">No orders selected. Go back and pick some to print.</p>
       )}

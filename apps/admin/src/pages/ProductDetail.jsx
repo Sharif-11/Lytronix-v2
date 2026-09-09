@@ -9,6 +9,7 @@ import { formatMoney } from '../utils/format';
 import { useConfirm } from '../context/ConfirmContext';
 import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
 import RichText from '../components/RichText';
+import Loader from '../components/Loader';
 
 function policyText(p) {
   if (!p) return 'Full Cash on Delivery';
@@ -61,7 +62,7 @@ export default function ProductDetail() {
   };
 
   if (status === 'loading') {
-    return <div className="max-w-4xl mx-auto px-4 sm:px-5 py-10 text-ui-muted">Loading…</div>;
+    return <Loader />;
   }
   if (status === 'error' || !product) {
     return (

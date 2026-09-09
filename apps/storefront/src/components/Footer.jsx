@@ -13,7 +13,7 @@ export default function Footer() {
       <div className="bg-ui-brand/[0.04] border-b border-ui-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap justify-center sm:justify-between gap-x-8 gap-y-2 text-xs sm:text-sm text-ui-ink">
           <span className="inline-flex items-center gap-2">
-            <ShieldCheck size={15} className="text-ui-brand" /> ১০০% আসল প্রোডাক্টের নিশ্চয়তা
+            <ShieldCheck size={15} className="text-ui-brand" /> ১০০% অরিজিনাল প্রোডাক্টের নিশ্চয়তা
           </span>
           <span className="inline-flex items-center gap-2">
             <Truck size={15} className="text-ui-brand" /> সারা বাংলাদেশে হোম ডেলিভারি
@@ -29,7 +29,7 @@ export default function Footer() {
           <div>
             <img src={logo} alt={COMPANY_NAME} className="h-8 w-auto mb-3" />
             <p className="text-sm text-ui-muted leading-relaxed max-w-xs">
-              আইপিএস ও ইউপিএস-এর জন্য BMS এবং লিথিয়াম ব্যাটারি সেল ও প্যাক — আসল প্রোডাক্ট, ক্যাশ অন
+              আইপিএস ও ইউপিএস-এর জন্য BMS এবং লিথিয়াম ব্যাটারি সেল ও প্যাক — অরিজিনাল প্রোডাক্ট, ক্যাশ অন
               ডেলিভারিসহ সারা বাংলাদেশে ডেলিভারি।
             </p>
           </div>

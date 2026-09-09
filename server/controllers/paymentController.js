@@ -1,6 +1,7 @@
 const Payment = require('../models/Payment');
 const Order = require('../models/Order');
 const { getGateway } = require('../services/payments');
+const logger = require('../services/logger');
 
 // GET /api/payments?status=&method=&order=&search=&page=&limit=
 // `search` matches the payment's own fields (sender number, transaction ID,
@@ -145,26 +146,116 @@ exports.initiateBkash = async (req, res) => {
   if (!order) return res.status(404).json({ message: 'Order not found' });
 
   const gateway = getGateway('bkash');
-  if (!gateway) return res.status(400).json({ message: 'bKash gateway is not registered on this server.' });
+  if (!gateway || !gateway.isEnabled || !gateway.isEnabled()) {
+    return res.status(400).json({ message: 'bKash automated checkout is not available right now.' });
+  }
 
-  const payment = await Payment.findOneAndUpdate(
-    { order: order._id, method: 'bkash_automated' },
-    { $setOnInsert: { amount: order.pricing.grandTotal, status: 'pending' } },
-    { upsert: true, new: true }
-  );
+  let payment = await Payment.findOne({ order: order._id, method: 'bkash_automated' });
+  if (payment && payment.status === 'verified') {
+    return res.status(409).json({ message: 'This order has already been paid.' });
+  }
+  if (['cancelled', 'refunded', 'returned', 'completed'].includes(order.status)) {
+    return res.status(409).json({ message: 'This order can no longer be paid online.' });
+  }
 
-  // Will currently throw "not configured" until real BKASH_* credentials
-  // are added — that's surfaced to the customer as a normal 400 so the
-  // storefront can offer COD / manual bKash as a fallback.
-  const result = await gateway.initiate({ order, payment });
-  res.json(result);
+  // Charge only what is actually outstanding — grandTotal minus any advance
+  // already paid and any payments already recorded on the order ledger — so a
+  // customer can never over-pay an order via the automated flow.
+  const outstanding =
+    order.pricing && order.pricing.due != null
+      ? Math.round(order.pricing.due * 100) / 100
+      : order.pricing.grandTotal;
+  if (!(outstanding > 0)) {
+    return res.status(409).json({ message: 'This order is already fully paid.' });
+  }
+
+  if (!payment) {
+    payment = await Payment.create({
+      order: order._id,
+      method: 'bkash_automated',
+      amount: outstanding,
+      status: 'pending',
+    });
+  } else {
+    // Retry: wipe the previous failed / abandoned attempt so a fresh bKash
+    // payment can be created against this same order.
+    payment.status = 'pending';
+    payment.rejectionReason = '';
+    payment.transactionId = '';
+    payment.amount = outstanding;
+    await payment.save();
+  }
+
+  // bKash redirects the customer's BROWSER back to this URL — it only needs
+  // to be reachable from the shopper's device. Set API_BASE_URL for LAN /
+  // production; otherwise derive it from the incoming request.
+  const apiBase = (process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const callbackURL = `${apiBase}/api/orders/${order._id}/payments/bkash/callback`;
+
+  const result = await gateway.initiate({ order, payment, callbackURL });
+  res.json(result); // { redirectURL, paymentID }
 };
 
-// POST /api/orders/:id/payments/bkash/callback  (public — bKash redirects/calls this)
+// GET /api/orders/:id/payments/bkash/callback?paymentID=&status=
+// bKash sends the shopper's browser here after payment. We execute the
+// payment, update the Payment/Order, then redirect back to the storefront.
 exports.bkashCallback = async (req, res) => {
-  const gateway = getGateway('bkash');
-  if (!gateway) return res.status(400).json({ message: 'bKash gateway is not registered on this server.' });
+  const clientBase = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const order = await Order.findById(req.params.id);
+  const dest = (result) => {
+    const path = order?.trackingId ? `/track/${order.trackingId}` : '/shop';
+    return `${clientBase}${path}?bkash=${result}`;
+  };
 
-  const result = await gateway.verify(req.body);
-  res.json(result);
+  const gateway = getGateway('bkash');
+  const payment = order && (await Payment.findOne({ order: order._id, method: 'bkash_automated' }));
+  if (!order || !gateway || !payment) return res.redirect(dest('error'));
+
+  const { paymentID, status } = req.query;
+
+  // Idempotency: bKash (or a browser refresh / back-forward) can deliver this
+  // callback more than once. If we've already settled this payment, just bounce
+  // back to the result page without executing or ledgering it again.
+  if (payment.status === 'verified') {
+    return res.redirect(dest('success'));
+  }
+
+  if (status !== 'success') {
+    payment.status = 'failed';
+    payment.rejectionReason = `bKash: ${status || 'cancelled'}`;
+    await payment.save().catch(() => {});
+    logger.info('bkash: callback non-success', { orderNumber: order.orderNumber, status });
+    return res.redirect(dest(status === 'failure' ? 'failed' : 'cancelled'));
+  }
+
+  try {
+    const result = await gateway.execute(paymentID);
+    if (result.ok) {
+      // Trust bKash's reported amount for the ledger entry; fall back to what
+      // we asked for if it's missing.
+      const paidAmount = Number(result.amount) > 0 ? Number(result.amount) : payment.amount;
+      payment.status = 'verified';
+      payment.transactionId = result.trxID || paymentID;
+      payment.amount = paidAmount;
+      payment.verifiedAt = new Date();
+      await payment.save();
+      // Mirror into the order's own payment ledger so pricing.due drops by the
+      // amount received and the order moves unverified -> pending.
+      await mirrorIntoOrderLedger(payment);
+      logger.info('bkash: payment verified', {
+        orderNumber: order.orderNumber,
+        trxID: result.trxID,
+        amount: paidAmount,
+      });
+      return res.redirect(dest('success'));
+    }
+    payment.status = 'failed';
+    payment.rejectionReason = `bKash execute: ${result.raw?.statusMessage || 'not completed'}`;
+    await payment.save().catch(() => {});
+    logger.warn('bkash: execute not completed', { orderNumber: order.orderNumber, raw: result.raw });
+    return res.redirect(dest('failed'));
+  } catch (err) {
+    logger.error('bkash: callback execute error', { orderId: String(order._id), error: err.message });
+    return res.redirect(dest('error'));
+  }
 };

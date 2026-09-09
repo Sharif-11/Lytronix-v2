@@ -3,6 +3,7 @@ import { Inbox, Search, Loader2, Check, Archive, Trash2, Phone, Mail, RotateCcw,
 import { getContactMessages, updateContactMessage, deleteContactMessage } from '../api/client';
 import { formatDate } from '../utils/format';
 import { useConfirm } from '../context/ConfirmContext';
+import Loader from '../components/Loader';
 
 const TABS = [
   { key: 'new', label: 'New' },
@@ -130,7 +131,7 @@ export default function Messages() {
         <button className="btn-secondary shrink-0" type="submit">Search</button>
       </form>
 
-      {loading && <p className="py-10 text-center text-ui-muted text-sm">Loading…</p>}
+      {loading && <Loader />}
       {!loading && messages.length === 0 && (
         <p className="py-12 text-center text-ui-muted text-sm border border-dashed border-ui-line rounded-2xl">
           No messages here.

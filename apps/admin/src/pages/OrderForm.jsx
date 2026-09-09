@@ -9,6 +9,7 @@ import AiOrderAssist from '../components/AiOrderAssist';
 import BookCourierModal from '../components/BookCourierModal';
 import SearchableSelect from '../components/SearchableSelect';
 import SuggestInput from '../components/SuggestInput';
+import Loader from '../components/Loader';
 import { emitError } from '../lib/errorBus';
 
 const emptyCustomer = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
@@ -236,7 +237,7 @@ export default function OrderForm() {
     }
   };
 
-  if (loading) return <div className="max-w-5xl mx-auto px-4 sm:px-5 py-10 text-sm text-ui-muted">Loading…</div>;
+  if (loading) return <Loader />;
 
   if (createdOrder) {
     return (

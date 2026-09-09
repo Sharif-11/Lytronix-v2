@@ -4,6 +4,7 @@ import { SlidersHorizontal, X, ChevronRight, ChevronDown } from 'lucide-react';
 import { getProducts, getCategories } from '../api/client';
 import ProductCard from './ProductCard';
 import SearchableSelect from './SearchableSelect';
+import Spinner from './Spinner';
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'নতুন প্রোডাক্ট' },
@@ -95,8 +96,12 @@ export default function Catalogue({ lockedCategorySlug = null }) {
             >
               <SlidersHorizontal size={15} /> ফিল্টার
             </button>
-            <p className="text-sm text-ui-muted">
-              {loading ? 'লোড হচ্ছে…' : `${data.total}টি প্রোডাক্ট`}
+            <p className="text-sm text-ui-muted inline-flex items-center gap-2">
+              {loading ? (
+                <><Spinner size={14} className="text-ui-brand" /> লোড হচ্ছে…</>
+              ) : (
+                `${data.total}টি প্রোডাক্ট`
+              )}
             </p>
             <SearchableSelect
               className="w-40 sm:max-w-[12rem] ml-auto"

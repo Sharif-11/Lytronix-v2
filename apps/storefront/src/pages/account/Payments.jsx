@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Wallet } from 'lucide-react';
 import { getMyPayments } from '../../api/client';
 import { formatMoney, formatDate, statusStyle, paymentMethodLabel, paymentStatusLabel } from '../../utils/format';
+import Loader from '../../components/Loader';
 
 export default function Payments() {
   const [payments, setPayments] = useState(null);
@@ -10,7 +11,7 @@ export default function Payments() {
     getMyPayments().then((d) => setPayments(d.payments)).catch(() => setPayments([]));
   }, []);
 
-  if (payments === null) return <p className="text-sm text-ui-muted">লোড হচ্ছে…</p>;
+  if (payments === null) return <Loader inline className="py-2" />;
 
   if (payments.length === 0) {
     return (

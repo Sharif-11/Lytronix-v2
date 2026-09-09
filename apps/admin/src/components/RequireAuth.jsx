@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import Loader from './Loader';
 
 // Wrap any admin page: <RequireAuth permission="orders:manage"><OrderForm /></RequireAuth>
 // Omit `permission` to just require any logged-in, active account.
@@ -10,7 +11,7 @@ export default function RequireAuth({ children, permission }) {
   const location = useLocation();
 
   if (loading) {
-    return <div className="max-w-3xl mx-auto px-5 py-16 text-center text-ui-muted">{t('common.loading')}</div>;
+    return <Loader />;
   }
 
   if (!user) {

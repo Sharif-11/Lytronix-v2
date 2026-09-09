@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { getAllOrders } from '../api/client';
 import { formatMoney, formatDateShort } from '../utils/format';
 import { COMPANY_NAME } from '../utils/company';
+import Loader from '../components/Loader';
 
 // Rough number of table rows that comfortably fit one A4 sheet at this
 // font size/margins. Doesn't need to be exact — it just needs to give
@@ -123,7 +124,7 @@ export default function PrintLogbook() {
       )}
 
       {loading ? (
-        <p className="text-ui-muted text-sm py-10 text-center">Loading…</p>
+        <Loader />
       ) : orders.length === 0 ? (
         <p className="text-ui-muted text-sm py-10 text-center">No orders match this filter.</p>
       ) : (

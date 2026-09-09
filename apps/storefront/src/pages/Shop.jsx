@@ -9,7 +9,7 @@ import { getCategories } from '../api/client';
 import { COMPANY_NAME, COMPANY_TAGLINE_BN } from '../utils/company';
 
 const BADGES = [
-  { icon: ShieldCheck, label: '১০০% আসল প্রোডাক্ট' },
+  { icon: ShieldCheck, label: '১০০% অরিজিনাল প্রোডাক্ট' },
   { icon: Banknote, label: 'ক্যাশ অন ডেলিভারি' },
   { icon: Truck, label: 'দ্রুত ডেলিভারি' },
   { icon: RotateCcw, label: 'সহজ রিটার্ন' },
@@ -18,7 +18,7 @@ const BADGES = [
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'নিশ্চিত আসল প্রোডাক্ট',
+    title: 'নিশ্চিত অরিজিনাল প্রোডাক্ট',
     body: 'প্রতিটি প্রোডাক্ট ভেরিফাই করে তালিকাভুক্ত করা হয় — কোনো নকল নয়।',
   },
   {

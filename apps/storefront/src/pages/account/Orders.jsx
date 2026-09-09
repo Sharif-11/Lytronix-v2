@@ -6,6 +6,7 @@ import {
   formatMoney, formatDate, formatTime, statusStyle, statusLabel, paymentMethodLabel, paymentStatusLabel,
   mergeTrackingTimeline, groupTimelineByDate,
 } from '../../utils/format';
+import Loader from '../../components/Loader';
 
 export default function Orders() {
   const { id } = useParams();
@@ -19,7 +20,7 @@ function OrderList() {
     getMyOrders().then((d) => setOrders(d.orders)).catch(() => setOrders([]));
   }, []);
 
-  if (orders === null) return <p className="text-sm text-ui-muted">লোড হচ্ছে…</p>;
+  if (orders === null) return <Loader inline className="py-2" />;
 
   if (orders.length === 0) {
     return (
@@ -76,7 +77,7 @@ function OrderDetail({ id }) {
       </div>
     );
   }
-  if (!data) return <p className="text-sm text-ui-muted">লোড হচ্ছে…</p>;
+  if (!data) return <Loader inline className="py-2" />;
 
   const { order, payments } = data;
 

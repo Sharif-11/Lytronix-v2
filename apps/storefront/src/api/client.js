@@ -131,6 +131,10 @@ export const uploadPaymentProof = (file) => {
 export const initiateBkashCheckout = (orderId) =>
   client.post(`/orders/${orderId}/payments/bkash/initiate`).then((r) => r.data);
 
+// Which online payment options the checkout should show (e.g. bKash auto).
+export const getPaymentMeta = () =>
+  client.get('/meta/payments').then((r) => r.data).catch(() => ({ bkashAutomated: false }));
+
 // ---- Contact ----
 export const submitContact = (data) => client.post('/contact', data).then((r) => r.data);
 

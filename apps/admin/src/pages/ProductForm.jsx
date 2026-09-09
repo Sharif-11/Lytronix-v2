@@ -9,6 +9,7 @@ import { usePhonetic } from '../context/PhoneticContext';
 import { ImagePlus, VideoIcon, X, Star, Loader2, Play } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect';
 import RichTextEditor from '../components/RichTextEditor';
+import Loader from '../components/Loader';
 import { emitError } from '../lib/errorBus';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -175,7 +176,7 @@ export default function ProductForm() {
     }
   };
 
-  if (loading) return <div className="max-w-2xl mx-auto px-4 sm:px-5 py-10 text-ui-muted">Loading…</div>;
+  if (loading) return <Loader />;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-5 py-6 sm:py-8">

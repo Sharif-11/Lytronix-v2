@@ -10,6 +10,7 @@ import {
 } from '../api/client';
 import RichTextEditor from '../components/RichTextEditor';
 import SearchableSelect from '../components/SearchableSelect';
+import Loader from '../components/Loader';
 import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import { emitError } from '../lib/errorBus';
@@ -115,7 +116,7 @@ export default function CustomerForm() {
     }
   };
 
-  if (loading) return <div className="max-w-2xl mx-auto px-4 sm:px-5 py-10 text-ui-muted">Loading…</div>;
+  if (loading) return <Loader />;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-5 py-6 sm:py-8">

@@ -13,6 +13,7 @@ import { getSessionId, shouldLogProductView, track } from '../lib/analytics';
 import ProductCard from '../components/ProductCard';
 import ProductGallery from '../components/ProductGallery';
 import RichText from '../components/RichText';
+import Loader from '../components/Loader';
 
 const POLICY_TONE_CLASSES = {
   rust: 'bg-red-50 text-ui-rust border-red-100',
@@ -66,7 +67,7 @@ export default function ProductDetail() {
   }
 
   if (!product) {
-    return <div className="max-w-5xl mx-auto px-4 py-24 text-center text-ui-muted text-sm">লোড হচ্ছে…</div>;
+    return <Loader />;
   }
 
   const outOfStock = product.trackInventory && product.stock <= 0;
@@ -190,7 +191,7 @@ export default function ProductDetail() {
           </button>
 
           <div className="mt-6 pt-5 border-t border-dashed border-ui-line grid grid-cols-3 gap-2 text-center">
-            <TrustItem icon={ShieldCheck} label="আসল প্রোডাক্ট" />
+            <TrustItem icon={ShieldCheck} label="অরিজিনাল প্রোডাক্ট" />
             <TrustItem icon={Truck} label="দ্রুত ডেলিভারি" />
             <TrustItem icon={Banknote} label={codAllowed ? 'ক্যাশ অন ডেলিভারি' : 'নিরাপদ অগ্রিম পেমেন্ট'} />
           </div>

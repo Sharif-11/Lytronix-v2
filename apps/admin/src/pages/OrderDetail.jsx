@@ -15,6 +15,7 @@ import {
 } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
 import CourierTracker from '../components/CourierTracker';
+import Loader from '../components/Loader';
 import SuggestInput from '../components/SuggestInput';
 import { useConfirm } from '../context/ConfirmContext';
 import { emitError } from '../lib/errorBus';
@@ -83,7 +84,7 @@ export default function OrderDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?._id]);
 
-  if (!order) return <div className="max-w-5xl mx-auto px-5 py-10 text-ui-muted">Loading…</div>;
+  if (!order) return <Loader />;
 
   const trackingUrl = `${window.location.origin}/track/${order.trackingId}`;
 

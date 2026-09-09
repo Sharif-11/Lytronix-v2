@@ -4,7 +4,7 @@ import {
   ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock,
 } from 'lucide-react';
 import {
-  createOrder, getPoliceStations, uploadPaymentProof,
+  createOrder, getPoliceStations, uploadPaymentProof, getPaymentMeta, initiateBkashCheckout,
 } from '../api/client';
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
@@ -30,8 +30,10 @@ export default function Checkout() {
   const [bkash, setBkash] = useState(emptyBkash);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
+  const [bkashAutoOn, setBkashAutoOn] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;
 
@@ -44,6 +46,7 @@ export default function Checkout() {
 
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
+    getPaymentMeta().then((m) => setBkashAutoOn(Boolean(m.bkashAutomated)));
   }, []);
 
   // Whenever the cart contains a product that isn't fully COD-eligible, bKash
@@ -175,6 +178,27 @@ export default function Checkout() {
 
     try {
       const created = await createOrder(payload);
+
+      if (paymentMethod === 'bkash_automated') {
+        // Order is created as "unverified"; hand off to bKash's hosted page.
+        setRedirectingBkash(true);
+        try {
+          const { redirectURL } = await initiateBkashCheckout(created._id);
+          clearCart();
+          window.location.href = redirectURL;
+          return;
+        } catch {
+          // Couldn't start bKash — the order still exists; send them to the
+          // confirmation/tracking screen where a "retry bKash payment" button
+          // is shown.
+          setRedirectingBkash(false);
+          clearCart();
+          if (isAuthed) refresh();
+          setConfirmed(created);
+          return;
+        }
+      }
+
       clearCart();
       if (isAuthed) refresh();
       setConfirmed(created);
@@ -410,14 +434,25 @@ export default function Checkout() {
             <PaymentOption
               icon={Zap}
               label="বিকাশ চেকআউট"
-              sub="অনলাইন পেমেন্ট"
-              disabled
-              badge="শীঘ্রই আসছে"
+              sub={bkashAutoOn ? 'অনলাইন পেমেন্ট' : 'অনলাইন পেমেন্ট'}
+              active={paymentMethod === 'bkash_automated'}
+              onClick={() => setPaymentMethod('bkash_automated')}
+              disabled={!bkashAutoOn}
+              badge={bkashAutoOn ? undefined : 'শীঘ্রই আসছে'}
+              accent="bkash"
             />
           </div>
 
           {paymentMethod === 'bkash_manual' && (
             <BkashPanel grandTotal={grandTotal} advanceInfo={advanceInfo} bkash={bkash} setBkash={setBkash} onProofChange={handleProofChange} />
+          )}
+
+          {paymentMethod === 'bkash_automated' && (
+            <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] px-4 py-3 text-sm text-ui-ink">
+              <span className="font-display italic font-extrabold text-bkash">bKash</span> পেজে গিয়ে{' '}
+              <span className="font-mono font-medium">{formatMoney(grandTotal)}</span> পেমেন্ট সম্পন্ন করুন। সফল হলে
+              আপনার অর্ডার স্বয়ংক্রিয়ভাবে কনফার্ম হবে।
+            </div>
           )}
 
           {paymentMethod === 'cod' && !advanceRequired && (
@@ -433,8 +468,14 @@ export default function Checkout() {
             <>
               <Loader2 size={16} className="animate-spin" /> স্ক্রিনশট আপলোড হচ্ছে…
             </>
+          ) : redirectingBkash ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…
+            </>
           ) : submitting ? (
             'অর্ডার হচ্ছে…'
+          ) : paymentMethod === 'bkash_automated' ? (
+            `বিকাশে পেমেন্ট করুন · ${formatMoney(grandTotal)}`
           ) : (
             `অর্ডার করুন · ${formatMoney(grandTotal)}`
           )}
@@ -581,6 +622,7 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
   let paymentSummary = {
     cod: 'ক্যাশ অন ডেলিভারি — প্রোডাক্ট হাতে পেয়ে পেমেন্ট করুন।',
     bkash_manual: 'বিকাশ পেমেন্ট গ্রহণ করা হয়েছে — শীঘ্রই ভেরিফাই করা হবে।',
+    bkash_automated: 'বিকাশ পেমেন্ট এখনও সম্পন্ন হয়নি — নিচের ট্র্যাকিং লিংকে গিয়ে "আবার বিকাশে পেমেন্ট করুন" বাটনে চাপ দিন।',
   }[paymentMethod];
 
   if (paymentMethod === 'bkash_manual' && advanceInfo?.requiredAdvance > 0) {

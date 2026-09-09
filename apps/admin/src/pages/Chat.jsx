@@ -27,6 +27,7 @@ import {
   uploadChatMedia,
 } from '../api/client';
 import ProgressRing from '../components/ProgressRing';
+import Loader from '../components/Loader';
 import { useConfirm } from '../context/ConfirmContext';
 
 const POLL_THREADS_MS = 8000;
@@ -465,11 +466,7 @@ export default function Chat() {
                 className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5"
                 onClick={() => menuFor && setMenuFor(null)}
               >
-                {loadingMsgs && (
-                  <p className="text-center text-xs text-black/40 mt-4">
-                    <Loader2 size={14} className="animate-spin inline" /> Loading…
-                  </p>
-                )}
+                {loadingMsgs && <Loader inline className="justify-center mt-4" />}
                 {!loadingMsgs && messages.length === 0 && (
                   <p className="text-center text-xs text-black/40 mt-6">No messages yet.</p>
                 )}

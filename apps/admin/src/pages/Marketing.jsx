@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Megaphone, Send, Loader2, CheckCircle2, XCircle, X, Users, Coins } from 'lucide-react';
 import { getCustomers, getCustomer, sendBroadcast } from '../api/client';
 import SearchableSelect from '../components/SearchableSelect';
+import Loader from '../components/Loader';
 import { useConfirm } from '../context/ConfirmContext';
 import { emitError } from '../lib/errorBus';
 import useSmsBalance from '../lib/useSmsBalance';
@@ -296,7 +297,7 @@ export default function Marketing() {
               <span className="text-xs text-ui-faint">{selected.size} selected</span>
             </div>
             {loading ? (
-              <p className="text-sm text-ui-muted py-8 text-center">Loading…</p>
+              <Loader className="py-8" />
             ) : customers.length === 0 ? (
               <p className="text-sm text-ui-muted py-8 text-center">No customers match.</p>
             ) : (

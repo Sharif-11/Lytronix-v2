@@ -1,20 +1,45 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { MapPin, Package } from 'lucide-react';
-import { trackOrder } from '../api/client';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { MapPin, Package, CheckCircle2, XCircle, Loader2, Zap } from 'lucide-react';
+import { trackOrder, initiateBkashCheckout } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
+import Loader from '../components/Loader';
 import { formatMoney, formatTime, mergeTrackingTimeline, groupTimelineByDate } from '../utils/format';
+
+const BKASH_RESULT = {
+  success: { ok: true, text: 'বিকাশ পেমেন্ট সফল হয়েছে — আপনার অর্ডার কনফার্ম হয়েছে।' },
+  failed: { ok: false, text: 'বিকাশ পেমেন্ট সম্পন্ন হয়নি। আবার চেষ্টা করুন অথবা ক্যাশ অন ডেলিভারিতে অর্ডারটি রাখুন।' },
+  cancelled: { ok: false, text: 'বিকাশ পেমেন্ট বাতিল করা হয়েছে। অর্ডারটি এখনও পেমেন্টের অপেক্ষায় আছে।' },
+  error: { ok: false, text: 'বিকাশ পেমেন্ট যাচাই করা যায়নি। কিছুক্ষণ পর স্ট্যাটাস দেখুন বা আমাদের সাথে যোগাযোগ করুন।' },
+};
 
 export default function TrackOrder() {
   const { trackingId } = useParams();
+  const [params] = useSearchParams();
+  const bkash = BKASH_RESULT[params.get('bkash')];
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
+  const [retrying, setRetrying] = useState(false);
+  const [retryErr, setRetryErr] = useState('');
 
   useEffect(() => {
     trackOrder(trackingId)
       .then(setOrder)
       .catch(() => setError('এই ট্র্যাকিং আইডি দিয়ে কোনো অর্ডার খুঁজে পাওয়া যায়নি।'));
   }, [trackingId]);
+
+  const retryBkash = async () => {
+    if (!order?._id) return;
+    setRetrying(true);
+    setRetryErr('');
+    try {
+      const { redirectURL } = await initiateBkashCheckout(order._id);
+      window.location.href = redirectURL;
+    } catch (err) {
+      setRetrying(false);
+      setRetryErr(err.response?.data?.message || 'বিকাশ পেমেন্ট আবার শুরু করা যায়নি। কিছুক্ষণ পর চেষ্টা করুন।');
+    }
+  };
 
   return (
     <div className="min-h-[70vh] flex items-start justify-center px-4 sm:px-5 py-8 sm:py-14">
@@ -24,11 +49,30 @@ export default function TrackOrder() {
           <div className="font-mono text-sm text-ui-muted mt-1">{trackingId}</div>
         </div>
 
+        {bkash && (
+          <div
+            className={`flex items-start gap-2.5 border text-sm px-4 py-3 rounded-xl mb-5 ${
+              bkash.ok
+                ? 'border-ui-brand/30 bg-ui-brand/10 text-ui-brand'
+                : 'border-ui-gold/40 bg-amber-50 text-ui-gold'
+            }`}
+          >
+            {bkash.ok ? (
+              <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+            ) : (
+              <XCircle size={16} className="shrink-0 mt-0.5" />
+            )}
+            <span className="leading-snug">{bkash.text}</span>
+          </div>
+        )}
+
         {error && (
           <div className="border border-ui-rust/40 bg-ui-rust/10 text-ui-rust text-sm px-4 py-3 rounded-xl text-center">
             {error}
           </div>
         )}
+
+        {!order && !error && <Loader />}
 
         {order && (
           <div className="bg-ui-panel border border-ui-line rounded-xl shadow-card p-6">
@@ -89,6 +133,33 @@ export default function TrackOrder() {
                 <span className="font-mono">{formatMoney(order.pricing?.due)}</span>
               </div>
             </div>
+
+            {order.canRetryBkash && (
+              <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] p-4">
+                <p className="text-sm text-ui-ink leading-snug">
+                  এই অর্ডারের{' '}
+                  <span className="font-display italic font-extrabold text-bkash">bKash</span> পেমেন্ট এখনও সম্পন্ন
+                  হয়নি। নিচের বাটনে চাপ দিয়ে আবার চেষ্টা করুন।
+                </p>
+                {retryErr && <p className="text-xs text-ui-rust mt-2">{retryErr}</p>}
+                <button
+                  type="button"
+                  onClick={retryBkash}
+                  disabled={retrying}
+                  className="btn-primary w-full mt-3 py-2.5 gap-2 bg-bkash hover:bg-bkash-dark"
+                >
+                  {retrying ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={15} /> আবার বিকাশে পেমেন্ট করুন · {formatMoney(order.pricing?.grandTotal)}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

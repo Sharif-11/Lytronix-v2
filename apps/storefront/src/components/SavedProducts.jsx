@@ -5,6 +5,7 @@ import { getWishlist, getProducts } from '../api/client';
 import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { formatMoney } from '../utils/format';
+import Loader from './Loader';
 
 // Works for both a signed-in customer (server wishlist) and a guest
 // (product ids from localStorage via CartContext).
@@ -42,7 +43,7 @@ export default function SavedProducts({ heading = 'পছন্দের প্�
     await remove(p._id);
   };
 
-  if (products === null) return <p className="text-sm text-ui-muted">লোড হচ্ছে…</p>;
+  if (products === null) return <Loader inline className="py-2" />;
 
   if (products.length === 0) {
     return (

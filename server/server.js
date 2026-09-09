@@ -89,6 +89,11 @@ app.get('/api/meta/steadfast', (req, res) =>
     trackingUrlTemplate: process.env.STEADFAST_TRACKING_URL_TEMPLATE || '',
   })
 );
+// Which online payment methods the storefront checkout should offer.
+app.get('/api/meta/payments', (req, res) => {
+  const bkash = require('./services/payments').getGateway('bkash');
+  res.json({ bkashAutomated: Boolean(bkash && bkash.isEnabled && bkash.isEnabled()) });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);

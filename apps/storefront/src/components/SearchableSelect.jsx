@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, Check, X } from 'lucide-react';
+import Spinner from './Spinner';
 
 /**
  * A custom, searchable single-select — replaces the OS-native <select>
@@ -82,6 +83,7 @@ export default function SearchableSelect({
           disabled || loading ? 'opacity-60 cursor-not-allowed' : 'hover:border-ui-faint/60'
         } ${open ? 'border-ui-brand ring-4 ring-ui-brand/10' : ''}`}
       >
+        {loading && <Spinner size={15} className="text-ui-brand shrink-0" />}
         <span className={`flex-1 min-w-0 truncate ${selected ? 'text-ui-ink' : 'text-ui-faint'}`}>
           {loading ? 'লোড হচ্ছে…' : selected ? selected.label : disabled && disabledHint ? disabledHint : placeholder}
         </span>
