@@ -1,7 +1,6 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Payment = require('../models/Payment');
-const Customer = require('../models/Customer');
 const CustomerAccount = require('../models/CustomerAccount');
 const steadfast = require('../services/steadfast');
 const notifications = require('../services/notifications');
@@ -74,29 +73,15 @@ async function ensureCheckoutAccount(reqCustomer, customer) {
   }
 }
 
-// Keep the admin-side Customer rolodex populated from every checkout, and —
-// for a signed-in shopper — make sure the address they just used is saved to
+// For a signed-in shopper, make sure the address they just used is saved to
 // their account so a repeat order doesn't need it re-entered. Best-effort:
 // failures here never fail the order.
+//
+// The admin-side Customer "notebook" (server/models/Customer.js) is
+// deliberately NOT touched here — it's for entries an admin adds by hand
+// only, never auto-populated from checkouts.
 async function syncCustomerRecords(order, account) {
   const c = order.customer || {};
-  try {
-    await Customer.findOneAndUpdate(
-      { phone: c.phone },
-      {
-        $setOnInsert: { phone: c.phone },
-        $set: {
-          ...(c.name ? { name: c.name } : {}),
-          ...(c.zilla ? { zilla: c.zilla } : {}),
-          ...(c.thana ? { thana: c.thana } : {}),
-          ...(c.address ? { address: c.address } : {}),
-        },
-      },
-      { upsert: true, new: true }
-    );
-  } catch (err) {
-    logger.error('rolodex upsert failed', { error: err.message });
-  }
 
   // Save the checkout address to the customer's account: as the DEFAULT
   // address if they have none yet, otherwise as an extra address. Skipped
