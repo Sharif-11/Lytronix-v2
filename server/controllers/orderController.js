@@ -14,14 +14,28 @@ const { computeOrderAdvance } = require('../utils/paymentPolicy');
 const { transactionIdTakenBy } = require('../utils/transactionId');
 const { bkashAutoEnabled } = require('../services/payments');
 
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// How much of an order can be settled online with automated bKash: only the
+// amount that must be paid UP FRONT — i.e. the outstanding balance minus the
+// cash-on-delivery leg (`pricing.cashOnAmount`, which for advance orders
+// already bundles the delivery charge). For a plain full-payment order this
+// is just the outstanding balance.
+function onlinePayAmount(order) {
+  const p = order?.pricing || {};
+  const due = p.due != null ? round2(p.due) : round2(p.grandTotal);
+  const codLeg = Math.max(0, round2(p.cashOnAmount));
+  return round2(Math.max(0, due - codLeg));
+}
+exports.onlinePayAmount = onlinePayAmount;
+
 // An order can be paid online (automated bKash) when the gateway is live, the
 // order is still awaiting payment (`unverified` — the only storefront state
-// where money hasn't been confirmed), and something is actually still owed.
-// Works for orders that started as manual bKash too, not just failed auto ones.
+// where money hasn't been confirmed), and there's an up-front amount left to
+// collect. Works for orders that started as manual bKash too.
 function canPayOrderOnline(order) {
   if (!order || order.status !== 'unverified') return false;
-  const due = order.pricing?.due;
-  if (due != null && due <= 0) return false;
+  if (!(onlinePayAmount(order) > 0)) return false;
   return bkashAutoEnabled();
 }
 exports.canPayOrderOnline = canPayOrderOnline;
@@ -319,12 +333,14 @@ exports.createOrder = async (req, res) => {
 
     ({ requiredAdvance, codRemainder } = computeOrderAdvance(lines, pricing?.deliveryCharge || 0));
 
-    if (requiredAdvance > 0 && method !== 'bkash_manual') {
+    // A required advance can be settled by either bKash flow (manual send-money
+    // or automated checkout). Only pure COD is rejected for such an order.
+    if (requiredAdvance > 0 && method !== 'bkash_manual' && method !== 'bkash_automated') {
       return res.status(400).json({
         message:
           codRemainder > 0
-            ? `This order requires an advance payment of ৳${requiredAdvance} via bKash before it can ship; the remaining ৳${codRemainder} is payable on delivery.`
-            : `This order requires the full amount (৳${requiredAdvance}) to be paid in advance via bKash — Cash on Delivery isn't available for it.`,
+            ? `This order requires an advance payment of ৳${requiredAdvance} via bKash before it can ship; the remaining ৳${codRemainder} (delivery charge included) is payable on delivery.`
+            : `This order requires the full amount (৳${requiredAdvance}, delivery charge included) to be paid in advance via bKash — Cash on Delivery isn't available for it.`,
       });
     }
   }
@@ -407,10 +423,12 @@ exports.createOrder = async (req, res) => {
         proofImageUrl: paymentDetails.proofImageUrl || '',
       });
     } else if (method === 'bkash_automated') {
+      // Same as manual bKash: only the required up-front amount is charged
+      // online; the cash-on-delivery leg (incl. delivery charge) is not.
       await Payment.create({
         order: order._id,
         method: 'bkash_automated',
-        amount: order.pricing.grandTotal,
+        amount: requiredAdvance > 0 ? requiredAdvance : order.pricing.grandTotal,
         status: 'pending',
       });
     }
@@ -635,12 +653,13 @@ exports.sendOrderMessage = async (req, res) => {
 // GET /api/track/:trackingId  (public, no admin data like payments/comments exposed)
 exports.trackOrder = async (req, res) => {
   const order = await Order.findOne({ trackingId: req.params.trackingId }).select(
-    'orderNumber trackingId status statusHistory courierEvents courier.trackingCode courier.status courier.lastMessage items pricing.grandTotal pricing.due createdAt customer.name'
+    'orderNumber trackingId status statusHistory courierEvents courier.trackingCode courier.status courier.lastMessage items pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt customer.name'
   );
   if (!order) return res.status(404).json({ message: 'Tracking ID not found' });
 
   // Enough payment context for the storefront to offer a "pay now" button on
-  // any order that's still awaiting payment.
+  // any order that's still awaiting payment. `onlinePayAmount` is the up-front
+  // portion only — the delivery-time cash leg is never charged online.
   const bkashPayment = await Payment.findOne({ order: order._id, method: 'bkash_automated' })
     .select('status')
     .lean();
@@ -649,6 +668,7 @@ exports.trackOrder = async (req, res) => {
     ...order.toObject(),
     bkashPayment: bkashPayment || null,
     canPayOnline: canPayOrderOnline(order),
+    onlinePayAmount: onlinePayAmount(order),
   });
 };
 
@@ -661,16 +681,16 @@ exports.trackOrdersByPhone = async (req, res) => {
   if (!/^01\d{9}$/.test(phone)) return res.json({ orders: [] });
 
   const found = await Order.find({ 'customer.phone': phone })
-    .select('orderNumber trackingId status items.name items.quantity pricing.grandTotal pricing.due createdAt')
+    .select('orderNumber trackingId status items.name items.quantity pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
 
   const online = bkashAutoEnabled();
-  const orders = found.map((o) => ({
-    ...o,
-    canPayOnline: online && o.status === 'unverified' && (o.pricing?.due == null || o.pricing.due > 0),
-  }));
+  const orders = found.map((o) => {
+    const amt = onlinePayAmount(o);
+    return { ...o, canPayOnline: online && o.status === 'unverified' && amt > 0, onlinePayAmount: amt };
+  });
 
   res.json({ orders });
 };

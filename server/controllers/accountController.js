@@ -6,9 +6,20 @@ const Order = require('../models/Order')
 const Payment = require('../models/Payment')
 const { bkashAutoEnabled } = require('../services/payments')
 
-// Order still awaiting payment → can be paid online with automated bKash.
-const canPayOnline = (o) =>
-  o && o.status === 'unverified' && (o.pricing?.due == null || o.pricing.due > 0) && bkashAutoEnabled()
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+// Up-front amount collectable online: outstanding balance minus the
+// cash-on-delivery leg (pricing.cashOnAmount already bundles delivery for
+// advance orders). Mirrors orderController.onlinePayAmount.
+const onlinePayAmount = (o) => {
+  const p = (o && o.pricing) || {}
+  const due = p.due != null ? round2(p.due) : round2(p.grandTotal)
+  return round2(Math.max(0, due - Math.max(0, round2(p.cashOnAmount))))
+}
+
+// Order still awaiting payment → can be paid online with automated bKash
+// (only the up-front amount; the delivery-time cash leg is never charged online).
+const canPayOnline = (o) => o && o.status === 'unverified' && onlinePayAmount(o) > 0 && bkashAutoEnabled()
 
 // ---------- Profile ----------
 
@@ -119,7 +130,9 @@ exports.listOrders = async (req, res) => {
     .sort({ createdAt: -1 })
     .select('orderNumber trackingId status statusHistory items pricing courier createdAt')
     .lean()
-  res.json({ orders: orders.map((o) => ({ ...o, canPayOnline: canPayOnline(o) })) })
+  res.json({
+    orders: orders.map((o) => ({ ...o, canPayOnline: canPayOnline(o), onlinePayAmount: onlinePayAmount(o) })),
+  })
 }
 
 // GET /api/account/orders/:id
@@ -127,7 +140,10 @@ exports.getOrder = async (req, res) => {
   const order = await Order.findOne({ _id: req.params.id, customerAccount: req.customer._id })
   if (!order) return res.status(404).json({ message: 'Order not found.' })
   const payments = await Payment.find({ order: order._id }).sort({ createdAt: -1 })
-  res.json({ order: { ...order.toObject(), canPayOnline: canPayOnline(order) }, payments })
+  res.json({
+    order: { ...order.toObject(), canPayOnline: canPayOnline(order), onlinePayAmount: onlinePayAmount(order) },
+    payments,
+  })
 }
 
 // GET /api/account/payments

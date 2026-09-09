@@ -124,8 +124,12 @@ export default function TrackOrder() {
                   </li>
                 ))}
               </ul>
+              <div className="flex justify-between text-sm text-ui-muted">
+                <span>ডেলিভারি চার্জ</span>
+                <span className="font-mono">{formatMoney(order.pricing?.deliveryCharge)}</span>
+              </div>
               <div className="flex justify-between text-sm font-semibold text-ui-brand border-t border-ui-line pt-2">
-                <span>গ্র্যান্ড টোটাল</span>
+                <span>গ্র্যান্ড টোটাল (ডেলিভারি চার্জ সহ)</span>
                 <span className="font-mono">{formatMoney(order.pricing?.grandTotal)}</span>
               </div>
               <div className="flex justify-between text-sm text-ui-muted">
@@ -137,10 +141,15 @@ export default function TrackOrder() {
             {order.canPayOnline && (
               <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] p-4">
                 <p className="text-sm text-ui-ink leading-snug">
-                  এই অর্ডারের পেমেন্ট এখনও বাকি —{' '}
-                  <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ অনলাইনে পেমেন্ট
-                  সম্পন্ন করুন।
+                  অনলাইনে <span className="font-mono font-medium">{formatMoney(order.onlinePayAmount)}</span> পেমেন্ট বাকি —{' '}
+                  <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ সম্পন্ন করুন।
                 </p>
+                {order.pricing?.cashOnAmount > 0 && (
+                  <p className="text-xs text-ui-muted mt-1">
+                    বাকি <span className="font-mono">{formatMoney(order.pricing.cashOnAmount)}</span> (ডেলিভারি চার্জ{' '}
+                    <span className="font-mono">{formatMoney(order.pricing.deliveryCharge)}</span> সহ) ডেলিভারিতে ক্যাশে দিতে হবে।
+                  </p>
+                )}
                 {payErr && <p className="text-xs text-ui-rust mt-2">{payErr}</p>}
                 <button
                   type="button"
@@ -154,7 +163,7 @@ export default function TrackOrder() {
                     </>
                   ) : (
                     <>
-                      <Zap size={15} /> বিকাশে পেমেন্ট করুন · {formatMoney(order.pricing?.due ?? order.pricing?.grandTotal)}
+                      <Zap size={15} /> বিকাশে পেমেন্ট করুন · {formatMoney(order.onlinePayAmount ?? order.pricing?.due ?? order.pricing?.grandTotal)}
                     </>
                   )}
                 </button>

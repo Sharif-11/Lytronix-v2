@@ -426,12 +426,19 @@ export default function Checkout() {
               সম্পন্ন করা যাচ্ছে না — বিকাশের মাধ্যমে{' '}
               <span className="font-mono font-medium">{formatMoney(advanceInfo.requiredAdvance)}</span> অগ্রিম
               পাঠাতে হবে।
-              {advanceInfo.codRemainder > 0 && (
+              {advanceInfo.codRemainder > 0 ? (
                 <>
                   {' '}
                   বাকি{' '}
-                  <span className="font-mono font-medium">{formatMoney(advanceInfo.codRemainder)}</span> ডেলিভারিতে
-                  ক্যাশে পরিশোধ করতে পারবেন।
+                  <span className="font-mono font-medium">{formatMoney(advanceInfo.codRemainder)}</span> (ডেলিভারি চার্জ{' '}
+                  <span className="font-mono font-medium">{formatMoney(deliveryTotal)}</span> সহ) ডেলিভারিতে ক্যাশে পরিশোধ
+                  করতে পারবেন।
+                </>
+              ) : (
+                <>
+                  {' '}
+                  এই অগ্রিমের মধ্যে ডেলিভারি চার্জ{' '}
+                  <span className="font-mono font-medium">{formatMoney(deliveryTotal)}</span> অন্তর্ভুক্ত।
                 </>
               )}
             </p>
@@ -472,17 +479,41 @@ export default function Checkout() {
           )}
 
           {paymentMethod === 'bkash_automated' && (
-            <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] px-4 py-3 text-sm text-ui-ink">
-              <span className="font-display italic font-extrabold text-bkash">bKash</span> পেজে গিয়ে{' '}
-              <span className="font-mono font-medium">{formatMoney(grandTotal)}</span> পেমেন্ট সম্পন্ন করুন। সফল হলে
-              আপনার অর্ডার স্বয়ংক্রিয়ভাবে কনফার্ম হবে।
+            <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] px-4 py-3 text-sm text-ui-ink space-y-1">
+              {advanceRequired ? (
+                <>
+                  <p>
+                    <span className="font-display italic font-extrabold text-bkash">bKash</span> পেজে গিয়ে অগ্রিম{' '}
+                    <span className="font-mono font-medium">{formatMoney(advanceInfo.requiredAdvance)}</span> পেমেন্ট করুন।
+                  </p>
+                  {advanceInfo.codRemainder > 0 ? (
+                    <p className="text-ui-muted">
+                      বাকি <span className="font-mono">{formatMoney(advanceInfo.codRemainder)}</span> (এর মধ্যে ডেলিভারি
+                      চার্জ <span className="font-mono">{formatMoney(deliveryTotal)}</span>) ডেলিভারিতে ক্যাশে দিতে হবে।
+                    </p>
+                  ) : (
+                    <p className="text-ui-muted">
+                      এই অগ্রিমের মধ্যে ডেলিভারি চার্জ <span className="font-mono">{formatMoney(deliveryTotal)}</span>{' '}
+                      অন্তর্ভুক্ত।
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  <span className="font-display italic font-extrabold text-bkash">bKash</span> পেজে গিয়ে{' '}
+                  <span className="font-mono font-medium">{formatMoney(grandTotal)}</span> (ডেলিভারি চার্জ{' '}
+                  <span className="font-mono">{formatMoney(deliveryTotal)}</span> সহ) পেমেন্ট সম্পন্ন করুন। সফল হলে অর্ডার
+                  স্বয়ংক্রিয়ভাবে কনফার্ম হবে।
+                </p>
+              )}
             </div>
           )}
 
           {paymentMethod === 'cod' && !advanceRequired && (
             <p className="mt-4 pt-4 border-t border-dashed border-ui-line text-sm text-ui-muted">
-              প্রোডাক্ট হাতে পেয়ে ক্যাশে পেমেন্ট করুন। ডেলিভারিতে পরিশোধযোগ্য মোট টাকা:{' '}
-              <span className="font-mono font-medium text-ui-ink">{formatMoney(grandTotal)}</span>।
+              প্রোডাক্ট হাতে পেয়ে ক্যাশে পেমেন্ট করুন। ডেলিভারিতে পরিশোধযোগ্য মোট{' '}
+              <span className="font-mono font-medium text-ui-ink">{formatMoney(grandTotal)}</span> (ডেলিভারি চার্জ{' '}
+              <span className="font-mono">{formatMoney(deliveryTotal)}</span> সহ)।
             </p>
           )}
         </section>
@@ -499,7 +530,7 @@ export default function Checkout() {
           ) : submitting ? (
             'অর্ডার হচ্ছে…'
           ) : paymentMethod === 'bkash_automated' ? (
-            `বিকাশে পেমেন্ট করুন · ${formatMoney(grandTotal)}`
+            `বিকাশে পেমেন্ট করুন · ${formatMoney(advanceRequired ? advanceInfo.requiredAdvance : grandTotal)}`
           ) : (
             `অর্ডার করুন · ${formatMoney(grandTotal)}`
           )}
@@ -649,11 +680,12 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
     bkash_automated: 'বিকাশ পেমেন্ট এখনও সম্পন্ন হয়নি — নিচের ট্র্যাকিং লিংকে গিয়ে "আবার বিকাশে পেমেন্ট করুন" বাটনে চাপ দিন।',
   }[paymentMethod];
 
+  const deliveryCharge = order.pricing?.deliveryCharge || 0;
   if (paymentMethod === 'bkash_manual' && advanceInfo?.requiredAdvance > 0) {
     paymentSummary =
       advanceInfo.codRemainder > 0
-        ? `বিকাশে ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — বাকি ${formatMoney(advanceInfo.codRemainder)} ডেলিভারিতে ক্যাশে দিতে হবে।`
-        : `বিকাশে সম্পূর্ণ ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — ডেলিভারিতে আর কোনো টাকা লাগবে না।`;
+        ? `বিকাশে ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — বাকি ${formatMoney(advanceInfo.codRemainder)} (ডেলিভারি চার্জ ${formatMoney(deliveryCharge)} সহ) ডেলিভারিতে ক্যাশে দিতে হবে।`
+        : `বিকাশে সম্পূর্ণ ${formatMoney(advanceInfo.requiredAdvance)} অগ্রিম (ডেলিভারি চার্জ ${formatMoney(deliveryCharge)} সহ) পাঠানো হয়েছে, ভেরিফাইয়ের অপেক্ষায় — ডেলিভারিতে আর কোনো টাকা লাগবে না।`;
   }
 
   return (
@@ -682,7 +714,11 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
             <span className="font-mono font-medium">{order.orderNumber}</span>
           </div>
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-ui-muted">গ্র্যান্ড টোটাল</span>
+            <span className="text-ui-muted">ডেলিভারি চার্জ</span>
+            <span className="font-mono">{formatMoney(deliveryCharge)}</span>
+          </div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-ui-muted">গ্র্যান্ড টোটাল (ডেলিভারি চার্জ সহ)</span>
             <span className="font-mono font-medium">{formatMoney(order.pricing?.grandTotal)}</span>
           </div>
           {paymentSummary && (

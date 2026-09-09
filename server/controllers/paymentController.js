@@ -158,22 +158,30 @@ exports.initiateBkash = async (req, res) => {
     return res.status(409).json({ message: 'This order can no longer be paid online.' });
   }
 
-  // Charge only what is actually outstanding — grandTotal minus any advance
-  // already paid and any payments already recorded on the order ledger — so a
-  // customer can never over-pay an order via the automated flow.
-  const outstanding =
-    order.pricing && order.pricing.due != null
-      ? Math.round(order.pricing.due * 100) / 100
-      : order.pricing.grandTotal;
-  if (!(outstanding > 0)) {
+  // bKash automated collects only the amount that must be paid UP FRONT: the
+  // outstanding balance minus the cash-on-delivery leg (pricing.cashOnAmount,
+  // which for advance orders already bundles the delivery charge). For a plain
+  // full-payment order that's just the outstanding balance. This also guards
+  // against over-payment.
+  const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const due =
+    order.pricing && order.pricing.due != null ? round2(order.pricing.due) : round2(order.pricing?.grandTotal);
+  if (!(due > 0)) {
     return res.status(409).json({ message: 'This order is already fully paid.' });
+  }
+  const codLeg = Math.max(0, round2(order.pricing?.cashOnAmount));
+  const requiredNow = round2(Math.max(0, due - codLeg));
+  if (!(requiredNow > 0)) {
+    return res.status(409).json({
+      message: 'The remaining amount is collected on delivery — there is nothing to pay online for this order.',
+    });
   }
 
   if (!payment) {
     payment = await Payment.create({
       order: order._id,
       method: 'bkash_automated',
-      amount: outstanding,
+      amount: requiredNow,
       status: 'pending',
     });
   } else {
@@ -182,7 +190,7 @@ exports.initiateBkash = async (req, res) => {
     payment.status = 'pending';
     payment.rejectionReason = '';
     payment.transactionId = '';
-    payment.amount = outstanding;
+    payment.amount = requiredNow;
     await payment.save();
   }
 

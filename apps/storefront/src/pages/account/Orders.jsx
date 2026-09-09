@@ -84,6 +84,9 @@ function OrderList() {
               <div className="text-xs text-ui-muted">
                 {formatDate(o.createdAt)} · {o.items.length}টি প্রোডাক্ট
               </div>
+              <div className="text-xs text-ui-faint">
+                ডেলিভারি চার্জ {formatMoney(o.pricing?.deliveryCharge)}
+              </div>
             </div>
             <div className="text-right shrink-0">
               <div className="font-mono text-sm font-medium">{formatMoney(o.pricing?.grandTotal)}</div>
@@ -92,7 +95,7 @@ function OrderList() {
           </Link>
           {o.canPayOnline && (
             <div className="mt-3">
-              <PayNowButton orderId={o._id} amount={o.pricing?.due ?? o.pricing?.grandTotal} />
+              <PayNowButton orderId={o._id} amount={o.onlinePayAmount ?? o.pricing?.due ?? o.pricing?.grandTotal} />
             </div>
           )}
         </div>
@@ -133,11 +136,17 @@ function OrderDetail({ id }) {
 
       {order.canPayOnline && (
         <div className="card p-4 sm:p-5 border-bkash/30 bg-bkash/[0.04]">
-          <p className="text-sm text-ui-ink leading-snug mb-3">
-            এই অর্ডারের পেমেন্ট এখনও বাকি —{' '}
-            <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ অনলাইনে সম্পন্ন করুন।
+          <p className="text-sm text-ui-ink leading-snug mb-2">
+            অনলাইনে <span className="font-mono font-medium">{formatMoney(order.onlinePayAmount)}</span> পেমেন্ট বাকি —{' '}
+            <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ সম্পন্ন করুন।
           </p>
-          <PayNowButton orderId={order._id} amount={order.pricing?.due ?? order.pricing?.grandTotal} />
+          {order.pricing?.cashOnAmount > 0 && (
+            <p className="text-xs text-ui-muted mb-3 -mt-1">
+              বাকি {formatMoney(order.pricing.cashOnAmount)} (ডেলিভারি চার্জ {formatMoney(order.pricing.deliveryCharge)} সহ)
+              ডেলিভারিতে ক্যাশে।
+            </p>
+          )}
+          <PayNowButton orderId={order._id} amount={order.onlinePayAmount ?? order.pricing?.due ?? order.pricing?.grandTotal} />
         </div>
       )}
 

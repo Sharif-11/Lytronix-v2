@@ -102,28 +102,37 @@ export default function GuestOrders() {
                   <div className="text-xs text-ui-faint mt-0.5">
                     {formatDate(o.createdAt)}
                     {o.pricing?.grandTotal != null && ` · ${formatMoney(o.pricing.grandTotal)}`}
+                    {o.pricing?.deliveryCharge != null && ` (ডেলিভারি চার্জ ${formatMoney(o.pricing.deliveryCharge)} সহ)`}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-ui-faint shrink-0 group-hover:text-ui-brand" />
               </Link>
 
               {o.canPayOnline && (
-                <button
-                  type="button"
-                  onClick={() => payNow(o)}
-                  disabled={Boolean(payingId)}
-                  className="btn-primary w-full mt-3 py-2.5 gap-2 bg-bkash hover:bg-bkash-dark"
-                >
-                  {payingId === o._id ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…
-                    </>
-                  ) : (
-                    <>
-                      <Zap size={15} /> পেমেন্ট করুন · {formatMoney(o.pricing?.due ?? o.pricing?.grandTotal)}
-                    </>
+                <>
+                  {o.pricing?.cashOnAmount > 0 && (
+                    <p className="text-xs text-ui-muted mt-2">
+                      অনলাইনে {formatMoney(o.onlinePayAmount)} · বাকি {formatMoney(o.pricing.cashOnAmount)} (ডেলিভারি চার্জ{' '}
+                      {formatMoney(o.pricing.deliveryCharge)} সহ) ডেলিভারিতে ক্যাশে।
+                    </p>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => payNow(o)}
+                    disabled={Boolean(payingId)}
+                    className="btn-primary w-full mt-2 py-2.5 gap-2 bg-bkash hover:bg-bkash-dark"
+                  >
+                    {payingId === o._id ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={15} /> পেমেন্ট করুন · {formatMoney(o.onlinePayAmount ?? o.pricing?.due ?? o.pricing?.grandTotal)}
+                      </>
+                    )}
+                  </button>
+                </>
               )}
             </li>
           ))}
