@@ -117,6 +117,14 @@ export default function StorefrontHeader() {
           <Link to="/shop/contact" className="hidden lg:inline text-sm font-medium text-ui-ink px-2 py-2 hover:text-ui-brand">
             যোগাযোগ
           </Link>
+          {!isAuthed && guestOrders && (
+            <Link
+              to="/shop/my-orders"
+              className="hidden md:inline text-sm font-medium text-ui-ink px-2 py-2 hover:text-ui-brand"
+            >
+              আমার অর্ডার
+            </Link>
+          )}
 
           {/* Search */}
           <form onSubmit={submitSearch} className="flex-1 max-w-md relative hidden sm:block">
@@ -159,7 +167,7 @@ export default function StorefrontHeader() {
             {!isAuthed && guestOrders && (
               <Link
                 to="/shop/my-orders"
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-ui-muted hover:bg-ui-surfaceAlt hover:text-ui-ink transition-colors"
+                className="hidden sm:flex md:hidden w-10 h-10 rounded-xl items-center justify-center text-ui-muted hover:bg-ui-surfaceAlt hover:text-ui-ink transition-colors"
                 aria-label="আমার অর্ডার"
               >
                 <Package size={19} />
