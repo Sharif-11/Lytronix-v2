@@ -15,6 +15,8 @@ import ProductGallery from '../components/ProductGallery';
 import ChatWidget from '../components/ChatWidget';
 import RichText from '../components/RichText';
 import Loader from '../components/Loader';
+import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
+import useFormDraft from '../lib/useFormDraft';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, BKASH_MERCHANT_NUMBER } from '../utils/company';
@@ -35,7 +37,8 @@ export default function ProductLanding() {
 
   const [districts, setDistricts] = useState([]);
   const [qty, setQty] = useState(1);
-  const [form, setForm] = useState(emptyForm);
+  // Returning guest → prefill name / phone / last delivery address.
+  const [form, setForm] = useState(() => ({ ...emptyForm, ...getReorderPrefill() }));
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
@@ -45,6 +48,23 @@ export default function ProductLanding() {
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   const formRef = useRef(null);
+
+  // Autosave the in-progress order form (guest-only page) so a reload doesn't
+  // wipe a half-filled form. Restored silently. Address is shared across
+  // products, so the draft key isn't per-slug.
+  const draft = useMemo(
+    () => ({
+      form,
+      paymentMethod,
+      bkash: { senderNumber: bkash.senderNumber, transactionId: bkash.transactionId },
+    }),
+    [form, paymentMethod, bkash.senderNumber, bkash.transactionId]
+  );
+  const { clearDraft } = useFormDraft('p-order', draft, (d) => {
+    if (d.form) setForm((f) => ({ ...f, ...d.form }));
+    if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
+    if (d.bkash) setBkash((b) => ({ ...b, ...d.bkash }));
+  });
 
   useEffect(() => {
     let alive = true;
@@ -173,6 +193,10 @@ export default function ProductLanding() {
     try {
       track('checkout_started', { via: 'product_link', productId: product._id });
       const created = await createOrder(payload);
+
+      // Device-side memory so a returning guest finds this order + reuses the address.
+      recordGuestCheckout(created);
+      clearDraft();
 
       if (paymentMethod === 'bkash_automated') {
         setRedirectingBkash(true);
@@ -686,6 +710,7 @@ function Confirmation({ order, paymentMethod, advanceInfo }) {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to={`/track/${order.trackingId}`} className="btn-primary">স্ট্যাটাস দেখুন</Link>
+          <Link to="/shop/my-orders" className="btn-secondary">আমার অর্ডার</Link>
           <Link to="/shop" className="btn-secondary inline-flex items-center gap-1.5">
             <ArrowLeft size={15} /> স্টোরে যান
           </Link>

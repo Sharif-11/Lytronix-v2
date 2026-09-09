@@ -156,6 +156,9 @@ export const getPoliceStations = async () => {
 
 // ---- Public order tracking ----
 export const trackOrder = (trackingId) => client.get(`/track/${trackingId}`).then((r) => r.data);
+// Guest "My orders": look up a phone number's orders (phone kept on-device).
+export const getGuestOrders = (phone) =>
+  client.post('/track/by-phone', { phone }).then((r) => r.data);
 
 // ---- Live chat (storefront widget) ----
 export const chatStart = (phone, name) => client.post('/chat/start', { phone, name }).then((r) => r.data);

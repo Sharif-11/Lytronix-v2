@@ -12,6 +12,19 @@ const logger = require('../services/logger');
 const { mapSteadfastStatus } = require('../utils/steadfastStatusMap');
 const { computeOrderAdvance } = require('../utils/paymentPolicy');
 const { transactionIdTakenBy } = require('../utils/transactionId');
+const { bkashAutoEnabled } = require('../services/payments');
+
+// An order can be paid online (automated bKash) when the gateway is live, the
+// order is still awaiting payment (`unverified` — the only storefront state
+// where money hasn't been confirmed), and something is actually still owed.
+// Works for orders that started as manual bKash too, not just failed auto ones.
+function canPayOrderOnline(order) {
+  if (!order || order.status !== 'unverified') return false;
+  const due = order.pricing?.due;
+  if (due != null && due <= 0) return false;
+  return bkashAutoEnabled();
+}
+exports.canPayOrderOnline = canPayOrderOnline;
 
 // Guest checkout auto-creates a storefront account (name + phone) so the
 // customer can sign in and track the order later. A brand-new account also
@@ -340,24 +353,38 @@ exports.createOrder = async (req, res) => {
   // never get an account attached this way.
   const checkoutAccount = isAdminCreated ? null : await ensureCheckoutAccount(req.customer, customer);
 
+  const orderPayload = {
+    customer,
+    items,
+    pricing: finalPricing,
+    payments,
+    status: initialStatus,
+    source,
+    createdBy,
+    weightKg: weightKg !== undefined ? weightKg : undefined,
+    customerAccount: checkoutAccount ? checkoutAccount._id : null,
+  };
+
+  // The orderNumber / trackingId are generated in Order.pre('save'); two
+  // near-simultaneous checkouts can still land on the same value and trip the
+  // unique index. Retry a few times — a fresh doc regenerates the identifiers,
+  // seeing whichever order just won the race.
   let order;
-  try {
-    order = await Order.create({
-      customer,
-      items,
-      pricing: finalPricing,
-      payments,
-      status: initialStatus,
-      source,
-      createdBy,
-      weightKg: weightKg !== undefined ? weightKg : undefined,
-      customerAccount: checkoutAccount ? checkoutAccount._id : null,
-    });
-  } catch (err) {
-    await Promise.all(
-      reserved.map((r) => Product.findByIdAndUpdate(r.productId, { $inc: { stock: r.quantity } }).catch(() => {}))
-    );
-    throw err;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      order = await Order.create(orderPayload);
+      break;
+    } catch (err) {
+      if (err && err.code === 11000 && attempt < 6) {
+        logger.warn('order: duplicate generated id, retrying', { attempt, key: err.keyValue });
+        await new Promise((r) => setTimeout(r, 25 * attempt));
+        continue;
+      }
+      await Promise.all(
+        reserved.map((r) => Product.findByIdAndUpdate(r.productId, { $inc: { stock: r.quantity } }).catch(() => {}))
+      );
+      throw err;
+    }
   }
 
   // Every checkout — whatever the payment method — gets one persistent
@@ -612,17 +639,40 @@ exports.trackOrder = async (req, res) => {
   );
   if (!order) return res.status(404).json({ message: 'Tracking ID not found' });
 
-  // Just enough payment context for the storefront to offer a "retry bKash"
-  // button when an automated payment didn't go through.
+  // Enough payment context for the storefront to offer a "pay now" button on
+  // any order that's still awaiting payment.
   const bkashPayment = await Payment.findOne({ order: order._id, method: 'bkash_automated' })
     .select('status')
     .lean();
-  const canRetryBkash =
-    Boolean(bkashPayment) &&
-    bkashPayment.status !== 'verified' &&
-    !['cancelled', 'completed', 'refunded', 'returned'].includes(order.status);
 
-  res.json({ ...order.toObject(), bkashPayment: bkashPayment || null, canRetryBkash });
+  res.json({
+    ...order.toObject(),
+    bkashPayment: bkashPayment || null,
+    canPayOnline: canPayOrderOnline(order),
+  });
+};
+
+// POST /api/track/by-phone   { phone }   (public)
+// Backs the storefront's guest "My orders" page: the device remembers only the
+// shopper's phone number, and this returns that number's orders. Deliberately
+// name/address-free so a probe of a random number leaks as little as possible.
+exports.trackOrdersByPhone = async (req, res) => {
+  const phone = String(req.body?.phone || '').replace(/\D/g, '');
+  if (!/^01\d{9}$/.test(phone)) return res.json({ orders: [] });
+
+  const found = await Order.find({ 'customer.phone': phone })
+    .select('orderNumber trackingId status items.name items.quantity pricing.grandTotal pricing.due createdAt')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  const online = bkashAutoEnabled();
+  const orders = found.map((o) => ({
+    ...o,
+    canPayOnline: online && o.status === 'unverified' && (o.pricing?.due == null || o.pricing.due > 0),
+  }));
+
+  res.json({ orders });
 };
 
 // Builds the single-string address Steadfast expects, within their 250 char limit.

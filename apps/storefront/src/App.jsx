@@ -18,6 +18,7 @@ import SavedPage from './pages/SavedPage';
 import Checkout from './pages/Checkout';
 import Login from './pages/Login';
 import TrackOrder from './pages/TrackOrder';
+import GuestOrders from './pages/GuestOrders';
 import About from './pages/About';
 import Contact from './pages/Contact';
 
@@ -64,6 +65,7 @@ export default function App() {
       <Route path="/shop/cart" element={<ShopLayout><Cart /></ShopLayout>} />
       <Route path="/shop/checkout" element={<ShopLayout><Checkout /></ShopLayout>} />
       <Route path="/shop/login" element={<ShopLayout><Login /></ShopLayout>} />
+      <Route path="/shop/my-orders" element={<ShopLayout><GuestOrders /></ShopLayout>} />
       <Route path="/shop/about" element={<ShopLayout><About /></ShopLayout>} />
       <Route path="/shop/contact" element={<ShopLayout><Contact /></ShopLayout>} />
 

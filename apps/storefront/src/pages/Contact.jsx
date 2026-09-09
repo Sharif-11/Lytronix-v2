@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Phone, Mail, MapPin, MessageCircle, Loader2, CheckCircle2 } from 'lucide-react';
 import { submitContact } from '../api/client';
+import useFormDraft from '../lib/useFormDraft';
 import { COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, COMPANY_WHATSAPP } from '../utils/company';
 
 export default function Contact() {
@@ -8,6 +9,13 @@ export default function Contact() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
+
+  // Keep a draft of the message so a mistap doesn't lose it (honeypot excluded).
+  const draft = useMemo(
+    () => ({ name: form.name, contact: form.contact, message: form.message }),
+    [form.name, form.contact, form.message]
+  );
+  const { clearDraft } = useFormDraft('contact', draft, (d) => setForm((f) => ({ ...f, ...d })));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,6 +33,7 @@ export default function Contact() {
         company: form.company,
       });
       setDone(true);
+      clearDraft();
     } catch (err) {
       setError(err.response?.data?.message || 'বার্তাটি পাঠানো যায়নি। আবার চেষ্টা করুন।');
     } finally {

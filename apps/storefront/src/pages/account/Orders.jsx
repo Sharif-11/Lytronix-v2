@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Package, MapPin } from 'lucide-react';
-import { getMyOrders, getMyOrder } from '../../api/client';
+import { ArrowLeft, Package, MapPin, Zap, Loader2 } from 'lucide-react';
+import { getMyOrders, getMyOrder, initiateBkashCheckout } from '../../api/client';
 import {
   formatMoney, formatDate, formatTime, statusStyle, statusLabel, paymentMethodLabel, paymentStatusLabel,
   mergeTrackingTimeline, groupTimelineByDate,
@@ -11,6 +11,42 @@ import Loader from '../../components/Loader';
 export default function Orders() {
   const { id } = useParams();
   return id ? <OrderDetail id={id} /> : <OrderList />;
+}
+
+// "Pay now" button for an order still awaiting payment — hands off to the
+// automated bKash flow (works whether the order started as COD-fallback,
+// manual bKash, or a failed auto attempt; the server figures out the rest).
+function PayNowButton({ orderId, amount }) {
+  const [paying, setPaying] = useState(false);
+  const [err, setErr] = useState('');
+  const go = async () => {
+    setPaying(true);
+    setErr('');
+    try {
+      const { redirectURL } = await initiateBkashCheckout(orderId);
+      window.location.href = redirectURL;
+    } catch (e) {
+      setPaying(false);
+      setErr(e.response?.data?.message || 'বিকাশ পেমেন্ট শুরু করা যায়নি।');
+    }
+  };
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={go}
+        disabled={paying}
+        className="btn-primary w-full py-2.5 gap-2 bg-bkash hover:bg-bkash-dark"
+      >
+        {paying ? (
+          <><Loader2 size={15} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…</>
+        ) : (
+          <><Zap size={15} /> বিকাশে পেমেন্ট করুন{amount != null ? ` · ${formatMoney(amount)}` : ''}</>
+        )}
+      </button>
+      {err && <p className="text-xs text-ui-rust mt-1.5">{err}</p>}
+    </div>
+  );
 }
 
 function OrderList() {
@@ -38,22 +74,28 @@ function OrderList() {
     <div className="space-y-3">
       <h2 className="font-display text-lg text-ui-ink">আপনার অর্ডার</h2>
       {orders.map((o) => (
-        <Link
-          key={o._id}
-          to={`/shop/account/orders/${o._id}`}
-          className="card p-4 flex items-center justify-between gap-3 hover:shadow-raised transition-shadow"
-        >
-          <div className="min-w-0">
-            <div className="font-mono text-sm font-medium text-ui-ink">{o.orderNumber}</div>
-            <div className="text-xs text-ui-muted">
-              {formatDate(o.createdAt)} · {o.items.length}টি প্রোডাক্ট
+        <div key={o._id} className="card p-4">
+          <Link
+            to={`/shop/account/orders/${o._id}`}
+            className="flex items-center justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <div className="font-mono text-sm font-medium text-ui-ink">{o.orderNumber}</div>
+              <div className="text-xs text-ui-muted">
+                {formatDate(o.createdAt)} · {o.items.length}টি প্রোডাক্ট
+              </div>
             </div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="font-mono text-sm font-medium">{formatMoney(o.pricing?.grandTotal)}</div>
-            <span className={`chip mt-1 ${statusStyle(o.status)}`}>{statusLabel(o.status)}</span>
-          </div>
-        </Link>
+            <div className="text-right shrink-0">
+              <div className="font-mono text-sm font-medium">{formatMoney(o.pricing?.grandTotal)}</div>
+              <span className={`chip mt-1 ${statusStyle(o.status)}`}>{statusLabel(o.status)}</span>
+            </div>
+          </Link>
+          {o.canPayOnline && (
+            <div className="mt-3">
+              <PayNowButton orderId={o._id} amount={o.pricing?.due ?? o.pricing?.grandTotal} />
+            </div>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -88,6 +130,16 @@ function OrderDetail({ id }) {
         <h2 className="font-display text-lg text-ui-ink">{order.orderNumber}</h2>
         <span className={`chip ${statusStyle(order.status)}`}>{statusLabel(order.status)}</span>
       </div>
+
+      {order.canPayOnline && (
+        <div className="card p-4 sm:p-5 border-bkash/30 bg-bkash/[0.04]">
+          <p className="text-sm text-ui-ink leading-snug mb-3">
+            এই অর্ডারের পেমেন্ট এখনও বাকি —{' '}
+            <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ অনলাইনে সম্পন্ন করুন।
+          </p>
+          <PayNowButton orderId={order._id} amount={order.pricing?.due ?? order.pricing?.grandTotal} />
+        </div>
+      )}
 
       <div className="card p-4 sm:p-5">
         <h3 className="text-xs uppercase tracking-wide text-ui-muted mb-2">প্রোডাক্টসমূহ</h3>

@@ -6,6 +6,7 @@ import {
 import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { getCategories } from '../api/client';
+import { hasGuestSession, GUEST_SESSION_EVENT } from '../lib/guestOrders';
 import { COMPANY_PHONE } from '../utils/company';
 import logo from '../assets/lytronix-logo.png';
 
@@ -17,10 +18,19 @@ export default function StorefrontHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [guestOrders, setGuestOrders] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
     getCategories().then((d) => setCats(d.tree || [])).catch(() => setCats([]));
+  }, []);
+
+  // Show a "My orders" shortcut for guests who have ordered from this device.
+  useEffect(() => {
+    const sync = () => setGuestOrders(hasGuestSession());
+    sync();
+    window.addEventListener(GUEST_SESSION_EVENT, sync);
+    return () => window.removeEventListener(GUEST_SESSION_EVENT, sync);
   }, []);
 
   useEffect(() => {
@@ -145,6 +155,16 @@ export default function StorefrontHeader() {
                 </span>
               )}
             </Link>
+
+            {!isAuthed && guestOrders && (
+              <Link
+                to="/shop/my-orders"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-ui-muted hover:bg-ui-surfaceAlt hover:text-ui-ink transition-colors"
+                aria-label="আমার অর্ডার"
+              >
+                <Package size={19} />
+              </Link>
+            )}
 
             {isAuthed ? (
               <div className="relative" ref={menuRef}>

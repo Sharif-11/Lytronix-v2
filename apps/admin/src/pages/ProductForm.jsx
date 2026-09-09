@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   getProduct, createProduct, updateProduct, uploadProductImage, uploadProductVideo,
@@ -10,6 +10,7 @@ import { ImagePlus, VideoIcon, X, Star, Loader2, Play } from 'lucide-react';
 import SearchableSelect from '../components/SearchableSelect';
 import RichTextEditor from '../components/RichTextEditor';
 import Loader from '../components/Loader';
+import useFormDraft from '../lib/useFormDraft';
 import { emitError } from '../lib/errorBus';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -46,6 +47,19 @@ export default function ProductForm() {
   const fileInputRef = useRef(null);
   const { phoneticOn } = usePhonetic();
   const confirm = useConfirm();
+
+  // Autosave a new-product form (minus uploaded media) so navigating away
+  // doesn't lose typed input. Restored silently on the next visit.
+  const draftForm = useMemo(() => {
+    const { images, videos, ...rest } = form;
+    return rest;
+  }, [form]);
+  const { clearDraft } = useFormDraft(
+    'admin-product-new',
+    draftForm,
+    (d) => setForm((f) => ({ ...f, ...d, paymentPolicy: { ...f.paymentPolicy, ...(d.paymentPolicy || {}) } })),
+    { enabled: !isEdit }
+  );
 
   useEffect(() => {
     getCategories({ includeInactive: 'true' })
@@ -167,7 +181,10 @@ export default function ProductForm() {
     };
     try {
       if (isEdit) await updateProduct(id, payload);
-      else await createProduct(payload);
+      else {
+        await createProduct(payload);
+        clearDraft();
+      }
       navigate('/products');
     } catch {
       // Surfaced globally via the ErrorModal (see api/client.js interceptor).

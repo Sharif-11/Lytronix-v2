@@ -217,8 +217,17 @@ orderSchema.pre('save', async function assignIdentifiers(next) {
     const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
       now.getDate()
     ).padStart(2, '0')}`;
-    const count = await this.constructor.countDocuments({});
-    this.orderNumber = `ORD-${datePart}-${String(count + 1).padStart(4, '0')}`;
+    // Continue from the highest sequence ever assigned — read off the most
+    // recently inserted order (by _id). Gap-proof: deleting an order never
+    // rewinds the counter. A genuine race to the same number is caught by the
+    // unique index + the retry loop in orderController.createOrder.
+    const last = await this.constructor
+      .findOne({ orderNumber: { $regex: /^ORD-\d{8}-\d+$/ } })
+      .sort({ _id: -1 })
+      .select('orderNumber')
+      .lean();
+    const lastSeq = last ? parseInt(String(last.orderNumber).split('-').pop(), 10) || 0 : 0;
+    this.orderNumber = `ORD-${datePart}-${String(lastSeq + 1).padStart(4, '0')}`;
   }
   if (this.isNew && (!this.statusHistory || this.statusHistory.length === 0)) {
     this.statusHistory = [{ status: this.status || 'pending', note: 'Order created', at: new Date() }];

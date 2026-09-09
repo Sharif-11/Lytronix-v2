@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Phone, ArrowLeft, ShieldCheck, Loader2, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
+import { getGuestPhone } from '../lib/guestOrders';
 
 export default function Login() {
   const { requestOtp, verifyOtp, login, forgotPassword, isAuthed } = useCustomerAuth();
@@ -11,7 +12,7 @@ export default function Login() {
 
   const [mode, setMode] = useState('otp'); // 'otp' | 'password'
   const [step, setStep] = useState('phone'); // otp flow: 'phone' | 'code'
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => getGuestPhone() || '');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);

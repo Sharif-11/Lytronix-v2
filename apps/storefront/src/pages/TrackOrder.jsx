@@ -19,8 +19,8 @@ export default function TrackOrder() {
   const bkash = BKASH_RESULT[params.get('bkash')];
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
-  const [retrying, setRetrying] = useState(false);
-  const [retryErr, setRetryErr] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [payErr, setPayErr] = useState('');
 
   useEffect(() => {
     trackOrder(trackingId)
@@ -28,16 +28,16 @@ export default function TrackOrder() {
       .catch(() => setError('এই ট্র্যাকিং আইডি দিয়ে কোনো অর্ডার খুঁজে পাওয়া যায়নি।'));
   }, [trackingId]);
 
-  const retryBkash = async () => {
+  const payNow = async () => {
     if (!order?._id) return;
-    setRetrying(true);
-    setRetryErr('');
+    setPaying(true);
+    setPayErr('');
     try {
       const { redirectURL } = await initiateBkashCheckout(order._id);
       window.location.href = redirectURL;
     } catch (err) {
-      setRetrying(false);
-      setRetryErr(err.response?.data?.message || 'বিকাশ পেমেন্ট আবার শুরু করা যায়নি। কিছুক্ষণ পর চেষ্টা করুন।');
+      setPaying(false);
+      setPayErr(err.response?.data?.message || 'বিকাশ পেমেন্ট শুরু করা যায়নি। কিছুক্ষণ পর চেষ্টা করুন।');
     }
   };
 
@@ -134,27 +134,27 @@ export default function TrackOrder() {
               </div>
             </div>
 
-            {order.canRetryBkash && (
+            {order.canPayOnline && (
               <div className="mt-4 rounded-xl border border-bkash/30 bg-bkash/[0.04] p-4">
                 <p className="text-sm text-ui-ink leading-snug">
-                  এই অর্ডারের{' '}
-                  <span className="font-display italic font-extrabold text-bkash">bKash</span> পেমেন্ট এখনও সম্পন্ন
-                  হয়নি। নিচের বাটনে চাপ দিয়ে আবার চেষ্টা করুন।
+                  এই অর্ডারের পেমেন্ট এখনও বাকি —{' '}
+                  <span className="font-display italic font-extrabold text-bkash">bKash</span>-এ অনলাইনে পেমেন্ট
+                  সম্পন্ন করুন।
                 </p>
-                {retryErr && <p className="text-xs text-ui-rust mt-2">{retryErr}</p>}
+                {payErr && <p className="text-xs text-ui-rust mt-2">{payErr}</p>}
                 <button
                   type="button"
-                  onClick={retryBkash}
-                  disabled={retrying}
+                  onClick={payNow}
+                  disabled={paying}
                   className="btn-primary w-full mt-3 py-2.5 gap-2 bg-bkash hover:bg-bkash-dark"
                 >
-                  {retrying ? (
+                  {paying ? (
                     <>
                       <Loader2 size={15} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…
                     </>
                   ) : (
                     <>
-                      <Zap size={15} /> আবার বিকাশে পেমেন্ট করুন · {formatMoney(order.pricing?.grandTotal)}
+                      <Zap size={15} /> বিকাশে পেমেন্ট করুন · {formatMoney(order.pricing?.due ?? order.pricing?.grandTotal)}
                     </>
                   )}
                 </button>

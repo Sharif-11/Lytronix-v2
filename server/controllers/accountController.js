@@ -4,6 +4,11 @@ const SavedProduct = require('../models/SavedProduct')
 const Product = require('../models/Product')
 const Order = require('../models/Order')
 const Payment = require('../models/Payment')
+const { bkashAutoEnabled } = require('../services/payments')
+
+// Order still awaiting payment → can be paid online with automated bKash.
+const canPayOnline = (o) =>
+  o && o.status === 'unverified' && (o.pricing?.due == null || o.pricing.due > 0) && bkashAutoEnabled()
 
 // ---------- Profile ----------
 
@@ -113,7 +118,8 @@ exports.listOrders = async (req, res) => {
   const orders = await Order.find({ customerAccount: req.customer._id })
     .sort({ createdAt: -1 })
     .select('orderNumber trackingId status statusHistory items pricing courier createdAt')
-  res.json({ orders })
+    .lean()
+  res.json({ orders: orders.map((o) => ({ ...o, canPayOnline: canPayOnline(o) })) })
 }
 
 // GET /api/account/orders/:id
@@ -121,7 +127,7 @@ exports.getOrder = async (req, res) => {
   const order = await Order.findOne({ _id: req.params.id, customerAccount: req.customer._id })
   if (!order) return res.status(404).json({ message: 'Order not found.' })
   const payments = await Payment.find({ order: order._id }).sort({ createdAt: -1 })
-  res.json({ order, payments })
+  res.json({ order: { ...order.toObject(), canPayOnline: canPayOnline(order) }, payments })
 }
 
 // GET /api/account/payments

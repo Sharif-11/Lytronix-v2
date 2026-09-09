@@ -10,6 +10,7 @@ import BookCourierModal from '../components/BookCourierModal';
 import SearchableSelect from '../components/SearchableSelect';
 import SuggestInput from '../components/SuggestInput';
 import Loader from '../components/Loader';
+import useFormDraft from '../lib/useFormDraft';
 import { emitError } from '../lib/errorBus';
 
 const emptyCustomer = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
@@ -38,6 +39,29 @@ export default function OrderForm() {
   const [saving, setSaving] = useState(false);
   const [createdOrder, setCreatedOrder] = useState(null); // set once, right after a successful create — drives the "book courier?" modal
   const { phoneticOn } = usePhonetic(); // universal — set once from the navbar, applies here too
+
+  // Autosave a new-order form so navigating away mid-entry doesn't lose it.
+  // Create-mode only — never restore over a loaded order.
+  const orderFormDraft = useMemo(
+    () => ({ customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source }),
+    [customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source]
+  );
+  const { clearDraft } = useFormDraft(
+    'admin-order-new',
+    orderFormDraft,
+    (d) => {
+      if (d.customer) setCustomer((c) => ({ ...c, ...d.customer }));
+      if (Array.isArray(d.items)) setItems(d.items);
+      if (d.orderDiscount !== undefined) setOrderDiscount(d.orderDiscount);
+      if (d.deliveryChargeOverride !== undefined) setDeliveryChargeOverride(d.deliveryChargeOverride);
+      if (d.advancePaid !== undefined) setAdvancePaid(d.advancePaid);
+      if (d.cashOnAmount !== undefined) setCashOnAmount(d.cashOnAmount);
+      if (d.weightKg) setWeightKg(d.weightKg);
+      if (d.status) setStatus(d.status);
+      if (d.source !== undefined) setSource(d.source);
+    },
+    { enabled: !isEdit }
+  );
 
   useEffect(() => {
     getProducts({ active: 'true' }).then(setProducts).catch(() => {});
@@ -226,6 +250,7 @@ export default function OrderForm() {
         navigate(`/orders/${id}`);
       } else {
         const created = await createOrder(payload);
+        clearDraft();
         // Give the admin a chance to book the courier right away — see the
         // modal below — instead of always landing on the order page first.
         setCreatedOrder(created);

@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
-const { trackOrder } = require('../controllers/orderController');
+const { trackOrder, trackOrdersByPhone } = require('../controllers/orderController');
 
-// Public endpoint, intentionally lightweight - no auth, no sensitive fields.
+// Public endpoints, intentionally lightweight - no auth, no sensitive fields.
+router.post('/by-phone', asyncHandler(trackOrdersByPhone)); // guest "My orders" — { phone }
 router.get('/:trackingId', asyncHandler(trackOrder));
 
 module.exports = router;

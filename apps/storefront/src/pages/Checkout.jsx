@@ -13,6 +13,8 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
+import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
+import useFormDraft from '../lib/useFormDraft';
 import { BKASH_MERCHANT_NUMBER } from '../utils/company';
 
 const emptyAddress = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
@@ -21,11 +23,12 @@ const emptyBkash = { senderNumber: '', transactionId: '', proofFile: null, proof
 export default function Checkout() {
   const navigate = useNavigate();
   const { items, subtotal, deliveryTotal, clearCart } = useCart();
-  const { customer, isAuthed, refresh } = useCustomerAuth();
+  const { customer, isAuthed, loading: authLoading, refresh } = useCustomerAuth();
 
   const [districts, setDistricts] = useState([]);
   const [selectedAddrId, setSelectedAddrId] = useState('new');
-  const [form, setForm] = useState(emptyAddress);
+  // Returning guest → prefill name / phone / last delivery address.
+  const [form, setForm] = useState(() => ({ ...emptyAddress, ...getReorderPrefill() }));
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [bkash, setBkash] = useState(emptyBkash);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +39,22 @@ export default function Checkout() {
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;
+
+  // Autosave the in-progress checkout for guests so a reload / accidental
+  // back-navigation doesn't wipe a half-filled form. Restored silently.
+  const draft = useMemo(
+    () => ({
+      form,
+      paymentMethod,
+      bkash: { senderNumber: bkash.senderNumber, transactionId: bkash.transactionId },
+    }),
+    [form, paymentMethod, bkash.senderNumber, bkash.transactionId]
+  );
+  const { clearDraft } = useFormDraft('checkout', draft, (d) => {
+    if (d.form) setForm((f) => ({ ...f, ...d.form }));
+    if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
+    if (d.bkash) setBkash((b) => ({ ...b, ...d.bkash }));
+  }, { enabled: !authLoading && !isAuthed });
 
   // Some products require full or partial advance payment (set per-product by
   // the admin) — this mirrors the server's own calculation just to drive the
@@ -178,6 +197,11 @@ export default function Checkout() {
 
     try {
       const created = await createOrder(payload);
+
+      // Remember this order + address on the device so a guest can find it
+      // again from "My orders" and reorder without re-typing.
+      if (!isAuthed) recordGuestCheckout(created);
+      clearDraft();
 
       if (paymentMethod === 'bkash_automated') {
         // Order is created as "unverified"; hand off to bKash's hosted page.
@@ -689,9 +713,14 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
               আমার অর্ডার
             </Link>
           ) : (
-            <Link to={`/track/${order.trackingId}`} className="btn-primary">
-              স্ট্যাটাস দেখুন
-            </Link>
+            <>
+              <Link to={`/track/${order.trackingId}`} className="btn-primary">
+                স্ট্যাটাস দেখুন
+              </Link>
+              <Link to="/shop/my-orders" className="btn-secondary">
+                আমার সব অর্ডার
+              </Link>
+            </>
           )}
           <Link to="/shop" className="btn-secondary">
             কেনাকাটা চালিয়ে যান

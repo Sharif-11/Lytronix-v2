@@ -11,6 +11,7 @@ import {
 import RichTextEditor from '../components/RichTextEditor';
 import SearchableSelect from '../components/SearchableSelect';
 import Loader from '../components/Loader';
+import useFormDraft from '../lib/useFormDraft';
 import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import { emitError } from '../lib/errorBus';
@@ -50,6 +51,9 @@ export default function CustomerForm() {
 
   const nameRef = useRef(null);
   const addressRef = useRef(null);
+
+  // Autosave a new-customer form so navigating away doesn't lose typed input.
+  const { clearDraft } = useFormDraft('admin-customer-new', form, setForm, { enabled: !isEdit });
 
   useEffect(() => {
     if (!isEdit) return;
@@ -107,7 +111,10 @@ export default function CustomerForm() {
     setSaving(true);
     try {
       if (isEdit) await updateCustomer(id, form);
-      else await createCustomer(form);
+      else {
+        await createCustomer(form);
+        clearDraft();
+      }
       navigate('/customers');
     } catch {
       // Surfaced globally via the ErrorModal (see api/client.js interceptor).
