@@ -145,6 +145,26 @@ export default function ChatWidget({ hint = '' }) {
     }
   };
 
+  // The server thread can vanish under us (old-chat cleanup job, a DB reseed).
+  // Silently re-open one for the same phone so the widget keeps working
+  // instead of every call failing with "চ্যাট খুঁজে পাওয়া যায়নি।".
+  const recoverThread = async () => {
+    const p = session?.phone || (isAuthed ? customer?.phone : '') || '';
+    if (!/^01\d{9}$/.test(p)) return null;
+    try {
+      const s = await chatStart(isAuthed ? undefined : p, session?.name || customer?.name);
+      const next = { phone: s.phone, guestKey: s.guestKey, name: s.name };
+      setSession(next);
+      saveSession(next);
+      lastIdRef.current = null;
+      updatedAtRef.current = null;
+      knownIdsRef.current = new Set();
+      return next;
+    } catch {
+      return null;
+    }
+  };
+
   const poll = async (s = session) => {
     if (!s?.phone) return;
     try {
@@ -187,8 +207,12 @@ export default function ChatWidget({ hint = '' }) {
           }
         }
       }
-    } catch {
-      /* transient — try again next tick */
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        const next = await recoverThread();
+        if (next) poll(next);
+      }
+      /* else transient — try again next tick */
     }
   };
 
@@ -311,6 +335,21 @@ export default function ChatWidget({ hint = '' }) {
       });
       if (isRealId(message._id)) lastIdRef.current = message._id;
     } catch (err) {
+      // Thread gone server-side → re-open it and send once more before giving up.
+      if (err?.response?.status === 404) {
+        const next = await recoverThread();
+        if (next) {
+          try {
+            const { message } = await chatSend({ phone: next.phone, guestKey: next.guestKey, ...payload });
+            knownIdsRef.current.add(message._id);
+            setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? message : m)));
+            if (isRealId(message._id)) lastIdRef.current = message._id;
+            return;
+          } catch {
+            /* fall through to the failure marker */
+          }
+        }
+      }
       setMessages((prev) => prev.map((m) => (m._id === optimistic._id ? { ...m, failed: true } : m)));
       setError(err.response?.data?.message || 'মেসেজ পাঠানো যায়নি।');
     }
