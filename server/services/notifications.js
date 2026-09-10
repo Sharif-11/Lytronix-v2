@@ -68,12 +68,8 @@ async function notifyAdminsNewOrder(order) {
   const phones = adminPhones();
   if (phones.length === 0) return [];
 
-  const due =
-    order.pricing.due !== order.pricing.grandTotal ? `, বাকি ৳${order.pricing.due}` : '';
-  const message =
-    `নতুন অর্ডার ${order.orderNumber}\n` +
-    `${order.customer.name} ${order.customer.phone}\n` +
-    `৳${order.pricing.grandTotal}${due}`;
+  // Just a nudge — the admin opens the panel (or gets the push) for details.
+  const message = `নতুন অর্ডার এসেছে — ${order.orderNumber}`;
 
   return Promise.all(
     phones.map((phone) => sendAndLog({ to: phone, message, purpose: 'admin_new_order', orderId: order._id }))
