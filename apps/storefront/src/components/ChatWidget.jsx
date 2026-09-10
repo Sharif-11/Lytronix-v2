@@ -95,6 +95,8 @@ export default function ChatWidget({ hint = '' }) {
   const [recSecs, setRecSecs] = useState(0);
   const [editing, setEditing] = useState(null); // { id, body }
   const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
+  const [typing, setTyping] = useState(false); // show the "…" bubble just before an admin reply renders
+  const typingTimerRef = useRef(null);
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null);
@@ -188,7 +190,20 @@ export default function ChatWidget({ hint = '' }) {
           updatedAtRef.current = new Date(u).toISOString();
         }
       }
-      setMessages((prev) => mergeMessages(prev, fresh));
+
+      // A brand-new admin reply, panel open → show a "typing…" bubble for a
+      // beat, then reveal the message. Purely cosmetic.
+      const adminIncoming = brandNew.some((m) => m.from === 'admin');
+      if (adminIncoming && openRef.current) {
+        setTyping(true);
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => {
+          setTyping(false);
+          setMessages((prev) => mergeMessages(prev, fresh));
+        }, 850);
+      } else {
+        setMessages((prev) => mergeMessages(prev, fresh));
+      }
 
       if (!openRef.current) {
         const adminNewMsgs = brandNew.filter(
@@ -243,13 +258,16 @@ export default function ChatWidget({ hint = '' }) {
     if (open && bodyRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
-  }, [messages, open]);
+  }, [messages, open, typing]);
 
-  // Don't keep a half-finished edit / open action menu around once the panel closes.
+  // Don't keep a half-finished edit / open action menu / typing bubble around
+  // once the panel closes.
   useEffect(() => {
     if (!open) {
       setEditing(null);
       setMenuFor(null);
+      setTyping(false);
+      clearTimeout(typingTimerRef.current);
     }
   }, [open]);
 
@@ -648,6 +666,7 @@ export default function ChatWidget({ hint = '' }) {
                     />
                   )
                 )}
+                {typing && <TypingBubble />}
               </div>
 
               {/* Composer */}
@@ -773,6 +792,24 @@ function Ticks({ m }) {
   if (m.readByAdmin) return <CheckCheck size={14} className="text-[#53BDEB]" />;
   if (m.deliveredToAdmin) return <CheckCheck size={14} className="text-black/40" />;
   return <Check size={14} className="text-black/40" />;
+}
+
+// WhatsApp-style "…" indicator shown for a beat before an admin reply renders.
+function TypingBubble() {
+  return (
+    <div className="flex justify-start">
+      <style>{`@keyframes lx-typing{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-3px);opacity:.9}}`}</style>
+      <div className="bg-white rounded-2xl rounded-tl-md px-3.5 py-3 shadow-sm inline-flex items-center gap-1">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="w-1.5 h-1.5 rounded-full bg-black/50"
+            style={{ animation: 'lx-typing 1.2s infinite ease-in-out', animationDelay: `${i * 0.16}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
