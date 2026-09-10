@@ -62,6 +62,24 @@ exports.unsubscribe = async (req, res) => {
   res.json({ ok: true });
 };
 
+// POST /api/push/rotate   { oldEndpoint, subscription }   (public)
+// The browser silently re-issues a subscription; the service worker calls this
+// from `pushsubscriptionchange` (no auth token available there). Keyed on the
+// unguessable old endpoint, so it can only move an existing row forward.
+exports.rotate = async (req, res) => {
+  const { oldEndpoint, subscription: sub } = req.body || {};
+  if (!oldEndpoint || !valid(sub)) return res.status(400).json({ message: 'Bad rotate request.' });
+  const row = await PushSubscription.findOne({ endpoint: oldEndpoint });
+  if (!row) return res.status(404).json({ message: 'Unknown subscription.' });
+
+  await PushSubscription.deleteMany({ endpoint: sub.endpoint, _id: { $ne: row._id } });
+  row.endpoint = sub.endpoint;
+  row.keys = { p256dh: sub.keys.p256dh, auth: sub.keys.auth };
+  row.lastSeenAt = new Date();
+  await row.save();
+  res.json({ ok: true });
+};
+
 // POST /api/push/test   (admin) — push to this account's admin devices.
 exports.test = async (req, res) => {
   await webPush.notifyAll({

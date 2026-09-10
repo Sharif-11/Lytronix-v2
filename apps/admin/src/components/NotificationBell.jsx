@@ -4,7 +4,7 @@ import {
   Bell, BellRing, Package, Truck, MapPin, Wallet, Info, Volume2, VolumeX, Check, Loader2, MessageCircle,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
-import { pushSupported, getPushState, enablePush, disablePush } from '../lib/push';
+import { pushSupported, getPushState, enablePush, disablePush, ensureSubscribed, sendTestPush } from '../lib/push';
 
 const ICONS = {
   order_new: Package,
@@ -31,19 +31,28 @@ function relTime(iso) {
 }
 
 function PushRow() {
-  const [state, setState] = useState({ supported: true, permission: 'default', subscribed: false });
+  const [state, setState] = useState({
+    supported: true, permission: 'default', subscribed: false, swReady: false, serverEnabled: null,
+  });
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
 
   const refresh = () => getPushState().then(setState).catch(() => {});
   useEffect(() => {
-    refresh();
+    (async () => {
+      await refresh();
+      // Self-heal: permission granted but the server lost our subscription.
+      if (Notification.permission === 'granted') {
+        await ensureSubscribed().catch(() => {});
+        refresh();
+      }
+    })();
   }, []);
 
   if (!pushSupported()) return null;
 
   const toggle = async () => {
-    setErr('');
+    setMsg('');
     setBusy(true);
     try {
       if (state.subscribed) await disablePush();
@@ -53,21 +62,36 @@ function PushRow() {
       const map = {
         denied: 'ব্রাউজার সেটিংসে নোটিফিকেশন ব্লক করা আছে।',
         'server-not-configured': 'সার্ভারে পুশ কনফিগার করা নেই (VAPID কী)।',
+        'sw-failed': 'সার্ভিস ওয়ার্কার রেজিস্টার হয়নি — অ্যাপটি রিলোড দিন।',
         unsupported: 'এই ব্রাউজারে ব্যাকগ্রাউন্ড অ্যালার্ট সাপোর্ট করে না।',
       };
-      setErr(map[e.message] || 'পুশ চালু করা যায়নি।');
+      setMsg(map[e.message] || 'পুশ চালু করা যায়নি।');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    setMsg('');
+    setBusy(true);
+    try {
+      await sendTestPush();
+      setMsg('টেস্ট নোটিফিকেশন পাঠানো হয়েছে — কয়েক সেকেন্ডের মধ্যে আসার কথা।');
+    } catch {
+      setMsg('টেস্ট পাঠানো যায়নি।');
     } finally {
       setBusy(false);
     }
   };
 
   const blocked = state.permission === 'denied';
+  const serverOff = state.serverEnabled === false;
 
   return (
-    <div className="px-4 py-2 border-b border-ui-line bg-ui-surfaceAlt/60">
+    <div className="px-4 py-2 border-b border-ui-line bg-ui-surfaceAlt/60 space-y-1.5">
       <button
         onClick={toggle}
-        disabled={busy || blocked}
+        disabled={busy || blocked || serverOff}
         className={`w-full flex items-center gap-2 text-xs font-medium rounded-lg px-2.5 py-2 transition-colors ${
           state.subscribed
             ? 'text-ui-brand bg-ui-brand/10 hover:bg-ui-brand/15'
@@ -76,14 +100,32 @@ function PushRow() {
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : <BellRing size={14} />}
         <span className="flex-1 text-left">
-          {blocked
+          {serverOff
+            ? 'সার্ভারে পুশ কনফিগার করা নেই'
+            : blocked
             ? 'ব্যাকগ্রাউন্ড অ্যালার্ট ব্রাউজারে ব্লকড'
             : state.subscribed
             ? 'ব্যাকগ্রাউন্ড অ্যালার্ট চালু — বন্ধ করতে ট্যাপ করুন'
             : 'ব্যাকগ্রাউন্ড অ্যালার্ট চালু করুন (অ্যাপ বন্ধ থাকলেও)'}
         </span>
       </button>
-      {err && <p className="text-[11px] text-ui-rust mt-1">{err}</p>}
+
+      {state.subscribed && (
+        <button
+          onClick={test}
+          disabled={busy}
+          className="w-full text-[11px] text-ui-muted hover:text-ui-brand rounded-lg py-1 border border-dashed border-ui-line disabled:opacity-60"
+        >
+          টেস্ট নোটিফিকেশন পাঠান
+        </button>
+      )}
+
+      {msg && <p className="text-[11px] text-ui-muted">{msg}</p>}
+      {!state.swReady && !serverOff && (
+        <p className="text-[11px] text-amber-600">
+          সার্ভিস ওয়ার্কার লোড হয়নি — হোম স্ক্রিনে অ্যাপটি ইনস্টল করে ব্যবহার করুন।
+        </p>
+      )}
     </div>
   );
 }

@@ -52,15 +52,40 @@ bubblewrap build          # -> app-release-signed.apk
 ```
 Then put its `assetlinks.json` at `apps/admin/public/.well-known/`.
 
+## Troubleshooting — "notifications don't arrive"
+
+Check, in order:
+
+1. **`GET /api/push/config` returns `{"enabled":true,...}`** — if `false`, the
+   `VAPID_*` env vars aren't set on the Render **API** service.
+2. **It must be the installed PWA, not a browser tab.** Open the deployed
+   admin → browser menu → *Install app* / *Add to Home screen*. Background
+   push + the app-icon badge only work for the installed app.
+3. **Enable it once per device:** bell icon → *ব্যাকগ্রাউন্ড অ্যালার্ট চালু করুন*
+   → grant the browser permission. The bell panel shows a **"টেস্ট নোটিফিকেশন
+   পাঠান"** button once subscribed — use it to verify the whole path.
+4. **The API must be awake.** Render's free tier sleeps after ~15 min idle;
+   pushes are not queued, so events while it's asleep never alert. Use a paid
+   always-on instance or a 10-min uptime pinger. This is the usual reason a
+   real order doesn't ping but the test button (which wakes the API) does.
+5. **`/sw.js` must be served as a real file** by the static host — not
+   rewritten to `index.html`. Render/Netlify/Vercel do this by default; a
+   custom rewrite must exclude `/sw.js`, `/manifest.webmanifest`,
+   `/.well-known/`.
+6. **Battery optimisation:** on some Android OEMs, exclude the installed app
+   from battery optimisation or background push is delayed/dropped.
+7. If it worked before and stopped: the browser rotated the subscription. The
+   SW's `pushsubscriptionchange` handler now re-registers automatically via
+   `POST /api/push/rotate`; reopening the app also self-heals the subscription.
+
 ## Notes / limits
 
-- **The API server must be awake to send a push.** On Render's free tier it
-  sleeps after ~15 min idle — pushes are not queued, so anything that happens
-  while it's asleep won't alert until it wakes (it wakes on any request).
-  A paid always-on instance or an uptime pinger fixes this.
 - Notification **sound** is the phone's default notification sound (a plain
   Web Push SW can't ship a custom audio file). A fully native sound needs the
-  Capacitor + FCM route instead.
-- iOS: web push works only for a PWA added to the Home Screen on iOS 16.4+.
-- Aggressive battery savers on some Android OEMs can delay background push —
-  exclude the installed app from battery optimization.
+  Capacitor + FCM route instead. When the app is open, the in-app chime plays.
+- The number on the app icon is the unread-notification count
+  (`navigator.setAppBadge`) — set from the push payload while closed, synced
+  to the real unread count whenever the app is open; cleared on *Mark all read*
+  and logout. Requires an installed PWA.
+- iOS: web push + badge work only for a PWA added to the Home Screen on
+  iOS 16.4+.

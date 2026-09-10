@@ -1,8 +1,48 @@
-/* Lytronix storefront — service worker for push notifications (order updates,
-   payment confirmation, support replies). No offline caching by design. */
+/* Lytronix storefront — service worker: background push (order updates,
+   payment confirmation, support replies), app-icon badge, subscription
+   auto-renewal. No offline caching. Bump SW_VERSION on any change. */
+const SW_VERSION = 'v2';
+const CFG_CACHE = 'lx-cfg';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
+function b64ToUint8(base64) {
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+  const s = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+  return out;
+}
+async function saveApiBase(url) {
+  const c = await caches.open(CFG_CACHE);
+  await c.put('api-base', new Response(url));
+}
+async function getApiBase() {
+  try {
+    const c = await caches.open(CFG_CACHE);
+    const r = await c.match('api-base');
+    return r ? (await r.text()) : '';
+  } catch {
+    return '';
+  }
+}
+function setBadge(n) {
+  try {
+    if (!('setAppBadge' in self.navigator)) return;
+    if (typeof n === 'number' && n > 0) self.navigator.setAppBadge(n);
+    else self.navigator.clearAppBadge();
+  } catch {
+    /* unsupported / not installed */
+  }
+}
+
+self.addEventListener('message', (event) => {
+  const d = event.data || {};
+  if (d.type === 'CONFIG' && d.apiBase) event.waitUntil(saveApiBase(d.apiBase));
+  if (d.type === 'BADGE') setBadge(d.count);
+});
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -19,18 +59,23 @@ self.addEventListener('push', (event) => {
     badge: '/icon-192.png',
     tag: data.tag || 'lytronix',
     renotify: true,
-    vibrate: [90, 40, 90],
+    requireInteraction: true,
+    vibrate: [120, 60, 120],
     timestamp: data.at || Date.now(),
     data: { url: data.url || '/shop' },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options);
+      if (typeof data.badge === 'number') setBadge(data.badge);
+    })()
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/shop';
-
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
@@ -42,5 +87,32 @@ self.addEventListener('notificationclick', (event) => {
       }
       return self.clients.openWindow(url);
     })
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const apiBase = await getApiBase();
+      if (!apiBase) return;
+      try {
+        const cfg = await fetch(`${apiBase}/api/push/config`).then((r) => r.json());
+        if (!cfg || !cfg.publicKey) return;
+        const sub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: b64ToUint8(cfg.publicKey),
+        });
+        const oldEndpoint =
+          (event.oldSubscription && event.oldSubscription.endpoint) ||
+          (await self.registration.pushManager.getSubscription().then((s) => s && s.endpoint).catch(() => null));
+        await fetch(`${apiBase}/api/push/rotate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldEndpoint, subscription: sub.toJSON() }),
+        });
+      } catch {
+        /* retry next event */
+      }
+    })()
   );
 });

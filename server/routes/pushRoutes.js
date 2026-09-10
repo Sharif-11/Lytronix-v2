@@ -8,6 +8,7 @@ const {
   subscribe,
   customerSubscribe,
   unsubscribe,
+  rotate,
   test,
 } = require('../controllers/pushController');
 
@@ -16,6 +17,9 @@ router.get('/config', getConfig);
 
 // Drop a subscription — no auth needed to remove your own device.
 router.post('/unsubscribe', asyncHandler(unsubscribe));
+
+// Service-worker background renewal (keyed on the old endpoint, no token).
+router.post('/rotate', asyncHandler(rotate));
 
 // Storefront customer: bound to the signed-in shopper's phone.
 router.post('/customer/subscribe', attachCustomer, asyncHandler(customerSubscribe));

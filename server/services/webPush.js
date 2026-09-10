@@ -36,7 +36,9 @@ function publicKey() {
 
 // Fire-and-forget send to every subscription matching `filter`. Dead ones
 // (404/410) are pruned. Never throws.
-async function send(filter, { title, body = '', url = '/', tag = 'lytronix', data = {} }) {
+// `badge` may be a number (same for all) or an async fn (sub) => number, so
+// the app-icon badge can be personalised per recipient.
+async function send(filter, { title, body = '', url = '/', tag = 'lytronix', data = {}, badge } = {}) {
   if (!ready) return;
   let subs;
   try {
@@ -47,19 +49,29 @@ async function send(filter, { title, body = '', url = '/', tag = 'lytronix', dat
   }
   if (!subs.length) return;
 
-  const payload = JSON.stringify({ title, body, url, tag, data, at: Date.now() });
+  const base = { title, body, url, tag, data, at: Date.now() };
   const dead = [];
 
   await Promise.all(
-    subs.map((s) =>
-      webpush
-        .sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 600, urgency: 'high' })
+    subs.map(async (s) => {
+      let obj = base;
+      try {
+        if (typeof badge === 'function') obj = { ...base, badge: Number(await badge(s)) || 0 };
+        else if (typeof badge === 'number') obj = { ...base, badge };
+      } catch {
+        /* badge is best-effort */
+      }
+      return webpush
+        .sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(obj), {
+          TTL: 600,
+          urgency: 'high',
+        })
         .catch((err) => {
           const code = err.statusCode;
           if (code === 404 || code === 410) dead.push(s.endpoint);
           else logger.warn('webPush: send failed', { code, endpoint: s.endpoint.slice(0, 40) });
-        })
-    )
+        });
+    })
   );
 
   if (dead.length) {

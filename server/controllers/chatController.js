@@ -363,6 +363,7 @@ exports.adminSend = async (req, res) => {
       body: previewFor(c),
       url: '/shop?chat=1',
       tag: `chat-${thread.phone}`,
+      badge: thread.unreadForCustomer,
     })
     .catch(() => {});
 

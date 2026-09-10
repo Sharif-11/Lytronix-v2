@@ -2,6 +2,10 @@ import * as api from '../api/client';
 
 const SW_URL = '/sw.js';
 
+const API_BASE = (import.meta.env.VITE_API_URL || '')
+  .replace(/\/api\/?$/, '')
+  .replace(/\/$/, '') || (typeof window !== 'undefined' ? window.location.origin : '');
+
 function urlBase64ToUint8Array(base64) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -20,13 +24,35 @@ export function pushSupported() {
   );
 }
 
+async function tellSW(message) {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    (reg.active || navigator.serviceWorker.controller)?.postMessage(message);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+    const reg = await navigator.serviceWorker.register(SW_URL, { scope: '/' });
+    navigator.serviceWorker.ready.then(() => tellSW({ type: 'CONFIG', apiBase: API_BASE }));
+    return reg;
   } catch {
     return null;
   }
+}
+
+export function syncBadge(count) {
+  try {
+    if (!('setAppBadge' in navigator)) return;
+    if (count > 0) navigator.setAppBadge(count);
+    else navigator.clearAppBadge();
+  } catch {
+    /* ignore */
+  }
+  tellSW({ type: 'BADGE', count });
 }
 
 export async function getPushState() {
@@ -42,7 +68,7 @@ export async function getPushState() {
 }
 
 // Ask permission, subscribe, hand the subscription to the API (bound to the
-// signed-in shopper — the server rejects this if there's no customer token).
+// signed-in shopper — the server rejects this without a customer token).
 export async function enablePush() {
   if (!pushSupported()) throw new Error('unsupported');
 
@@ -53,7 +79,9 @@ export async function enablePush() {
   if (permission !== 'granted') throw new Error('denied');
 
   const reg = (await navigator.serviceWorker.getRegistration()) || (await registerServiceWorker());
+  if (!reg) throw new Error('sw-failed');
   await navigator.serviceWorker.ready;
+  tellSW({ type: 'CONFIG', apiBase: API_BASE });
 
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
@@ -74,6 +102,7 @@ export async function disablePush() {
       await api.deletePushSubscription(sub.endpoint).catch(() => {});
       await sub.unsubscribe().catch(() => {});
     }
+    syncBadge(0);
   } catch {
     /* ignore */
   }

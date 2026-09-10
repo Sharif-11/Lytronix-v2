@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import * as api from '../api/client';
 import { useAuth } from './AuthContext';
 import { playChime, playCourierChime } from '../lib/chime';
+import { syncBadge } from '../lib/push';
 
 const NotificationContext = createContext(null);
 const POLL_MS = 25000;
@@ -29,6 +30,7 @@ export function NotificationProvider({ children }) {
       const data = await api.getNotifications({ limit: 40 });
       setNotifications(data.notifications || []);
       setUnreadCount(data.unreadCount || 0);
+      syncBadge(data.unreadCount || 0);
 
       const fresh = (data.notifications || []).filter((n) => !seenIds.current.has(n._id));
       (data.notifications || []).forEach((n) => seenIds.current.add(n._id));
@@ -57,6 +59,7 @@ export function NotificationProvider({ children }) {
     if (!user) {
       setNotifications([]);
       setUnreadCount(0);
+      syncBadge(0);
       seenIds.current = new Set();
       primed.current = false;
       return undefined;
@@ -80,6 +83,7 @@ export function NotificationProvider({ children }) {
     try {
       const { unreadCount: uc } = await api.markNotificationsRead(ids);
       setUnreadCount(uc);
+      syncBadge(uc);
     } catch {
       /* ignore */
     }
@@ -88,6 +92,7 @@ export function NotificationProvider({ children }) {
   const markAllRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnreadCount(0);
+    syncBadge(0);
     try {
       await api.markAllNotificationsRead();
     } catch {
