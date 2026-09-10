@@ -186,6 +186,14 @@ export const markNotificationsRead = (ids) =>
 export const markAllNotificationsRead = () =>
   client.post('/notifications/read-all').then((r) => r.data);
 
+// ---- Web Push (admin PWA background notifications) ----
+export const getPushConfig = () => client.get('/push/config').then((r) => r.data);
+export const savePushSubscription = (subscription) =>
+  client.post('/push/subscribe', { subscription }).then((r) => r.data);
+export const deletePushSubscription = (endpoint) =>
+  client.post('/push/unsubscribe', { endpoint }).then((r) => r.data);
+export const sendTestPush = () => client.post('/push/test').then((r) => r.data);
+
 // ---- AI-assisted order extraction ----
 export const aiExtractOrder = (payload) =>
   client.post('/orders/ai-extract', payload).then((r) => r.data);

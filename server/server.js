@@ -24,6 +24,7 @@ const customerRoutes = require('./routes/customerRoutes');
 const smsRoutes = require('./routes/smsRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const pushRoutes = require('./routes/pushRoutes');
 
 // Registers the bKash gateway (stubbed until real credentials are added —
 // see services/payments/bkash.js). New gateways (SSLCommerz, etc.) register
@@ -114,6 +115,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/sms-logs', smsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/push', pushRoutes);
 
 app.use((req, res) => res.status(404).json({ message: 'Route not found' }));
 app.use(errorHandler);

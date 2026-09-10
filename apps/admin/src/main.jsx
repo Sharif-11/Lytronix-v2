@@ -8,7 +8,13 @@ import { NotificationProvider } from './context/NotificationContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import ErrorModalHost from './components/ErrorModal';
+import { registerServiceWorker } from './lib/push';
 import './styles/index.css';
+
+// Register the push service worker as early as possible so an installed PWA
+// can receive background notifications. Subscribing still requires the admin
+// to opt in (NotificationBell → "Enable background alerts").
+if ('serviceWorker' in navigator) registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

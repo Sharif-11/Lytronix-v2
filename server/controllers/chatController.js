@@ -2,6 +2,7 @@ const ChatThread = require('../models/ChatThread');
 const ChatMessage = require('../models/ChatMessage');
 const CustomerAccount = require('../models/CustomerAccount');
 const notificationCenter = require('../services/notificationCenter');
+const webPush = require('../services/webPush');
 const logger = require('../services/logger');
 const sms = require('../services/sms');
 
@@ -211,16 +212,26 @@ exports.customerSend = async (req, res) => {
   await thread.save();
 
   // Nudge the admin bell — but not on every single message: only when this
-  // is the first unread, so a burst doesn't spam the feed.
+  // is the first unread, so a burst doesn't spam the feed. (notificationCenter
+  // also fires one Web Push here.)
+  const pushTitle = `নতুন চ্যাট মেসেজ${thread.name ? ` — ${thread.name}` : ''}`;
+  const pushBody = `${thread.phone}: ${previewFor(c)}`;
+  const chatLink = `/chat?phone=${thread.phone}`;
   if (thread.unreadForAdmin === 1) {
     notificationCenter.push({
       type: 'chat',
       severity: 'info',
-      title: `নতুন চ্যাট মেসেজ${thread.name ? ` — ${thread.name}` : ''}`,
-      body: `${thread.phone}: ${previewFor(c)}`,
-      link: `/chat?phone=${thread.phone}`,
+      title: pushTitle,
+      body: pushBody,
+      link: chatLink,
       meta: { phone: thread.phone },
     });
+  } else {
+    // Follow-up messages skip the bell feed but still push — a live
+    // conversation wants a ping per message.
+    webPush
+      .notifyAll({ title: pushTitle, body: pushBody, url: chatLink, tag: `chat-${thread.phone}` })
+      .catch(() => {});
   }
 
   logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4), type: c.type });
