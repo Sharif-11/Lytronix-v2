@@ -12,6 +12,23 @@ const { mapSteadfastStatus } = require('../utils/steadfastStatusMap');
 const { computeOrderAdvance } = require('../utils/paymentPolicy');
 const { transactionIdTakenBy } = require('../utils/transactionId');
 const { bkashAutoEnabled } = require('../services/payments');
+const webPush = require('../services/webPush');
+
+// Bangla status labels for the shopper's push notification.
+const STATUS_BN = {
+  pending: 'প্রসেসিং হচ্ছে',
+  processing: 'প্রস্তুত করা হচ্ছে',
+  shipped: 'শিপ করা হয়েছে',
+  delivered: 'ডেলিভারি সম্পন্ন হয়েছে',
+  partial_delivered: 'আংশিক ডেলিভারি',
+  completed: 'সম্পন্ন হয়েছে',
+  cancelled: 'বাতিল করা হয়েছে',
+  returned: 'ফেরত এসেছে',
+  refunded: 'রিফান্ড হয়েছে',
+  hold: 'সাময়িক হোল্ডে আছে',
+  in_review: 'রিভিউ করা হচ্ছে',
+  unverified: 'পেমেন্ট যাচাইয়ের অপেক্ষায়',
+};
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -533,6 +550,19 @@ exports.updateStatus = async (req, res) => {
   order.status = status;
   order.statusHistory.push({ status, note: note || '', at: new Date() });
   await order.save();
+
+  // Ping the shopper's PWA when the status actually changed.
+  if (previousStatus.trim().toLowerCase() !== status.trim().toLowerCase()) {
+    const s = status.trim().toLowerCase();
+    webPush
+      .notifyCustomer(order.customer.phone, {
+        title: `অর্ডার ${order.orderNumber}`,
+        body: `স্ট্যাটাস: ${STATUS_BN[s] || status}`,
+        url: `/track/${order.trackingId}`,
+        tag: `order-${order._id}`,
+      })
+      .catch(() => {});
+  }
 
   logger.info('order: status transition', {
     orderNumber: order.orderNumber,

@@ -6,7 +6,13 @@ import { PhoneticProvider } from './context/PhoneticContext';
 import { CustomerAuthProvider } from './context/CustomerAuthContext';
 import { CartProvider } from './context/CartContext';
 import { ConfirmProvider } from './context/ConfirmContext';
+import { registerServiceWorker } from './lib/push';
 import './styles/index.css';
+
+// Register the push service worker so an installed PWA can get order-update
+// notifications. Subscribing still requires the shopper to opt in from their
+// account page.
+if ('serviceWorker' in navigator) registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

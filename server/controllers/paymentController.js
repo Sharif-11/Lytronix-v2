@@ -2,6 +2,23 @@ const Payment = require('../models/Payment');
 const Order = require('../models/Order');
 const { getGateway } = require('../services/payments');
 const logger = require('../services/logger');
+const webPush = require('../services/webPush');
+
+// Ping the shopper's PWA that a payment cleared.
+async function notifyPaymentVerified(orderId) {
+  try {
+    const o = await Order.findById(orderId).select('orderNumber trackingId customer.phone').lean();
+    if (!o) return;
+    await webPush.notifyCustomer(o.customer?.phone, {
+      title: `অর্ডার ${o.orderNumber}`,
+      body: 'পেমেন্ট নিশ্চিত হয়েছে ✅',
+      url: `/track/${o.trackingId}`,
+      tag: `order-${orderId}`,
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 // GET /api/payments?status=&method=&order=&search=&page=&limit=
 // `search` matches the payment's own fields (sender number, transaction ID,
@@ -120,6 +137,7 @@ exports.verifyPayment = async (req, res) => {
   await payment.save();
 
   await mirrorIntoOrderLedger(payment);
+  notifyPaymentVerified(payment.order);
 
   res.json(payment);
 };
@@ -250,6 +268,7 @@ exports.bkashCallback = async (req, res) => {
       // Mirror into the order's own payment ledger so pricing.due drops by the
       // amount received and the order moves unverified -> pending.
       await mirrorIntoOrderLedger(payment);
+      notifyPaymentVerified(order._id);
       logger.info('bkash: payment verified', {
         orderNumber: order.orderNumber,
         trxID: result.trxID,

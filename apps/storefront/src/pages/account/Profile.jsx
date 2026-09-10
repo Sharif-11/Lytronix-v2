@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Check, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Check, KeyRound, Eye, EyeOff, BellRing } from 'lucide-react';
 import { updateProfile } from '../../api/client';
 import { useCustomerAuth } from '../../context/CustomerAuthContext';
+import { pushSupported, getPushState, enablePush, disablePush } from '../../lib/push';
 
 export default function Profile() {
   const { customer, patchCustomer, refresh } = useCustomerAuth();
@@ -59,6 +60,66 @@ export default function Profile() {
       </div>
 
       <PasswordSection />
+      <NotificationsSection />
+    </div>
+  );
+}
+
+function NotificationsSection() {
+  const [state, setState] = useState({ supported: true, permission: 'default', subscribed: false });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const refresh = () => getPushState().then(setState).catch(() => {});
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  if (!pushSupported()) return null;
+
+  const blocked = state.permission === 'denied';
+
+  const toggle = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      if (state.subscribed) await disablePush();
+      else await enablePush();
+      await refresh();
+    } catch (e) {
+      const map = {
+        denied: 'ব্রাউজার সেটিংসে নোটিফিকেশন ব্লক করা আছে।',
+        'server-not-configured': 'নোটিফিকেশন সার্ভিস এখন উপলব্ধ নয়।',
+        unsupported: 'এই ব্রাউজারে নোটিফিকেশন সাপোর্ট করে না।',
+      };
+      setError(map[e.message] || 'নোটিফিকেশন চালু করা যায়নি।');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h2 className="font-display text-lg text-ui-ink flex items-center gap-2 mb-1">
+        <BellRing size={17} className="text-ui-brand" /> নোটিফিকেশন
+      </h2>
+      <p className="text-xs text-ui-muted mb-4">
+        অর্ডারের স্ট্যাটাস, পেমেন্ট নিশ্চিত হওয়া ও সাপোর্টের উত্তর — অ্যাপ বন্ধ থাকলেও ফোনে জানিয়ে দেব।
+        (হোম স্ক্রিনে অ্যাপটি ইনস্টল করে নিলে সবচেয়ে ভালো কাজ করে।)
+      </p>
+      {error && <p className="text-sm text-ui-rust mb-2">{error}</p>}
+      <button
+        onClick={toggle}
+        disabled={busy || blocked}
+        className={state.subscribed ? 'btn-secondary' : 'btn-primary'}
+      >
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <BellRing size={15} />}
+        {blocked
+          ? 'ব্রাউজারে ব্লকড'
+          : state.subscribed
+          ? 'নোটিফিকেশন বন্ধ করুন'
+          : 'নোটিফিকেশন চালু করুন'}
+      </button>
     </div>
   );
 }

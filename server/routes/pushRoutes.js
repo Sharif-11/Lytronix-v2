@@ -2,15 +2,27 @@ const express = require('express');
 const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
 const { protect } = require('../middleware/auth');
-const { getConfig, subscribe, unsubscribe, test } = require('../controllers/pushController');
+const { attachCustomer } = require('../middleware/customerAuth');
+const {
+  getConfig,
+  subscribe,
+  customerSubscribe,
+  unsubscribe,
+  test,
+} = require('../controllers/pushController');
 
-// The VAPID public key is needed by the admin app before it can subscribe.
+// The VAPID public key is needed by both apps before they can subscribe.
 router.get('/config', getConfig);
 
-// Everything else is for a signed-in staff member.
+// Drop a subscription — no auth needed to remove your own device.
+router.post('/unsubscribe', asyncHandler(unsubscribe));
+
+// Storefront customer: bound to the signed-in shopper's phone.
+router.post('/customer/subscribe', attachCustomer, asyncHandler(customerSubscribe));
+
+// Admin only from here down.
 router.use(protect);
 router.post('/subscribe', asyncHandler(subscribe));
-router.post('/unsubscribe', asyncHandler(unsubscribe));
 router.post('/test', asyncHandler(test));
 
 module.exports = router;

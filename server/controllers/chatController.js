@@ -356,6 +356,16 @@ exports.adminSend = async (req, res) => {
   thread.unreadForCustomer += 1;
   await thread.save();
 
+  // Ping the shopper's PWA about the reply.
+  webPush
+    .notifyCustomer(thread.phone, {
+      title: 'Lytronix — নতুন বার্তা',
+      body: previewFor(c),
+      url: '/shop?chat=1',
+      tag: `chat-${thread.phone}`,
+    })
+    .catch(() => {});
+
   res.status(201).json({ message: msg });
 };
 

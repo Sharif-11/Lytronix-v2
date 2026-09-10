@@ -34,13 +34,13 @@ function publicKey() {
   return PUBLIC_KEY;
 }
 
-// Fire-and-forget broadcast to every stored subscription. Dead subscriptions
+// Fire-and-forget send to every subscription matching `filter`. Dead ones
 // (404/410) are pruned. Never throws.
-async function notifyAll({ title, body = '', url = '/', tag = 'lytronix', data = {} }) {
+async function send(filter, { title, body = '', url = '/', tag = 'lytronix', data = {} }) {
   if (!ready) return;
   let subs;
   try {
-    subs = await PushSubscription.find({}).lean();
+    subs = await PushSubscription.find(filter).lean();
   } catch (err) {
     logger.error('webPush: could not load subscriptions', { error: err.message });
     return;
@@ -68,4 +68,14 @@ async function notifyAll({ title, body = '', url = '/', tag = 'lytronix', data =
   }
 }
 
-module.exports = { isConfigured, publicKey, notifyAll };
+// Broadcast to every admin device.
+const notifyAll = (msg) => send({ audience: 'admin' }, msg);
+
+// Target one shopper's devices by phone.
+function notifyCustomer(phone, msg) {
+  const p = String(phone || '').replace(/\D/g, '');
+  if (!/^01\d{9}$/.test(p)) return Promise.resolve();
+  return send({ audience: 'customer', phone: p }, msg);
+}
+
+module.exports = { isConfigured, publicKey, notifyAll, notifyCustomer };

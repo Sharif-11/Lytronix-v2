@@ -138,6 +138,13 @@ export const getPaymentMeta = () =>
 // ---- Contact ----
 export const submitContact = (data) => client.post('/contact', data).then((r) => r.data);
 
+// ---- Web Push (installable PWA notifications) ----
+export const getPushConfig = () => client.get('/push/config').then((r) => r.data);
+export const saveCustomerPushSubscription = (subscription) =>
+  client.post('/push/customer/subscribe', { subscription }).then((r) => r.data);
+export const deletePushSubscription = (endpoint) =>
+  client.post('/push/unsubscribe', { endpoint }).then((r) => r.data);
+
 // ---- Analytics ----
 export const trackEvent = (payload) =>
   client.post('/analytics/track', payload).then((r) => r.data).catch(() => null);
