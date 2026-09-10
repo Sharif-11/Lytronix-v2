@@ -15,8 +15,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Lytronix Admin';
   const options = {
     body: data.body || '',
-    icon: '/lytronix-mark.png',
-    badge: '/lytronix-mark.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     tag: data.tag || 'lytronix',
     renotify: true,
     vibrate: [90, 40, 90],
