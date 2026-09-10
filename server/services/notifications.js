@@ -2,12 +2,12 @@ const smsGateway = require('./sms');
 const SmsLog = require('../models/SmsLog');
 const logger = require('./logger');
 
-// Every SMS body in this module — customer- and admin-facing alike — is
-// written in Bangla (merchant requirement). Order numbers, tracking codes,
-// links and generated passwords stay in Latin so they remain
-// copy-paste/scannable. Bangla is Unicode SMS, so these run 2-3 segments each.
-// (Free-text admin broadcasts / per-order messages carry whatever the admin
-// types and are not translated here.)
+// Every SMS body in this module is written in Bangla (merchant requirement).
+// Bangla is Unicode SMS: ~70 chars = 1 segment, then ~67 per extra segment,
+// and each segment is billed — so these bodies are kept as terse as possible
+// (ideally 1 segment). Order numbers, codes, links and passwords stay Latin
+// so they remain copy-paste/scannable. (Free-text admin broadcasts / per-order
+// messages carry whatever the admin types and are not touched here.)
 
 // Sends one SMS and unconditionally writes an SmsLog entry, whether it
 // succeeded or not, so every notification attempt is auditable from the
@@ -68,9 +68,12 @@ async function notifyAdminsNewOrder(order) {
   const phones = adminPhones();
   if (phones.length === 0) return [];
 
+  const due =
+    order.pricing.due !== order.pricing.grandTotal ? `, বাকি ৳${order.pricing.due}` : '';
   const message =
-    `নতুন অর্ডার ${order.orderNumber} — ${order.customer.name} (${order.customer.phone})। ` +
-    `মোট ৳${order.pricing.grandTotal}, বাকি ৳${order.pricing.due}।`;
+    `নতুন অর্ডার ${order.orderNumber}\n` +
+    `${order.customer.name} ${order.customer.phone}\n` +
+    `৳${order.pricing.grandTotal}${due}`;
 
   return Promise.all(
     phones.map((phone) => sendAndLog({ to: phone, message, purpose: 'admin_new_order', orderId: order._id }))
@@ -80,8 +83,8 @@ async function notifyAdminsNewOrder(order) {
 async function notifyCustomerConsignmentBooked(order) {
   const trackingUrl = order.courierTrackingLink;
   const message = trackingUrl
-    ? `আপনার Lytronix অর্ডার ${order.orderNumber} Steadfast কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাক করুন: ${trackingUrl}`
-    : `আপনার Lytronix অর্ডার ${order.orderNumber} Steadfast কুরিয়ারের মাধ্যমে পাঠানো হয়েছে। ট্র্যাকিং কোড: ${
+    ? `Lytronix: ${order.orderNumber} কুরিয়ারে পাঠানো হয়েছে।\n${trackingUrl}`
+    : `Lytronix: ${order.orderNumber} কুরিয়ারে পাঠানো হয়েছে। কোড: ${
         order.courier?.trackingCode || 'N/A'
       }`;
 
@@ -94,7 +97,7 @@ async function notifyCustomerConsignmentBooked(order) {
 }
 
 async function notifyCustomerDelivered(order) {
-  const message = `আপনার Lytronix অর্ডার ${order.orderNumber} ডেলিভারি সম্পন্ন হয়েছে। আমাদের সাথে কেনাকাটার জন্য ধন্যবাদ!`;
+  const message = `Lytronix: অর্ডার ${order.orderNumber} ডেলিভারি সম্পন্ন। ধন্যবাদ!`;
   return sendAndLog({ to: order.customer.phone, message, purpose: 'customer_delivered', orderId: order._id });
 }
 
@@ -107,22 +110,22 @@ async function notifyCustomerOtp(phone, code) {
   // merchant's "all customer-facing messages in Bangla" instruction — if the
   // OTP stops being delivered, that sender-ID template restriction is the
   // first thing to check.
-  const message = `আপনার Lytronix OTP হলো ${code}। ${
+  const message = `Lytronix OTP ${code}। ${
     process.env.OTP_TTL_MINUTES || 5
-  } মিনিটের জন্য কার্যকর। এই কোডটি কারও সাথে শেয়ার করবেন না।`;
+  } মিনিট বৈধ, কাউকে জানাবেন না।`;
   return sendAndLog({ to: phone, message, purpose: 'customer_otp' });
 }
 
 // A guest checked out and we auto-created their account — text them the
 // login password so they can sign in without an OTP next time.
 async function notifyCustomerNewAccountPassword(phone, password) {
-  const message = `Lytronix-এ আপনার অ্যাকাউন্ট তৈরি হয়েছে। ফোন ${phone} ও পাসওয়ার্ড ${password} দিয়ে লগইন করে অর্ডার ট্র্যাক করুন। চাইলে অ্যাকাউন্ট থেকে পাসওয়ার্ড পরিবর্তন করে নিন।`;
+  const message = `Lytronix লগইন\nফোন: ${phone}\nপাসওয়ার্ড: ${password}`;
   return sendAndLog({ to: phone, message, purpose: 'customer_account_created' });
 }
 
 // Customer used "forgot password" — text them the new 6-digit password.
 async function notifyCustomerPasswordReset(phone, password) {
-  const message = `আপনার Lytronix পাসওয়ার্ড রিসেট করা হয়েছে। নতুন পাসওয়ার্ড: ${password}। লগইন করে পাসওয়ার্ডটি পরিবর্তন করে নিতে পারেন।`;
+  const message = `Lytronix নতুন পাসওয়ার্ড: ${password}`;
   return sendAndLog({ to: phone, message, purpose: 'customer_password_reset' });
 }
 
@@ -168,7 +171,7 @@ async function sendMarketingSms(numbers, message) {
 // Admin "forgot password" — the new password itself is the SMS body, same
 // spirit as the customer OTP: nothing to click, just read it off your phone.
 async function notifyAdminPasswordReset(phone, newPassword) {
-  const message = `আপনার Lytronix অ্যাডমিন পাসওয়ার্ড রিসেট করা হয়েছে। নতুন পাসওয়ার্ড: ${newPassword}। লগইন করে পাসওয়ার্ডটি পরিবর্তন করে নিন।`;
+  const message = `Lytronix Admin নতুন পাসওয়ার্ড: ${newPassword}`;
   return sendAndLog({ to: phone, message, purpose: 'admin_password_reset' });
 }
 
