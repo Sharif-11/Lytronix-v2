@@ -6,6 +6,7 @@ import ShopBottomNav from './components/ShopBottomNav';
 import ChatWidget from './components/ChatWidget';
 import RequireCustomer from './components/RequireCustomer';
 import ScrollToTop from './components/ScrollToTop';
+import UpdatePrompt from './components/UpdatePrompt';
 import { trackVisitOnce } from './lib/analytics';
 
 import Shop from './pages/Shop';
@@ -49,6 +50,7 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      <UpdatePrompt />
     <Routes>
       {/* Shareable single-product landing page — its own minimal chrome,
           order + checkout right on the page, no shop nav. */}

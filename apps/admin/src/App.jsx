@@ -8,6 +8,7 @@ import MoreSheet from './components/MoreSheet';
 import BanglaKeyboard from './components/BanglaKeyboard';
 import ScrollToTop from './components/ScrollToTop';
 import ChatToaster from './components/ChatToaster';
+import UpdatePrompt from './components/UpdatePrompt';
 import RequireAuth from './components/RequireAuth';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -69,6 +70,7 @@ export default function App() {
     <>
       <ScrollToTop />
       <ChatToaster />
+      <UpdatePrompt />
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/track/:trackingId" element={<TrackOrder />} />

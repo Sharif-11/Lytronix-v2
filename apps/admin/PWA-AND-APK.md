@@ -52,6 +52,21 @@ bubblewrap build          # -> app-release-signed.apk
 ```
 Then put its `assetlinks.json` at `apps/admin/public/.well-known/`.
 
+## Pushing an app update to installed users
+
+Every `vite build` stamps the git short SHA into `dist/version.json`, the
+`SW_VERSION` in `dist/sw.js`, and a `<meta name="app-version">` in
+`index.html`. The `<UpdatePrompt>` component (mounted in both apps) polls
+`/version.json` every 5 min + on focus/visibility, and also listens for a new
+service worker; when the deployed version differs from the one the tab booted
+with it shows a bottom bar — **"A new version is available · Reload"** /
+**"অ্যাপের নতুন সংস্করণ এসেছে · রিফ্রেশ"** — that calls `location.reload()`.
+
+So: just deploy. Installed PWA / APK users get the banner within ~5 minutes of
+next opening the app (or immediately on focus). No store submission is needed
+for content changes — the APK is only a shell around the live PWA. Rebuild the
+APK **only** when the manifest, icons, or package identity change.
+
 ## Troubleshooting — "notifications don't arrive"
 
 Check, in order:
