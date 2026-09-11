@@ -7,7 +7,6 @@ import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
 import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
-import { toPlainText } from '../components/RichText';
 
 // Compact, evenly-split card action. Icon-only on phones (where a product
 // card is only ~half the viewport wide); icon + label from `sm` up.
@@ -247,9 +246,6 @@ export default function ProductList() {
                     {p.category?.name || t('products.uncategorised')}
                     {p.viewCount ? ` · ${t('products.views', { n: p.viewCount })}` : ''}
                   </p>
-                  {p.description && (
-                    <p className="hidden sm:block text-sm text-ui-muted mt-1 line-clamp-2">{toPlainText(p.description)}</p>
-                  )}
                   {policyBadge && (
                     <span
                       className={`mt-1 sm:mt-1.5 inline-flex w-fit items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium uppercase ${
