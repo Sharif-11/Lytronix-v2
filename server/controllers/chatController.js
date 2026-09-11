@@ -455,3 +455,17 @@ exports.updateAiSettings = async (req, res) => {
   });
   res.json({ enabled: settings.enabled, knowledgeBase: settings.knowledgeBase, updatedAt: settings.updatedAt });
 };
+
+// GET /api/chat/ai-logs?phone=&limit=
+// Every auto-reply attempt (posted, declined, or errored) — diagnostic only,
+// never shown to the customer, auto-expires per AI_CHAT_LOG_RETENTION_DAYS.
+exports.listAiLogs = async (req, res) => {
+  const ChatAiLog = require('../models/ChatAiLog');
+  const filter = {};
+  const phone = normPhone(req.query.phone);
+  if (phone) filter.phone = phone;
+
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const logs = await ChatAiLog.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
+  res.json({ logs });
+};

@@ -1,6 +1,7 @@
 const Product = require('../models/Product');
 const ChatMessage = require('../models/ChatMessage');
 const ChatAiSettings = require('../models/ChatAiSettings');
+const ChatAiLog = require('../models/ChatAiLog');
 const ai = require('./ai');
 const webPush = require('./webPush');
 const logger = require('./logger');
@@ -96,78 +97,129 @@ Return ONLY a single JSON object, no prose, no markdown fences, with exactly thi
 }
 "answer" must be null unless inScope is true AND confidence is "high".`;
 
-function parseAnswer(outText) {
-  let parsed;
+// Parses the model's JSON verdict without throwing. Returns the raw parsed
+// object (whatever shape it came back in) or null if it wasn't valid JSON
+// at all — callers decide what counts as "safe to post" themselves.
+function parseVerdict(outText) {
   try {
-    parsed = ai.parseJsonBlock(outText);
+    return ai.parseJsonBlock(outText);
   } catch {
     return null;
   }
-  if (!parsed || parsed.inScope !== true || parsed.confidence !== 'high') return null;
-  const answer = String(parsed.answer || '').trim();
-  return answer || null;
+}
+
+// Every attempt gets logged — posted, silently declined, or errored — so
+// nothing about the assistant's behavior is invisible even when the
+// customer never sees a reply. Never throws: a logging failure must not be
+// able to affect the (already fire-and-forget) caller.
+async function writeLog({ thread, message, verdict, outText, posted, replyMessageId, error }) {
+  try {
+    await ChatAiLog.create({
+      thread: thread._id,
+      phone: thread.phone,
+      question: message.body,
+      provider: 'gemini',
+      model: ai.GEMINI_MODEL,
+      inScope: verdict && typeof verdict.inScope === 'boolean' ? verdict.inScope : null,
+      confidence: verdict && ['high', 'low'].includes(verdict.confidence) ? verdict.confidence : null,
+      answer: verdict && verdict.answer != null ? String(verdict.answer).slice(0, 4000) : null,
+      posted: Boolean(posted),
+      replyMessage: replyMessageId || null,
+      rawOutput: outText ? String(outText).slice(0, 4000) : '',
+      error: error || '',
+    });
+  } catch (err) {
+    logger.warn('chatAi: failed to write log', { error: err.message });
+  }
 }
 
 // Called after a customer's text message is saved (fire-and-forget from
-// chatController.customerSend — never blocks or fails their request).
-// `thread` is a Mongoose ChatThread document; `message` the just-created
-// ChatMessage document.
+// chatController.customerSend — the caller never awaits or catches this,
+// so an unhandled rejection here would be an unhandled rejection process-
+// wide). This wrapper guarantees it never throws; the real work is in
+// runAutoReply below.
 async function maybeAutoReply(thread, message) {
   try {
-    if (message.type !== 'text' || message.mediaUrl) return; // belt-and-suspenders — caller already filters this
+    await runAutoReply(thread, message);
+  } catch (err) {
+    logger.warn('chatAi: auto-reply failed', { error: err.message });
+  }
+}
 
-    const settings = await ChatAiSettings.load();
-    if (!settings.enabled) return;
-    if (!ai.isGeminiConfigured()) return;
+async function runAutoReply(thread, message) {
+  if (message.type !== 'text' || message.mediaUrl) return; // belt-and-suspenders — caller already filters this
 
+  const settings = await ChatAiSettings.load();
+  if (!settings.enabled) return;
+  if (!ai.isGeminiConfigured()) return;
+
+  let outText = null;
+  let verdict = null;
+  let errorMsg = '';
+
+  try {
     const [catalogueText, transcript] = await Promise.all([
       buildCatalogueText(),
       buildRecentTranscript(thread._id, message._id),
     ]);
-
     const userPrompt = `PRODUCT CATALOGUE:\n${catalogueText}\n\nKNOWLEDGE BASE:\n${settings.knowledgeBase || '(none provided)'}\n\nRECENT CONVERSATION:\n${transcript || '(none)'}\n\nQUESTION:\n${message.body}`;
-
-    const outText = await ai.callGemini({ text: userPrompt, systemPrompt: SYSTEM_PROMPT });
-    const answer = parseAnswer(outText);
-    if (!answer) {
-      logger.info('chatAi: declined to auto-reply', { phone: thread.phone.slice(-4) });
-      return;
-    }
-
-    const reply = await ChatMessage.create({
-      thread: thread._id,
-      phone: thread.phone,
-      from: 'admin',
-      senderName: 'Lytronix (স্বয়ংক্রিয় উত্তর)', // "automated reply" — kept visible to the customer for transparency
-      isAiReply: true,
-      type: 'text',
-      body: answer,
-      readByAdmin: false,
-      deliveredToAdmin: false,
-    });
-
-    thread.lastMessageAt = reply.createdAt;
-    thread.lastMessagePreview = answer.slice(0, 120);
-    thread.lastMessageFrom = 'admin';
-    thread.unreadForCustomer += 1;
-    await thread.save();
-
-    webPush
-      .notifyCustomer(thread.phone, {
-        title: 'Lytronix — নতুন বার্তা',
-        body: answer.slice(0, 120),
-        url: '/shop?chat=1',
-        tag: `chat-${thread.phone}`,
-        badge: thread.unreadForCustomer,
-      })
-      .catch(() => {});
-
-    logger.info('chatAi: auto-replied', { phone: thread.phone.slice(-4) });
+    outText = await ai.callGemini({ text: userPrompt, systemPrompt: SYSTEM_PROMPT });
+    verdict = parseVerdict(outText);
+    if (!verdict) errorMsg = 'AI response was not valid JSON.';
   } catch (err) {
-    // Never let an AI hiccup affect the customer's own message flow —
-    // this runs fire-and-forget after their message is already saved.
-    logger.warn('chatAi: auto-reply failed', { error: err.message });
+    errorMsg = err.message;
   }
+
+  const answer =
+    !errorMsg && verdict && verdict.inScope === true && verdict.confidence === 'high'
+      ? String(verdict.answer || '').trim()
+      : '';
+
+  let replyMessageId = null;
+  if (answer) {
+    try {
+      const reply = await ChatMessage.create({
+        thread: thread._id,
+        phone: thread.phone,
+        from: 'admin',
+        senderName: 'Lytronix (স্বয়ংক্রিয় উত্তর)', // "automated reply" — kept visible to the customer for transparency
+        isAiReply: true,
+        type: 'text',
+        body: answer,
+        readByAdmin: false,
+        deliveredToAdmin: false,
+      });
+      replyMessageId = reply._id;
+
+      thread.lastMessageAt = reply.createdAt;
+      thread.lastMessagePreview = answer.slice(0, 120);
+      thread.lastMessageFrom = 'admin';
+      thread.unreadForCustomer += 1;
+      await thread.save();
+
+      webPush
+        .notifyCustomer(thread.phone, {
+          title: 'Lytronix — নতুন বার্তা',
+          body: answer.slice(0, 120),
+          url: '/shop?chat=1',
+          tag: `chat-${thread.phone}`,
+          badge: thread.unreadForCustomer,
+        })
+        .catch(() => {});
+
+      logger.info('chatAi: auto-replied', { phone: thread.phone.slice(-4) });
+    } catch (err) {
+      // The verdict was fine but posting it failed (DB hiccup) — log as an
+      // error rather than a silent decline, since the model did its job.
+      errorMsg = err.message;
+    }
+  } else if (errorMsg) {
+    logger.warn('chatAi: auto-reply failed', { error: errorMsg });
+  } else {
+    logger.info('chatAi: declined to auto-reply', { phone: thread.phone.slice(-4) });
+  }
+
+  await writeLog({ thread, message, verdict, outText, posted: Boolean(replyMessageId), replyMessageId, error: errorMsg });
 }
 
 module.exports = {

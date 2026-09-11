@@ -50,5 +50,6 @@ router.patch('/threads/:phone', protect, authorize('customers:manage'), asyncHan
 // AI auto-reply assistant — on/off switch + knowledge base editor.
 router.get('/ai-settings', protect, authorize('customers:manage'), asyncHandler(ctrl.getAiSettings));
 router.put('/ai-settings', protect, authorize('customers:manage'), asyncHandler(ctrl.updateAiSettings));
+router.get('/ai-logs', protect, authorize('customers:manage'), asyncHandler(ctrl.listAiLogs));
 
 module.exports = router;
