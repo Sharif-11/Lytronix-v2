@@ -12,11 +12,11 @@ export const RICH_TEXT_CLASS = [
   // contentEditable's own line-break element in some browsers, kept as a
   // fallback for content saved before the editor started forcing <p> (see
   // RichTextEditor.jsx) — so it isn't spacing-less/leading-less.
-  '[&_div]:my-2 [&_div]:leading-relaxed',
-  'prose-p:my-2 prose-p:leading-relaxed prose-p:text-ui-ink/90',
-  'prose-headings:font-display prose-headings:text-ui-ink prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-1.5',
+  '[&_div]:my-1.5 [&_div]:leading-relaxed',
+  'prose-p:my-1.5 prose-p:leading-relaxed prose-p:text-ui-ink/90',
+  'prose-headings:font-display prose-headings:text-ui-ink prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1',
   'prose-h2:text-lg prose-h3:text-base',
-  'prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:marker:text-ui-faint',
+  'prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-li:marker:text-ui-faint',
   'prose-strong:text-ui-ink prose-strong:font-semibold',
   'prose-a:text-ui-brand prose-a:font-medium',
   'prose-blockquote:border-l-2 prose-blockquote:border-ui-brand/40 prose-blockquote:pl-3 prose-blockquote:not-italic prose-blockquote:font-normal prose-blockquote:text-ui-muted',
