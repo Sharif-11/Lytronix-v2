@@ -197,6 +197,7 @@ export const sendTestPush = () => client.post('/push/test').then((r) => r.data);
 // ---- AI-assisted order extraction ----
 export const aiExtractOrder = (payload) =>
   client.post('/orders/ai-extract', payload).then((r) => r.data);
+export const getAiConfig = () => client.get('/orders/ai-config').then((r) => r.data);
 
 // ---- Meta ----
 export const getSuggestedStatuses = () => client.get('/meta/statuses').then((r) => r.data);

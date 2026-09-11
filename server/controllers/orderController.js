@@ -1032,3 +1032,11 @@ exports.aiExtractOrder = async (req, res) => {
   const draft = await ai.extractOrder({ text: text ? String(text).slice(0, 8000) : '', image });
   res.json({ draft, model: ai.MODEL });
 };
+
+// GET /api/orders/ai-config
+// Lets the admin's AI-assist panel know up front whether it's usable and
+// whether the image-paste option should even be shown, instead of the admin
+// discovering "not configured" / "image not supported" only after trying.
+exports.aiConfig = (req, res) => {
+  res.json({ configured: ai.isConfigured(), imageSupported: ai.imageSupported(), provider: ai.PROVIDER, model: ai.MODEL });
+};

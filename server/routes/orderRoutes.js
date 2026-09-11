@@ -16,6 +16,7 @@ const {
   bookSteadfastParcel,
   syncSteadfastStatus,
   aiExtractOrder,
+  aiConfig,
   sendOrderMessage,
 } = require('../controllers/orderController');
 const { initiateBkash, bkashCallback } = require('../controllers/paymentController');
@@ -35,6 +36,7 @@ router.use(protect, authorize('orders:view', 'orders:manage'));
 
 // AI-assisted draft extraction (paste text / screenshot -> prefilled form).
 router.post('/ai-extract', authorize('orders:manage'), asyncHandler(aiExtractOrder));
+router.get('/ai-config', authorize('orders:manage'), asyncHandler(aiConfig));
 
 router.get('/stats', asyncHandler(orderStats));
 router.get('/', asyncHandler(listOrders));
