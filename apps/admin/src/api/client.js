@@ -286,6 +286,7 @@ export const uploadChatMedia = (file, config) => {
 // AI auto-reply assistant — on/off switch + knowledge-base text.
 export const getChatAiSettings = () => client.get('/chat/ai-settings').then((r) => r.data);
 export const updateChatAiSettings = (payload) => client.put('/chat/ai-settings', payload).then((r) => r.data);
+export const getChatAiLogs = (params) => client.get('/chat/ai-logs', { params }).then((r) => r.data);
 
 // ---- Public tracking ----
 // skipErrorModal: a wrong/unknown tracking id is an expected outcome here,

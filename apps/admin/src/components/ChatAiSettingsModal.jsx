@@ -1,7 +1,69 @@
 import { useEffect, useState } from 'react';
-import { Bot, X, Loader2 } from 'lucide-react';
-import { getChatAiSettings, updateChatAiSettings } from '../api/client';
+import { Bot, X, Loader2, CheckCircle2, XCircle, HelpCircle, RefreshCw, Search } from 'lucide-react';
+import { getChatAiSettings, updateChatAiSettings, getChatAiLogs } from '../api/client';
 import { emitError } from '../lib/errorBus';
+
+const relTime = (d) => {
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+// One attempt's outcome, at a glance: posted (answered), declined (silently
+// left for a human — not an error), or errored (Gemini/parse failure).
+function OutcomeBadge({ log }) {
+  if (log.posted) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ui-brand bg-ui-brand/10 px-1.5 py-0.5 rounded-full">
+        <CheckCircle2 size={11} /> Posted
+      </span>
+    );
+  }
+  if (log.error) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ui-rust bg-red-50 px-1.5 py-0.5 rounded-full">
+        <XCircle size={11} /> Error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ui-muted bg-ui-bg px-1.5 py-0.5 rounded-full">
+      <HelpCircle size={11} /> Declined
+    </span>
+  );
+}
+
+function LogRow({ log }) {
+  return (
+    <div className="border border-ui-line rounded-lg px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-ui-ink">{log.phone}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <OutcomeBadge log={log} />
+          <span className="text-[11px] text-ui-faint">{relTime(log.createdAt)}</span>
+        </div>
+      </div>
+      <p className="text-sm text-ui-ink font-bangla" dir="auto">
+        <span className="text-ui-faint">প্রশ্ন: </span>
+        {log.question}
+      </p>
+      {log.posted && log.answer && (
+        <p className="text-sm text-ui-brand font-bangla" dir="auto">
+          <span className="text-ui-faint">উত্তর: </span>
+          {log.answer}
+        </p>
+      )}
+      {log.error && <p className="text-xs text-ui-rust break-words">{log.error}</p>}
+      {!log.posted && !log.error && (
+        <p className="text-xs text-ui-muted">
+          Not confident / out of scope{log.confidence ? ` (confidence: ${log.confidence})` : ''} — left for you.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Admin controls for the chat auto-reply assistant: an on/off switch plus a
 // free-text knowledge base for questions the product catalogue's own
@@ -10,12 +72,17 @@ import { emitError } from '../lib/errorBus';
 // is pulled live from the database every time — nothing to maintain here
 // beyond this supplementary text.
 export default function ChatAiSettingsModal({ onClose }) {
+  const [tab, setTab] = useState('settings'); // 'settings' | 'logs'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [knowledgeBase, setKnowledgeBase] = useState('');
   const [geminiConfigured, setGeminiConfigured] = useState(true); // optimistic until loaded
   const [dirty, setDirty] = useState(false);
+
+  const [logs, setLogs] = useState(null); // null = not loaded yet
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logPhone, setLogPhone] = useState('');
 
   useEffect(() => {
     getChatAiSettings()
@@ -27,6 +94,19 @@ export default function ChatAiSettingsModal({ onClose }) {
       .catch(() => emitError("Couldn't load the AI assistant settings."))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadLogs = () => {
+    setLogsLoading(true);
+    getChatAiLogs({ phone: logPhone || undefined, limit: 50 })
+      .then((d) => setLogs(d.logs || []))
+      .catch(() => emitError("Couldn't load the AI activity log."))
+      .finally(() => setLogsLoading(false));
+  };
+
+  useEffect(() => {
+    if (tab === 'logs' && logs === null) loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const save = async () => {
     setSaving(true);
@@ -58,7 +138,66 @@ export default function ChatAiSettingsModal({ onClose }) {
           </button>
         </div>
 
-        {loading ? (
+        <div className="flex border-b border-ui-line shrink-0 px-5 gap-4">
+          {[
+            { id: 'settings', label: 'Settings' },
+            { id: 'logs', label: 'Activity log' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === t.id ? 'border-ui-brand text-ui-brand' : 'border-transparent text-ui-muted hover:text-ui-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'logs' ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="px-5 py-3 border-b border-ui-line flex items-center gap-2 shrink-0">
+              <div className="relative flex-1">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ui-faint" />
+                <input
+                  className="input pl-8 py-1.5 text-sm"
+                  placeholder="Filter by phone (01XXXXXXXXX)…"
+                  value={logPhone}
+                  onChange={(e) => setLogPhone(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && loadLogs()}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={loadLogs}
+                disabled={logsLoading}
+                className="w-8 h-8 shrink-0 rounded-lg text-ui-muted hover:text-ui-brand hover:bg-ui-brand/10 flex items-center justify-center"
+                aria-label="Refresh"
+              >
+                <RefreshCw size={15} className={logsLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {logsLoading && logs === null ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 size={20} className="animate-spin text-ui-brand" />
+                </div>
+              ) : !logs || logs.length === 0 ? (
+                <p className="text-sm text-ui-muted text-center py-10">
+                  No AI activity {logPhone ? 'for this number' : 'yet'}.
+                </p>
+              ) : (
+                logs.map((log) => <LogRow key={log._id} log={log} />)
+              )}
+            </div>
+            <p className="px-5 py-2 border-t border-ui-line text-[11px] text-ui-faint shrink-0">
+              Every attempt — posted, declined, or errored — never shown to customers, auto-deleted after
+              server/.env's AI_CHAT_LOG_RETENTION_DAYS (30 days by default).
+            </p>
+          </div>
+        ) : loading ? (
           <div className="flex-1 flex items-center justify-center py-16">
             <Loader2 size={20} className="animate-spin text-ui-brand" />
           </div>
@@ -124,10 +263,12 @@ export default function ChatAiSettingsModal({ onClose }) {
           <button type="button" onClick={onClose} className="btn-secondary">
             Close
           </button>
-          <button type="button" onClick={save} disabled={!dirty || saving || loading} className="btn-primary">
-            {saving ? <Loader2 size={15} className="animate-spin" /> : null}
-            Save
-          </button>
+          {tab === 'settings' && (
+            <button type="button" onClick={save} disabled={!dirty || saving || loading} className="btn-primary">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : null}
+              Save
+            </button>
+          )}
         </div>
       </div>
     </div>
