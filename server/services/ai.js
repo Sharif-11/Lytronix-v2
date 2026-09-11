@@ -20,7 +20,7 @@ const { resolveZillaThana } = require('./geoResolve');
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || process.env.AI_MODEL || 'claude-opus-5';
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const geminiUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 function provider() {
@@ -59,7 +59,7 @@ Return ONLY a single JSON object, no prose, no markdown fences, with exactly thi
 
 Rules:
 - "phone": normalise Bangladeshi mobile numbers to 11 digits starting 01 (strip +88 / 88 / spaces / dashes). If not recoverable, "".
-- "zilla" = district, "thana" = upazila / police station. Split them out of a combined address line when possible; keep the street/house part in "address".
+- "zilla" = district, "thana" = upazila / police station. Split them out of a combined address line when possible; keep the street/house part in "address". If the input names a town, market, or locality that sits inside a larger upazila (e.g. "Mawna" is a town in Sreepur upazila, Gazipur) rather than the upazila itself, put the parent upazila in "thana" and keep the specific place name in "address". Always write "zilla" and "thana" in English/Latin script (e.g. "Gazipur", "Sreepur") even if the source text has them in Bangla — they're matched against an English district list. Keep "address" in whatever script the customer used.
 - Numbers must be plain numbers in BDT (no currency symbols, no commas). Use 0 when unknown.
 - "items": if quantities/prices aren't stated, still list the product names with quantity 1 and unitPrice 0.
 - Never invent data. Unknown strings -> "", unknown numbers -> 0.
