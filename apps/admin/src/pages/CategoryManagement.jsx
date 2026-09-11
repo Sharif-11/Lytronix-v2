@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
 import { emitError } from '../lib/errorBus';
+import usePageTitle from '../lib/usePageTitle';
 
 const emptyForm = {
   name: '',
@@ -17,6 +18,7 @@ const emptyForm = {
 
 export default function CategoryManagement() {
   const { t } = useLanguage();
+  usePageTitle(t('categories.title'));
   const confirm = useConfirm();
   const [tree, setTree] = useState([]);
   const [flat, setFlat] = useState([]);

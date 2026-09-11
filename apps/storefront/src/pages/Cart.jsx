@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Minus, Plus, Trash2, ArrowLeft, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatMoney } from '../utils/format';
+import usePageTitle from '../lib/usePageTitle';
 
 function QtyStepper({ quantity, onChange }) {
   return (
@@ -26,6 +27,7 @@ function QtyStepper({ quantity, onChange }) {
 }
 
 export default function Cart() {
+  usePageTitle('আপনার কার্ট');
   const { items, setQuantity, removeItem, subtotal, deliveryTotal } = useCart();
   const grandTotal = subtotal + deliveryTotal;
 

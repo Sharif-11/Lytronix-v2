@@ -9,6 +9,7 @@ import {
   Plus, Package, BookUser, Printer, ClipboardList, Wallet, Clock, TrendingUp, ArrowUpRight, ArrowRight,
   Users, Eye, RefreshCw,
 } from 'lucide-react';
+import usePageTitle from '../lib/usePageTitle';
 
 const STAT_TONES = {
   lime: { icon: 'bg-ui-brand/10 text-ui-brand', ring: 'from-ui-brand/10' },
@@ -45,6 +46,7 @@ const QUICK_ACTIONS = [
 export default function Dashboard() {
   const { user, hasPermission } = useAuth();
   const { t } = useLanguage();
+  usePageTitle(t('dashboard.title'));
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);

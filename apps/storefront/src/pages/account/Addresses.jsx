@@ -4,10 +4,12 @@ import { addAddress, updateAddress, deleteAddress, getPoliceStations } from '../
 import { useCustomerAuth } from '../../context/CustomerAuthContext';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useConfirm } from '../../context/ConfirmContext';
+import usePageTitle from '../../lib/usePageTitle';
 
 const empty = { label: 'বাসা', zilla: '', policeStation: '', address: '', isDefault: false };
 
 export default function Addresses() {
+  usePageTitle('সেভ করা অ্যাড্রেস');
   const { customer, patchCustomer, refresh } = useCustomerAuth();
   const confirm = useConfirm();
   const [districts, setDistricts] = useState([]);

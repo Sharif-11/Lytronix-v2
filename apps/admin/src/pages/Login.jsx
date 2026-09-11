@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from '../components/LanguageToggle';
 import * as api from '../api/client';
 import logoMark from '../assets/lytronix-mark.png';
+import usePageTitle from '../lib/usePageTitle';
 
 // Turn an axios failure into a short, human message.
 function readError(err, t) {
@@ -38,6 +39,7 @@ function Alert({ tone = 'error', children }) {
 export default function Login() {
   const { login } = useAuth();
   const { t } = useLanguage();
+  usePageTitle(t('login.title'));
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState('');

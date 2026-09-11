@@ -10,6 +10,7 @@ import BookCourierModal from '../components/BookCourierModal';
 import SearchableSelect from '../components/SearchableSelect';
 import SuggestInput from '../components/SuggestInput';
 import Loader from '../components/Loader';
+import usePageTitle from '../lib/usePageTitle';
 import useFormDraft from '../lib/useFormDraft';
 import { emitError } from '../lib/errorBus';
 
@@ -21,6 +22,7 @@ export default function OrderForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  usePageTitle(isEdit ? 'Edit order' : 'New order');
 
   const [products, setProducts] = useState([]);
   const [statuses, setStatuses] = useState([]);

@@ -4,10 +4,12 @@ import { ChevronRight, Home } from 'lucide-react';
 import Catalogue from '../components/Catalogue';
 import { getCategory } from '../api/client';
 import { track } from '../lib/analytics';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function Category() {
   const { slug } = useParams();
   const [meta, setMeta] = useState(null);
+  usePageTitle(meta?.category?.name || 'ক্যাটাগরি');
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {

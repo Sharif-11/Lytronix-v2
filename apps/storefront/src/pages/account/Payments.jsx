@@ -3,8 +3,10 @@ import { Wallet } from 'lucide-react';
 import { getMyPayments } from '../../api/client';
 import { formatMoney, formatDate, statusStyle, paymentMethodLabel, paymentStatusLabel } from '../../utils/format';
 import Loader from '../../components/Loader';
+import usePageTitle from '../../lib/usePageTitle';
 
 export default function Payments() {
+  usePageTitle('পেমেন্ট');
   const [payments, setPayments] = useState(null);
 
   useEffect(() => {

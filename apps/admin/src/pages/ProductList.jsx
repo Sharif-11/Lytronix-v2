@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
 import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
+import usePageTitle from '../lib/usePageTitle';
 
 // Compact, evenly-split card action. Icon-only on phones (where a product
 // card is only ~half the viewport wide); icon + label from `sm` up.
@@ -42,6 +43,7 @@ function ShareLinkButton({ slug, label }) {
 
 export default function ProductList() {
   const { t } = useLanguage();
+  usePageTitle(t('products.title'));
   const confirm = useConfirm();
   const SORTS = [
     { value: 'newest', label: t('products.sortNewest') },

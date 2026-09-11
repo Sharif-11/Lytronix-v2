@@ -14,6 +14,7 @@ import ProductCard from '../components/ProductCard';
 import ProductGallery from '../components/ProductGallery';
 import RichText from '../components/RichText';
 import Loader from '../components/Loader';
+import usePageTitle from '../lib/usePageTitle';
 
 const POLICY_TONE_CLASSES = {
   rust: 'bg-red-50 text-ui-rust border-red-100',
@@ -28,6 +29,7 @@ export default function ProductDetail() {
   const { isAuthed } = useCustomerAuth();
 
   const [product, setProduct] = useState(null);
+  usePageTitle(product?.name || 'প্রোডাক্ট');
   const [error, setError] = useState('');
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);

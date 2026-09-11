@@ -32,6 +32,7 @@ import ProgressRing from '../components/ProgressRing';
 import Loader from '../components/Loader';
 import ChatAiSettingsModal from '../components/ChatAiSettingsModal';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const POLL_THREADS_MS = 8000;
 const POLL_MESSAGES_MS = 3000;
@@ -91,6 +92,7 @@ async function copyToClipboard(text) {
 }
 
 export default function Chat() {
+  usePageTitle('Chat');
   const [params, setParams] = useSearchParams();
   const activePhone = params.get('phone') || '';
   const confirm = useConfirm();

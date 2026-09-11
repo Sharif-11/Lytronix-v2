@@ -16,6 +16,7 @@ import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
 import useFormDraft from '../lib/useFormDraft';
 import { BKASH_MERCHANT_NUMBER } from '../utils/company';
+import usePageTitle from '../lib/usePageTitle';
 
 const emptyAddress = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
 const emptyBkash = { senderNumber: '', transactionId: '', proofFile: null, proofPreview: '' };
@@ -36,6 +37,7 @@ export default function Checkout() {
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
+  usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : 'চেকআউট');
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;

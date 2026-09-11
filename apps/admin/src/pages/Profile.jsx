@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import * as api from '../api/client';
 import { emitError } from '../lib/errorBus';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
   const { t } = useLanguage();
+  usePageTitle(t('profile.title'));
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');

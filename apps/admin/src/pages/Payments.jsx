@@ -4,6 +4,7 @@ import { getPayments, verifyPayment, rejectPayment } from '../api/client';
 import { formatMoney, formatDate } from '../utils/format';
 import { CheckCircle2, XCircle, ImageOff, ExternalLink, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const STATUS_STYLES = {
   pending: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -23,6 +24,7 @@ function buildPrintQuery({ status, search }) {
 
 export default function Payments() {
   const { t } = useLanguage();
+  usePageTitle(t('payments.title'));
   const TABS = [
     { key: '', label: t('payments.tabAll') },
     { key: 'pending_verification', label: t('payments.tabNeedsReview') },

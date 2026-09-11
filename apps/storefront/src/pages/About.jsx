@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ShieldCheck, Truck, Banknote, HeartHandshake, ArrowRight } from 'lucide-react';
 import { COMPANY_NAME } from '../utils/company';
+import usePageTitle from '../lib/usePageTitle';
 
 const VALUES = [
   {
@@ -26,6 +27,7 @@ const VALUES = [
 ];
 
 export default function About() {
+  usePageTitle('আমাদের সম্পর্কে');
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
       <div className="text-center max-w-2xl mx-auto mb-12">

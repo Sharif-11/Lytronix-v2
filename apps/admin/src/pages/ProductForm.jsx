@@ -13,6 +13,7 @@ import Loader from '../components/Loader';
 import useFormDraft from '../lib/useFormDraft';
 import { emitError } from '../lib/errorBus';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const empty = {
   name: '',
@@ -38,6 +39,7 @@ export default function ProductForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [form, setForm] = useState(empty);
+  usePageTitle(isEdit ? form.name || 'Edit product' : 'New product');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);

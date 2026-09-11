@@ -10,6 +10,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { productLandingUrl, copyToClipboard } from '../lib/publicLinks';
 import RichText from '../components/RichText';
 import Loader from '../components/Loader';
+import usePageTitle from '../lib/usePageTitle';
 
 function policyText(p) {
   if (!p) return 'Full Cash on Delivery';
@@ -27,6 +28,7 @@ export default function ProductDetail() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [product, setProduct] = useState(null);
+  usePageTitle(product?.name || 'Product');
   const [status, setStatus] = useState('loading'); // loading | ok | error
   const [copied, setCopied] = useState(false);
 

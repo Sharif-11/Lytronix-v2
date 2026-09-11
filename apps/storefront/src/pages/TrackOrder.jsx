@@ -5,6 +5,7 @@ import { trackOrder, initiateBkashCheckout } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
 import { formatMoney, formatTime, mergeTrackingTimeline, groupTimelineByDate } from '../utils/format';
+import usePageTitle from '../lib/usePageTitle';
 
 const BKASH_RESULT = {
   success: { ok: true, text: 'বিকাশ পেমেন্ট সফল হয়েছে — আপনার অর্ডার কনফার্ম হয়েছে।' },
@@ -18,6 +19,7 @@ export default function TrackOrder() {
   const [params] = useSearchParams();
   const bkash = BKASH_RESULT[params.get('bkash')];
   const [order, setOrder] = useState(null);
+  usePageTitle(order?.orderNumber ? `অর্ডার ${order.orderNumber}` : 'অর্ডার ট্র্যাক করুন');
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
   const [payErr, setPayErr] = useState('');

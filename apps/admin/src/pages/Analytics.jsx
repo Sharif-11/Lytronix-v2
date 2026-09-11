@@ -6,9 +6,11 @@ import {
 import * as api from '../api/client';
 import { formatMoney } from '../utils/format';
 import { useLanguage } from '../context/LanguageContext';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function Analytics() {
   const { t } = useLanguage();
+  usePageTitle(t('analytics.title'));
   const RANGES = [
     { key: 'today', label: t('analytics.today') },
     { key: '7d', label: t('analytics.days7') },

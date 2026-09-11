@@ -4,10 +4,12 @@ import { MapPin, Package } from 'lucide-react';
 import { trackOrder } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
 import { formatMoney, formatTime, mergeTrackingTimeline, groupTimelineByDate } from '../utils/format';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function TrackOrder() {
   const { trackingId } = useParams();
   const [order, setOrder] = useState(null);
+  usePageTitle(order?.orderNumber ? `Track ${order.orderNumber}` : 'Track order');
   const [error, setError] = useState('');
 
   useEffect(() => {

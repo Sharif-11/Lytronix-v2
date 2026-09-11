@@ -3,8 +3,10 @@ import { Phone, Mail, MapPin, MessageCircle, Loader2, CheckCircle2 } from 'lucid
 import { submitContact } from '../api/client';
 import useFormDraft from '../lib/useFormDraft';
 import { COMPANY_PHONE, COMPANY_EMAIL, COMPANY_ADDRESS, COMPANY_WHATSAPP } from '../utils/company';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function Contact() {
+  usePageTitle('যোগাযোগ');
   const [form, setForm] = useState({ name: '', contact: '', message: '', company: '' }); // `company` = honeypot
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);

@@ -1,8 +1,10 @@
 import Catalogue from '../components/Catalogue';
+import usePageTitle from '../lib/usePageTitle';
 
 // Dedicated all-products listing — filters, sort and pagination, no home-page
 // chrome. `/shop` links here from "browse catalogue" prompts.
 export default function Products() {
+  usePageTitle('সকল প্রোডাক্ট');
   return (
     <div className="min-h-screen pb-20">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8">

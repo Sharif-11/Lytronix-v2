@@ -7,6 +7,7 @@ import {
   mergeTrackingTimeline, groupTimelineByDate,
 } from '../../utils/format';
 import Loader from '../../components/Loader';
+import usePageTitle from '../../lib/usePageTitle';
 
 export default function Orders() {
   const { id } = useParams();
@@ -50,6 +51,7 @@ function PayNowButton({ orderId, amount }) {
 }
 
 function OrderList() {
+  usePageTitle('আপনার অর্ডার');
   const [orders, setOrders] = useState(null);
 
   useEffect(() => {
@@ -106,6 +108,7 @@ function OrderList() {
 
 function OrderDetail({ id }) {
   const [data, setData] = useState(null);
+  usePageTitle(data?.order?.orderNumber ? `অর্ডার ${data.order.orderNumber}` : 'অর্ডার');
   const [error, setError] = useState('');
 
   useEffect(() => {

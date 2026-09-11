@@ -55,6 +55,7 @@ const en = {
   'nav.consoleSubtitle': 'Admin Console',
 
   // ---- Login ----
+  'login.title': 'Sign in',
   'login.welcome': 'Welcome back',
   'login.subtitle': 'Sign in to your admin console.',
   'login.identifier': 'Email or phone number',
@@ -79,6 +80,7 @@ const en = {
   'login.offline': 'Can’t reach the server. Check your connection and try again.',
 
   // ---- Dashboard ----
+  'dashboard.title': 'Dashboard',
   'dashboard.welcome': 'Welcome back',
   'dashboard.subtitle': "Here's what's happening with your store today.",
   'dashboard.newOrder': 'New order',
@@ -368,6 +370,7 @@ const bn = {
   'nav.consoleSubtitle': 'অ্যাডমিন কনসোল',
 
   // ---- Login ----
+  'login.title': 'সাইন ইন',
   'login.welcome': 'ফিরে আসার জন্য স্বাগতম',
   'login.subtitle': 'আপনার অ্যাডমিন কনসোলে লগইন করুন।',
   'login.identifier': 'ইমেইল বা ফোন নম্বর',
@@ -392,6 +395,7 @@ const bn = {
   'login.offline': 'সার্ভারে পৌঁছানো যাচ্ছে না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।',
 
   // ---- Dashboard ----
+  'dashboard.title': 'ড্যাশবোর্ড',
   'dashboard.welcome': 'ফিরে আসার জন্য স্বাগতম',
   'dashboard.subtitle': 'আজ আপনার দোকানে যা ঘটছে তা এখানে দেখুন।',
   'dashboard.newOrder': 'নিউ অর্ডার',

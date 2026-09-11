@@ -7,11 +7,13 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { formatMoney, formatDate } from '../utils/format';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
+import usePageTitle from '../lib/usePageTitle';
 
 // Guest-facing order history. The device only remembers the shopper's phone
 // number; this looks that number's orders up on the server. Signed-in
 // shoppers are sent to their real account history instead.
 export default function GuestOrders() {
+  usePageTitle('আমার অর্ডার');
   const { isAuthed, loading: authLoading } = useCustomerAuth();
   const [phone] = useState(() => getGuestPhone());
   const [orders, setOrders] = useState(null);

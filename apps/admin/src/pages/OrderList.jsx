@@ -5,6 +5,7 @@ import StatusBadge from '../components/StatusBadge';
 import { formatMoney, formatDateShort } from '../utils/format';
 import { Printer, Plus, Search, Tag, Loader2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const STATUS_TABS = ['pending', 'unverified', 'processing', 'shipped', 'delivered', 'cancelled', 'all'];
 
@@ -18,6 +19,7 @@ function buildPrintQuery({ status, search }) {
 
 export default function OrderList() {
   const { t } = useLanguage();
+  usePageTitle(t('orders.title'));
   const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [stats, setStats] = useState({ total: 0, byStatus: {} });

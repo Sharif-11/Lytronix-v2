@@ -4,6 +4,7 @@ import { getContactMessages, updateContactMessage, deleteContactMessage } from '
 import { formatDate } from '../utils/format';
 import { useConfirm } from '../context/ConfirmContext';
 import Loader from '../components/Loader';
+import usePageTitle from '../lib/usePageTitle';
 
 const TABS = [
   { key: 'new', label: 'New' },
@@ -13,6 +14,7 @@ const TABS = [
 ];
 
 export default function Messages() {
+  usePageTitle('Messages');
   const confirm = useConfirm();
   const [status, setStatus] = useState('new');
   const [search, setSearch] = useState('');

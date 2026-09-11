@@ -3,8 +3,10 @@ import { Loader2, Check, KeyRound, Eye, EyeOff, BellRing } from 'lucide-react';
 import { updateProfile } from '../../api/client';
 import { useCustomerAuth } from '../../context/CustomerAuthContext';
 import { pushSupported, getPushState, enablePush, disablePush } from '../../lib/push';
+import usePageTitle from '../../lib/usePageTitle';
 
 export default function Profile() {
+  usePageTitle('প্রোফাইল');
   const { customer, patchCustomer, refresh } = useCustomerAuth();
   const [name, setName] = useState(customer?.name || '');
   const [saving, setSaving] = useState(false);

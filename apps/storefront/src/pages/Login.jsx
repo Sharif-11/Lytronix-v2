@@ -3,8 +3,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Phone, ArrowLeft, ShieldCheck, Loader2, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { getGuestPhone } from '../lib/guestOrders';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function Login() {
+  usePageTitle('লগইন করুন');
   const { requestOtp, verifyOtp, login, forgotPassword, isAuthed } = useCustomerAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();

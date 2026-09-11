@@ -4,12 +4,14 @@ import * as api from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const emptyForm = { name: '', email: '', phone: '', password: '', role: '', isActive: true };
 const PAGE_SIZE = 20;
 
 export default function UserManagement() {
   const { t } = useLanguage();
+  usePageTitle(t('staff.title'));
   const confirm = useConfirm();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);

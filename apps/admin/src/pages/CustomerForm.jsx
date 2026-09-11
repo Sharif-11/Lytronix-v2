@@ -16,6 +16,7 @@ import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import { emitError } from '../lib/errorBus';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 import { KeyRound, RotateCcw, Loader2 } from 'lucide-react';
 
 const empty = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '', channels: [], priority: 'medium', tags: [] };
@@ -43,6 +44,7 @@ export default function CustomerForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [form, setForm] = useState(empty);
+  usePageTitle(isEdit ? form.name || 'Edit customer' : 'New customer');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const { phoneticOn } = usePhonetic(); // universal — set once from the navbar, applies here too

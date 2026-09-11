@@ -7,6 +7,7 @@ import Catalogue from '../components/Catalogue';
 import FeaturedStrip from '../components/FeaturedStrip';
 import { getCategories } from '../api/client';
 import { COMPANY_NAME, COMPANY_TAGLINE_BN } from '../utils/company';
+import usePageTitle from '../lib/usePageTitle';
 
 const BADGES = [
   { icon: ShieldCheck, label: '১০০% অরিজিনাল প্রোডাক্ট' },
@@ -39,6 +40,7 @@ const FEATURES = [
 ];
 
 export default function Shop() {
+  usePageTitle(''); // home page — hook's own default (site name + tagline) applies
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const hasQuery = params.get('q') || params.get('category');

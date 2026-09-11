@@ -8,9 +8,11 @@ import { getCustomers, deleteCustomer } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import SearchableSelect from '../components/SearchableSelect';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 
 export default function CustomerList() {
   const { t } = useLanguage();
+  usePageTitle(t('customers.title'));
   const confirm = useConfirm();
 
   const CHANNEL_META = {

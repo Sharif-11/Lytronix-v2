@@ -3,11 +3,13 @@ import { ShieldCheck, Lock, Plus, X } from 'lucide-react';
 import * as api from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useConfirm } from '../context/ConfirmContext';
+import usePageTitle from '../lib/usePageTitle';
 
 const emptyForm = { name: '', description: '', permissions: [] };
 
 export default function RoleManagement() {
   const { t } = useLanguage();
+  usePageTitle(t('roles.title'));
   const confirm = useConfirm();
   const [roles, setRoles] = useState([]);
   const [groups, setGroups] = useState([]);

@@ -22,6 +22,7 @@ import { emitError } from '../lib/errorBus';
 import useSmsBalance from '../lib/useSmsBalance';
 import { formatMoney, formatDate } from '../utils/format';
 import { Printer, Pencil, Trash2, Copy, ExternalLink, MessageSquare, Send, Loader2 } from 'lucide-react';
+import usePageTitle from '../lib/usePageTitle';
 
 const SMS_PURPOSE_LABELS = {
   admin_new_order: 'New order alert (to admin)',
@@ -41,6 +42,7 @@ export default function OrderDetail() {
   const confirm = useConfirm();
   const sms = useSmsBalance();
   const [order, setOrder] = useState(null);
+  usePageTitle(order?.orderNumber ? `Order ${order.orderNumber}` : 'Order');
   const [statuses, setStatuses] = useState([]);
   const [newStatus, setNewStatus] = useState('');
   const [statusNote, setStatusNote] = useState('');

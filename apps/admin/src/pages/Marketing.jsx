@@ -7,6 +7,7 @@ import Loader from '../components/Loader';
 import { useConfirm } from '../context/ConfirmContext';
 import { emitError } from '../lib/errorBus';
 import useSmsBalance from '../lib/useSmsBalance';
+import usePageTitle from '../lib/usePageTitle';
 
 const MAX_LEN = 640;
 // Rough SMS segment estimate: GSM7 (plain Latin) is 160 chars/segment,
@@ -19,6 +20,7 @@ function segmentInfo(text) {
 }
 
 export default function Marketing() {
+  usePageTitle('Marketing');
   const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);

@@ -21,6 +21,7 @@ import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, BKASH_MERCHANT_NUMBER } from '../utils/company';
 import logoMark from '../assets/lytronix-logo.png';
+import usePageTitle from '../lib/usePageTitle';
 
 const emptyForm = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
 const emptyBkash = { senderNumber: '', transactionId: '', proofFile: null, proofPreview: '' };
@@ -47,6 +48,7 @@ export default function ProductLanding() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
+  usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : product?.name || 'প্রোডাক্ট');
   const formRef = useRef(null);
   const nameInputRef = useRef(null);
   const submitBtnRef = useRef(null);
