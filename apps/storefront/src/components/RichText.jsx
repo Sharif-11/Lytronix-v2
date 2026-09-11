@@ -5,7 +5,12 @@ const HTML_TAG_RE = /<([a-z][a-z0-9]*)\b[^>]*>/i;
 // Kept identical to apps/admin/src/components/RichText.jsx's RICH_TEXT_CLASS
 // so the admin editor and this rendered output look the same.
 export const RICH_TEXT_CLASS = [
-  'prose prose-sm max-w-none font-bangla',
+  'prose prose-sm max-w-none font-bangla whitespace-pre-wrap',
+  // Tailwind Typography's prose-p:* rules don't reach a bare <div> — a
+  // contentEditable's own line-break element in some browsers, kept as a
+  // fallback for content saved before the editor started forcing <p> (see
+  // apps/admin's RichTextEditor.jsx) — so it isn't spacing-less/leading-less.
+  '[&_div]:my-2 [&_div]:leading-relaxed',
   'prose-p:my-2 prose-p:leading-relaxed prose-p:text-ui-ink/90',
   'prose-headings:font-display prose-headings:text-ui-ink prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-1.5',
   'prose-h2:text-lg prose-h3:text-base',
@@ -31,7 +36,11 @@ export default function RichText({ html, className = '' }) {
         .join('');
 
   const clean = DOMPurify.sanitize(prepared, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a', 'span'],
+    // 'div' matters here: a contentEditable's default response to Enter is
+    // to wrap the new line in <div> (browser-dependent), not <p>. Without it
+    // allowed, DOMPurify unwraps the tag but keeps its text — silently
+    // merging separate lines into one run with no break between them.
+    ALLOWED_TAGS: ['p', 'div', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a', 'span'],
     ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style'],
   });
 

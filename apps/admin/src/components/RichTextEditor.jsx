@@ -23,6 +23,16 @@ export default function RichTextEditor({ value, onChange, placeholder, phoneticE
     if (ref.current && ref.current.innerHTML !== (value || '')) {
       ref.current.innerHTML = value || '';
     }
+    // Without this, pressing Enter wraps the new line in <div> in some
+    // browsers (Chrome's default) rather than <p> — structurally fine now
+    // that RichText.jsx allows <div> too, but Tailwind Typography's prose
+    // spacing only targets <p>, so div-wrapped lines would render visually
+    // cramped. Forcing <p> keeps new content consistent everywhere.
+    try {
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+    } catch {
+      /* unsupported browser — <div> still renders correctly, just tighter */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
