@@ -7,6 +7,7 @@ const errorHandler = require('./middleware/errorHandler');
 const logger = require('./services/logger');
 const contactRoutes = require('./routes/contactRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const messengerRoutes = require('./routes/messengerRoutes');
 
 const authRoutes = require('./routes/authRoutes');
 const accountRoutes = require('./routes/accountRoutes');
@@ -70,7 +71,11 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// `verify` stashes the exact raw bytes on req.rawBody — needed by the
+// Messenger webhook to check Facebook's X-Hub-Signature-256, which is
+// computed over the raw body and won't match a re-serialized req.body.
+// Negligible cost for every other route, which never reads it.
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 // HTTP access logs flow through the same winston logger as the rest of the
 // app (server/services/logger.js) so `logs/combined.log` has everything in
 // one place, while still printing a readable line to the console in dev.
@@ -108,6 +113,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/messenger', messengerRoutes);
 app.use('/api/track', trackingRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/couriers', courierRoutes);

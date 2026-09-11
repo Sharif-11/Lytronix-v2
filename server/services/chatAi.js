@@ -1,9 +1,11 @@
 const Product = require('../models/Product');
+const ChatThread = require('../models/ChatThread');
 const ChatMessage = require('../models/ChatMessage');
 const ChatAiSettings = require('../models/ChatAiSettings');
 const ChatAiLog = require('../models/ChatAiLog');
 const ai = require('./ai');
 const webPush = require('./webPush');
+const messenger = require('./messenger');
 const logger = require('./logger');
 
 // Automated first-line answers for the storefront chat widget: text-only
@@ -25,6 +27,11 @@ const HISTORY_MESSAGES = 6; // just enough for "what about the second one" style
 // a cheaper Lite-tier model is a good fit and shouldn't be tied to whatever
 // order extraction needs for its messier free-text parsing.
 const CHAT_GEMINI_MODEL = process.env.CHAT_AI_GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
+// Applies to every thread on every channel (storefront + Messenger) —
+// counts attempted Gemini calls, not just ones that got posted, since a
+// declined/errored attempt still costs the same API call.
+const MAX_AI_REPLIES_PER_DAY = 5;
 
 function stripHtml(html) {
   return String(html || '')
@@ -118,7 +125,7 @@ function parseVerdict(outText) {
 // nothing about the assistant's behavior is invisible even when the
 // customer never sees a reply. Never throws: a logging failure must not be
 // able to affect the (already fire-and-forget) caller.
-async function writeLog({ thread, message, verdict, outText, posted, replyMessageId, error }) {
+async function writeLog({ thread, message, verdict, outText, posted, replyMessageId, error, capped }) {
   try {
     await ChatAiLog.create({
       thread: thread._id,
@@ -133,10 +140,50 @@ async function writeLog({ thread, message, verdict, outText, posted, replyMessag
       replyMessage: replyMessageId || null,
       rawOutput: outText ? String(outText).slice(0, 4000) : '',
       error: error || '',
+      capped: Boolean(capped),
     });
   } catch (err) {
     logger.warn('chatAi: failed to write log', { error: err.message });
   }
+}
+
+// Returns true and reserves one call against today's budget, or false if
+// the thread already used all MAX_AI_REPLIES_PER_DAY today. "Today" is a
+// UTC calendar date — simple and consistent; a reply near midnight either
+// way is not worth the complexity of per-shop timezone handling.
+//
+// Must be a single atomic DB operation, not read-then-write against the
+// in-memory `thread` doc: a customer sending several messages in quick
+// succession fires multiple fire-and-forget maybeAutoReply calls that
+// overlap in flight, so a check-then-increment done in JS would let all of
+// them read the same stale count and all slip through before any commits
+// (confirmed with a burst test before this fix — 7 near-simultaneous calls
+// all passed a 5/day cap). findOneAndUpdate's match filter + pipeline
+// update run as one atomic operation per document, so concurrent callers
+// correctly serialize and the count saturates exactly at the cap.
+async function consumeAiQuota(thread) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const bumped = await ChatThread.findOneAndUpdate(
+    {
+      _id: thread._id,
+      $or: [{ aiRepliesDate: { $ne: today } }, { aiRepliesToday: { $lt: MAX_AI_REPLIES_PER_DAY } }],
+    },
+    [
+      {
+        $set: {
+          aiRepliesToday: { $cond: [{ $eq: ['$aiRepliesDate', today] }, { $add: ['$aiRepliesToday', 1] }, 1] },
+          aiRepliesDate: today,
+        },
+      },
+    ],
+    { new: true }
+  );
+  if (!bumped) return false;
+
+  thread.aiRepliesDate = bumped.aiRepliesDate;
+  thread.aiRepliesToday = bumped.aiRepliesToday;
+  return true;
 }
 
 // Called after a customer's text message is saved (fire-and-forget from
@@ -158,6 +205,13 @@ async function runAutoReply(thread, message) {
   const settings = await ChatAiSettings.load();
   if (!settings.enabled) return;
   if (!ai.isGeminiConfigured()) return;
+
+  const allowed = await consumeAiQuota(thread);
+  if (!allowed) {
+    logger.info('chatAi: daily reply cap reached, skipping', { phone: thread.phone.slice(-4) });
+    await writeLog({ thread, message, verdict: null, outText: null, posted: false, replyMessageId: null, error: '', capped: true });
+    return;
+  }
 
   let outText = null;
   let verdict = null;
@@ -203,17 +257,25 @@ async function runAutoReply(thread, message) {
       thread.unreadForCustomer += 1;
       await thread.save();
 
-      webPush
-        .notifyCustomer(thread.phone, {
-          title: 'Lytronix — নতুন বার্তা',
-          body: answer.slice(0, 120),
-          url: '/shop?chat=1',
-          tag: `chat-${thread.phone}`,
-          badge: thread.unreadForCustomer,
-        })
-        .catch(() => {});
+      if (thread.channel === 'messenger') {
+        // The reply only actually reaches a Messenger user via the Send
+        // API — saving the ChatMessage alone (above) just records history.
+        messenger.sendText(thread.messengerPsid, answer).catch((err) => {
+          logger.warn('chatAi: failed to deliver auto-reply via Messenger', { error: err.message });
+        });
+      } else {
+        webPush
+          .notifyCustomer(thread.phone, {
+            title: 'Lytronix — নতুন বার্তা',
+            body: answer.slice(0, 120),
+            url: '/shop?chat=1',
+            tag: `chat-${thread.phone}`,
+            badge: thread.unreadForCustomer,
+          })
+          .catch(() => {});
+      }
 
-      logger.info('chatAi: auto-replied', { phone: thread.phone.slice(-4) });
+      logger.info('chatAi: auto-replied', { phone: thread.phone.slice(-4), channel: thread.channel });
     } catch (err) {
       // The verdict was fine but posting it failed (DB hiccup) — log as an
       // error rather than a silent decline, since the model did its job.

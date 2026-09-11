@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, X, Loader2, CheckCircle2, XCircle, HelpCircle, RefreshCw, Search } from 'lucide-react';
+import { Bot, X, Loader2, CheckCircle2, XCircle, HelpCircle, RefreshCw, Search, Ban } from 'lucide-react';
 import { getChatAiSettings, updateChatAiSettings, getChatAiLogs } from '../api/client';
 import { emitError } from '../lib/errorBus';
 
@@ -11,13 +11,22 @@ const relTime = (d) => {
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
-// One attempt's outcome, at a glance: posted (answered), declined (silently
-// left for a human — not an error), or errored (Gemini/parse failure).
+// One attempt's outcome, at a glance: posted (answered), capped (skipped
+// before ever calling Gemini — this thread already used its 5/day budget),
+// declined (silently left for a human — not an error), or errored
+// (Gemini/parse failure).
 function OutcomeBadge({ log }) {
   if (log.posted) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ui-brand bg-ui-brand/10 px-1.5 py-0.5 rounded-full">
         <CheckCircle2 size={11} /> Posted
+      </span>
+    );
+  }
+  if (log.capped) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">
+        <Ban size={11} /> Daily cap reached
       </span>
     );
   }
@@ -55,8 +64,11 @@ function LogRow({ log }) {
           {log.answer}
         </p>
       )}
+      {log.capped && (
+        <p className="text-xs text-amber-700">This thread already used its 5 auto-replies for today — left for you.</p>
+      )}
       {log.error && <p className="text-xs text-ui-rust break-words">{log.error}</p>}
-      {!log.posted && !log.error && (
+      {!log.posted && !log.capped && !log.error && (
         <p className="text-xs text-ui-muted">
           Not confident / out of scope{log.confidence ? ` (confidence: ${log.confidence})` : ''} — left for you.
         </p>
@@ -214,9 +226,10 @@ export default function ChatAiSettingsModal({ onClose }) {
               <span>
                 <span className="block text-sm font-medium text-ui-ink">Auto-reply to customers</span>
                 <span className="block text-xs text-ui-muted mt-0.5">
-                  Text-only questions the catalogue + knowledge base fully answer get a reply automatically.
-                  Everything else — images, voice notes, and anything the AI isn't fully confident about — is
-                  left for you, untouched.
+                  Text-only questions the catalogue + knowledge base fully answer get a reply automatically —
+                  on the storefront chat and Messenger alike. Everything else — images, voice notes, anything
+                  the AI isn't fully confident about, and any thread past its 5-replies-per-day limit — is left
+                  for you, untouched.
                 </span>
               </span>
               <span className="relative shrink-0 w-11 h-6">

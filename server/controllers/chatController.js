@@ -7,6 +7,7 @@ const logger = require('../services/logger');
 const sms = require('../services/sms');
 const chatAi = require('../services/chatAi');
 const ai = require('../services/ai');
+const messenger = require('../services/messenger');
 
 const MAX_BODY = 4000;
 // A typing ping older than this reads as "stopped typing" — long enough to
@@ -212,14 +213,14 @@ exports.customerTyping = async (req, res) => {
 };
 
 // POST /api/chat/send   { phone?, guestKey?, body?, type?, mediaUrl?, mediaMime?, durationSec? }
-exports.customerSend = async (req, res) => {
-  const c = contentFrom(req.body);
-  if (c.error) return res.status(400).json({ message: c.error });
-
-  const r = await customerThread(req);
-  if (r.error) return res.status(r.error).json({ message: r.message });
-  const thread = r.thread;
-
+// Shared by the storefront widget (customerSend, below) and the Messenger
+// webhook (messengerController.js) — everything that happens once a
+// customer message exists is identical regardless of channel: save it,
+// update the thread, notify the admin, maybe trigger an AI auto-reply.
+// Only how the *customer* actually receives an admin/AI reply differs
+// (WebPush vs. the Messenger Send API), which lives in chatAi.js /
+// adminSend instead. Returns the created ChatMessage.
+async function ingestCustomerMessage(thread, c) {
   const msg = await ChatMessage.create({
     thread: thread._id,
     phone: thread.phone,
@@ -261,13 +262,42 @@ exports.customerSend = async (req, res) => {
       .catch(() => {});
   }
 
-  logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4), type: c.type });
-  res.status(201).json({ message: msg });
+  logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4), channel: thread.channel, type: c.type });
 
-  // Text-only, fire-and-forget — never delays or affects the response
-  // above. Image/voice messages never reach this: chatAi checks type/
-  // mediaUrl again itself, but the fast path is decided right here.
+  // Text-only, fire-and-forget — never delays or affects the caller.
+  // Image/voice messages never reach this: chatAi checks type/mediaUrl
+  // again itself, but the fast path is decided right here.
   if (c.type === 'text') chatAi.maybeAutoReply(thread, msg);
+
+  return msg;
+}
+exports.ingestCustomerMessage = ingestCustomerMessage;
+
+// Finds this Messenger user's thread, or starts one. A Messenger user has
+// no phone number — Facebook only hands you a Page-Scoped User ID — so this
+// deliberately never tries to match them up with a phone-based storefront
+// thread for "the same" real person; see ChatThread.js for why.
+exports.findOrCreateMessengerThread = async function findOrCreateMessengerThread(psid) {
+  let thread = await ChatThread.findOne({ channel: 'messenger', messengerPsid: psid });
+  if (!thread) {
+    thread = await ChatThread.create({
+      phone: `msgr:${psid}`,
+      channel: 'messenger',
+      messengerPsid: psid,
+    });
+  }
+  return thread;
+};
+
+exports.customerSend = async (req, res) => {
+  const c = contentFrom(req.body);
+  if (c.error) return res.status(400).json({ message: c.error });
+
+  const r = await customerThread(req);
+  if (r.error) return res.status(r.error).json({ message: r.message });
+
+  const msg = await ingestCustomerMessage(r.thread, c);
+  res.status(201).json({ message: msg });
 };
 
 // POST /api/chat/upload  (multipart: file) — image or voice note.
@@ -369,6 +399,7 @@ exports.adminMessages = async (req, res) => {
       status: thread.status,
       unreadForAdmin: 0,
       customerTyping: isTypingRecently(thread.customerTypingAt),
+      channel: thread.channel,
     },
   });
 };
@@ -390,6 +421,13 @@ exports.adminSend = async (req, res) => {
   const c = contentFrom(req.body);
   if (c.error) return res.status(400).json({ message: c.error });
 
+  // MVP: the Messenger Send API path only relays plain text — an image/
+  // voice reply would save into the thread's history here but never
+  // actually reach the customer, which is worse than just refusing it.
+  if (thread.channel === 'messenger' && c.type !== 'text') {
+    return res.status(400).json({ message: 'Messenger থ্রেডে এখনো শুধু টেক্সট রিপ্লাই পাঠানো যায়।' });
+  }
+
   const msg = await ChatMessage.create({
     thread: thread._id,
     phone: thread.phone,
@@ -407,16 +445,26 @@ exports.adminSend = async (req, res) => {
   thread.unreadForCustomer += 1;
   await thread.save();
 
-  // Ping the shopper's PWA about the reply.
-  webPush
-    .notifyCustomer(thread.phone, {
-      title: 'Lytronix — নতুন বার্তা',
-      body: previewFor(c),
-      url: '/shop?chat=1',
-      tag: `chat-${thread.phone}`,
-      badge: thread.unreadForCustomer,
-    })
-    .catch(() => {});
+  if (thread.channel === 'messenger') {
+    try {
+      await messenger.sendText(thread.messengerPsid, c.body);
+    } catch (err) {
+      // The message is already saved (so it isn't lost), but the admin
+      // needs to know it never actually reached the customer.
+      return res.status(err.statusCode || 502).json({ message: err.message, saved: true });
+    }
+  } else {
+    // Ping the shopper's PWA about the reply.
+    webPush
+      .notifyCustomer(thread.phone, {
+        title: 'Lytronix — নতুন বার্তা',
+        body: previewFor(c),
+        url: '/shop?chat=1',
+        tag: `chat-${thread.phone}`,
+        badge: thread.unreadForCustomer,
+      })
+      .catch(() => {});
+  }
 
   res.status(201).json({ message: msg });
 };

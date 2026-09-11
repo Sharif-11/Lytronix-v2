@@ -26,6 +26,11 @@ const chatAiLogSchema = new mongoose.Schema(
     // decline and an error; `error` distinguishes which.
     posted: { type: Boolean, default: false },
     replyMessage: { type: mongoose.Schema.Types.ObjectId, ref: 'ChatMessage', default: null },
+    // True when this attempt was skipped before ever calling Gemini because
+    // the thread had already used its daily auto-reply budget (see
+    // chatAi.js MAX_AI_REPLIES_PER_DAY) — distinct from a real decline so
+    // the admin can tell "not confident" apart from "budget exhausted".
+    capped: { type: Boolean, default: false },
 
     // Raw model output, for debugging odd/unparseable responses — capped.
     rawOutput: { type: String, default: '', maxlength: 4000 },

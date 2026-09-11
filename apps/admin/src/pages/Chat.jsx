@@ -437,11 +437,18 @@ export default function Chat() {
                 }`}
               >
                 <div className="w-10 h-10 rounded-full bg-ui-brand/10 text-ui-brand flex items-center justify-center font-semibold shrink-0">
-                  {(t.name || t.phone || '?')[0].toUpperCase()}
+                  {(t.name || (t.channel === 'messenger' ? 'M' : t.phone) || '?')[0].toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-ui-ink truncate">{t.name || t.phone}</span>
+                    <span className="text-sm font-medium text-ui-ink truncate flex items-center gap-1.5">
+                      {t.name || (t.channel === 'messenger' ? 'Messenger ইউজার' : t.phone)}
+                      {t.channel === 'messenger' && (
+                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-[#0084FF] bg-[#0084FF]/10 rounded-full px-1.5 py-0.5">
+                          Messenger
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[11px] text-ui-faint shrink-0">{relTime(t.lastMessageAt)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -474,13 +481,24 @@ export default function Chat() {
                   <ArrowLeft size={20} />
                 </button>
                 <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center font-semibold shrink-0">
-                  {(activeThread?.name || activePhone)[0].toUpperCase()}
+                  {(activeThread?.name || (activeThread?.channel === 'messenger' ? 'M' : activePhone))[0].toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-sm leading-tight truncate">{activeThread?.name || activePhone}</div>
-                  <a href={`tel:${activePhone}`} className="text-[11px] text-white/70 leading-tight inline-flex items-center gap-1">
-                    <Phone size={11} /> {activePhone}
-                  </a>
+                  <div className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
+                    {activeThread?.name || (activeThread?.channel === 'messenger' ? 'Messenger ইউজার' : activePhone)}
+                    {activeThread?.channel === 'messenger' && (
+                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-white/20 rounded-full px-1.5 py-0.5">
+                        Messenger
+                      </span>
+                    )}
+                  </div>
+                  {activeThread?.channel === 'messenger' ? (
+                    <span className="text-[11px] text-white/70 leading-tight">কোনো ফোন নম্বর নেই — শুধু Messenger</span>
+                  ) : (
+                    <a href={`tel:${activePhone}`} className="text-[11px] text-white/70 leading-tight inline-flex items-center gap-1">
+                      <Phone size={11} /> {activePhone}
+                    </a>
+                  )}
                 </div>
                 <button
                   onClick={toggleClosed}
@@ -576,8 +594,9 @@ export default function Chat() {
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    disabled={attaching}
-                    className="w-10 h-10 rounded-full text-ui-muted hover:bg-black/5 flex items-center justify-center shrink-0"
+                    disabled={attaching || activeThread?.channel === 'messenger'}
+                    title={activeThread?.channel === 'messenger' ? 'Messenger থ্রেডে এখনো ছবি পাঠানো যায় না' : undefined}
+                    className="w-10 h-10 rounded-full text-ui-muted hover:bg-black/5 flex items-center justify-center shrink-0 disabled:opacity-30"
                     aria-label="Attach images"
                   >
                     {attaching ? <ProgressRing value={uploadPct} size={18} /> : <Paperclip size={18} />}
@@ -608,7 +627,9 @@ export default function Chat() {
                     <button
                       type="button"
                       onClick={startRec}
-                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0"
+                      disabled={activeThread?.channel === 'messenger'}
+                      title={activeThread?.channel === 'messenger' ? 'Messenger থ্রেডে এখনো ভয়েস মেসেজ পাঠানো যায় না' : undefined}
+                      className="w-10 h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center shrink-0 disabled:opacity-30"
                       aria-label="Record voice"
                     >
                       <Mic size={18} />
