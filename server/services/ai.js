@@ -169,10 +169,12 @@ async function callAnthropic({ text, image }) {
     .join('\n');
 }
 
-// systemPrompt is overridable so other Gemini-backed features (the chat
-// auto-reply assistant) can reuse this same request/error/parsing plumbing
-// with their own instructions, instead of duplicating the axios call.
-async function callGemini({ text, systemPrompt = SYSTEM_PROMPT }) {
+// systemPrompt and model are overridable so other Gemini-backed features
+// (the chat auto-reply assistant) can reuse this same request/error/parsing
+// plumbing with their own instructions and their own model choice — chat's
+// simple lookup-and-format task is well suited to a cheaper Lite model,
+// while order extraction's messier free-text parsing keeps the default.
+async function callGemini({ text, systemPrompt = SYSTEM_PROMPT, model = GEMINI_MODEL }) {
   if (!process.env.GEMINI_API_KEY) {
     const err = new Error(
       'AI extraction is not configured. Add a free GEMINI_API_KEY from https://aistudio.google.com/apikey to server/.env.'
@@ -184,7 +186,7 @@ async function callGemini({ text, systemPrompt = SYSTEM_PROMPT }) {
   let data;
   try {
     const res = await axios.post(
-      geminiUrl(GEMINI_MODEL),
+      geminiUrl(model),
       {
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: text || 'Extract the order.' }] }],

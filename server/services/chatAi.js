@@ -20,6 +20,12 @@ const MAX_PRODUCTS = 50; // matches the shop's actual catalogue size — no pagi
 const MAX_DESC_CHARS = 400;
 const HISTORY_MESSAGES = 6; // just enough for "what about the second one" style follow-ups
 
+// Independent of GEMINI_MODEL (used by order extraction) — this is simple
+// lookup-and-format over a small given context, not free-form reasoning, so
+// a cheaper Lite-tier model is a good fit and shouldn't be tied to whatever
+// order extraction needs for its messier free-text parsing.
+const CHAT_GEMINI_MODEL = process.env.CHAT_AI_GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
 function stripHtml(html) {
   return String(html || '')
     .replace(/<[^>]*>/g, ' ')
@@ -119,7 +125,7 @@ async function writeLog({ thread, message, verdict, outText, posted, replyMessag
       phone: thread.phone,
       question: message.body,
       provider: 'gemini',
-      model: ai.GEMINI_MODEL,
+      model: CHAT_GEMINI_MODEL,
       inScope: verdict && typeof verdict.inScope === 'boolean' ? verdict.inScope : null,
       confidence: verdict && ['high', 'low'].includes(verdict.confidence) ? verdict.confidence : null,
       answer: verdict && verdict.answer != null ? String(verdict.answer).slice(0, 4000) : null,
@@ -163,7 +169,7 @@ async function runAutoReply(thread, message) {
       buildRecentTranscript(thread._id, message._id),
     ]);
     const userPrompt = `PRODUCT CATALOGUE:\n${catalogueText}\n\nKNOWLEDGE BASE:\n${settings.knowledgeBase || '(none provided)'}\n\nRECENT CONVERSATION:\n${transcript || '(none)'}\n\nQUESTION:\n${message.body}`;
-    outText = await ai.callGemini({ text: userPrompt, systemPrompt: SYSTEM_PROMPT });
+    outText = await ai.callGemini({ text: userPrompt, systemPrompt: SYSTEM_PROMPT, model: CHAT_GEMINI_MODEL });
     verdict = parseVerdict(outText);
     if (!verdict) errorMsg = 'AI response was not valid JSON.';
   } catch (err) {
