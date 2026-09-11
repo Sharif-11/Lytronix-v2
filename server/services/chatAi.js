@@ -182,7 +182,7 @@ async function runAutoReply(thread, message) {
         thread: thread._id,
         phone: thread.phone,
         from: 'admin',
-        senderName: 'Lytronix (স্বয়ংক্রিয় উত্তর)', // "automated reply" — kept visible to the customer for transparency
+        senderName: 'Lytronix (অটোমেটেড রিপ্লাই)', // "automated reply" — kept visible to the customer for transparency
         isAiReply: true,
         type: 'text',
         body: answer,
