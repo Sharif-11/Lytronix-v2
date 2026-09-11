@@ -19,7 +19,7 @@ export default function FeaturedStrip({
   const pausedUntil = useRef(0);
 
   useEffect(() => {
-    getProducts({ sort, inStock: 'true', limit })
+    getProducts({ sort, active: 'true', inStock: 'true', limit })
       .then((d) => setProducts(d.products || []))
       .catch(() => setProducts([]));
   }, [sort, limit]);

@@ -323,8 +323,24 @@ exports.createOrder = async (req, res) => {
   if (!isAdminCreated) {
     const productIds = items.filter((i) => i.product).map((i) => i.product);
     const productsWithPolicy = productIds.length
-      ? await Product.find({ _id: { $in: productIds } }).select('paymentPolicy')
+      ? await Product.find({ _id: { $in: productIds } }).select('paymentPolicy isActive name')
       : [];
+
+    // A product can be deactivated after a customer already has it in their
+    // cart / on a product page they had open — re-check at checkout so a
+    // stale cart can never turn into a real order for it. Admin-created
+    // orders skip this (see isAdminCreated above): an admin may deliberately
+    // re-order a discontinued item.
+    const inactive = productsWithPolicy.filter((p) => !p.isActive);
+    if (inactive.length) {
+      return res.status(409).json({
+        message:
+          inactive.length === 1
+            ? `"${inactive[0].name}" is no longer available — please remove it from your order.`
+            : `Some items in your order are no longer available: ${inactive.map((p) => p.name).join(', ')}. Please remove them and try again.`,
+      });
+    }
+
     const policyById = new Map(productsWithPolicy.map((p) => [String(p._id), p.paymentPolicy]));
 
     const lines = items.map((i) => ({

@@ -39,6 +39,14 @@ export default function ProductDetail() {
     setQty(1);
     getProduct(slug)
       .then((p) => {
+        // The lookup endpoint is shared with the admin edit page (which needs
+        // to fetch inactive products too), so the "hidden from customers"
+        // rule is enforced here instead: a deactivated product reads as
+        // not-found on the storefront, same as a bad slug/id would.
+        if (!p.isActive) {
+          setError('এই প্রোডাক্টটি খুঁজে পাওয়া যায়নি।');
+          return;
+        }
         setProduct(p);
         if (shouldLogProductView(p._id)) {
           recordProductView(p._id, { sessionId: getSessionId(), path: window.location.pathname });
