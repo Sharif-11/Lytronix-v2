@@ -207,11 +207,28 @@ function Lightbox({ media, idx, name, onIdx, onClose }) {
       else if (e.key === 'ArrowLeft') onIdx((i) => i - 1);
     };
     window.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+
+    // overflow:hidden alone doesn't reliably stop the page moving under a
+    // touch drag on iOS Safari (its rubber-band pan is a separate mechanism
+    // from overflow scrolling). Pin the body in place at its current scroll
+    // position instead, and restore it on close.
+    const scrollY = window.scrollY;
+    const body = document.body.style;
+    const prev = { position: body.position, top: body.top, left: body.left, right: body.right, overflow: body.overflow };
+    body.position = 'fixed';
+    body.top = `-${scrollY}px`;
+    body.left = '0';
+    body.right = '0';
+    body.overflow = 'hidden';
+
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      body.position = prev.position;
+      body.top = prev.top;
+      body.left = prev.left;
+      body.right = prev.right;
+      body.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
     };
   }, [onClose, onIdx]);
 
@@ -256,6 +273,11 @@ function Lightbox({ media, idx, name, onIdx, onClose }) {
 
       <div
         className="flex-1 flex items-center justify-center px-4 pb-4 min-h-0"
+        // Both swipe-to-navigate (horizontal) and swipe-to-dismiss (vertical)
+        // are fully handled by JS below via touch deltas — without this, the
+        // browser's own native pan/rubber-band handling stays active during
+        // the drag and visibly moves the page behind the (fixed) overlay.
+        style={{ touchAction: 'none' }}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
