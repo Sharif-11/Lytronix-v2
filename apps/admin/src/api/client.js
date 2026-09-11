@@ -247,6 +247,7 @@ export const deleteCloudinaryAsset = (url) =>
 
 // ---- Payments ----
 export const getPayments = (params) => client.get('/payments', { params }).then((r) => r.data);
+export const getAllPayments = (params) => client.get('/payments', { params: { ...params, all: true } }).then((r) => r.data);
 export const getPayment = (id) => client.get(`/payments/${id}`).then((r) => r.data);
 export const verifyPayment = (id, data) => client.patch(`/payments/${id}/verify`, data).then((r) => r.data);
 export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/reject`, { reason }).then((r) => r.data);

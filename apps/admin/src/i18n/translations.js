@@ -247,6 +247,7 @@ const en = {
   'payments.confirmTxnTitle': 'Confirm the transaction ID to verify',
   'payments.confirmTxnPlaceholder': 'Re-enter the transaction ID',
   'payments.confirmAndVerify': 'Confirm & verify',
+  'payments.printLog': 'Print payment log',
 
   // ---- Staff ----
   'staff.title': 'Staff Accounts',
@@ -559,6 +560,7 @@ const bn = {
   'payments.confirmTxnTitle': 'ভেরিফাই করতে ট্রানজেকশন আইডি কনফার্ম করুন',
   'payments.confirmTxnPlaceholder': 'ট্রানজেকশন আইডি আবার লিখুন',
   'payments.confirmAndVerify': 'কনফার্ম করে ভেরিফাই করুন',
+  'payments.printLog': 'পেমেন্ট লগ প্রিন্ট করুন',
 
   // ---- Staff ----
   'staff.title': 'স্টাফ অ্যাকাউন্ট',

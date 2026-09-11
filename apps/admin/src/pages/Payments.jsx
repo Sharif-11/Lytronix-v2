@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPayments, verifyPayment, rejectPayment } from '../api/client';
 import { formatMoney, formatDate } from '../utils/format';
-import { CheckCircle2, XCircle, ImageOff, ExternalLink, Search } from 'lucide-react';
+import { CheckCircle2, XCircle, ImageOff, ExternalLink, Search, Printer } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 const STATUS_STYLES = {
@@ -12,6 +12,14 @@ const STATUS_STYLES = {
   failed: 'bg-red-50 text-ui-rust border-red-200',
   refunded: 'bg-violet-50 text-violet-700 border-violet-200',
 };
+
+function buildPrintQuery({ status, search }) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (search) params.set('search', search);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
 
 export default function Payments() {
   const { t } = useLanguage();
@@ -117,9 +125,19 @@ export default function Payments() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-5 py-6 sm:py-8 space-y-5">
-      <div>
-        <h1 className="font-display font-bold text-2xl sm:text-3xl text-ui-ink">{t('payments.title')}</h1>
-        <p className="text-sm text-ui-muted mt-1">{t('payments.subtitle')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display font-bold text-2xl sm:text-3xl text-ui-ink">{t('payments.title')}</h1>
+          <p className="text-sm text-ui-muted mt-1">{t('payments.subtitle')}</p>
+        </div>
+        <a
+          href={`/payments/print${buildPrintQuery({ status, search })}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-secondary gap-1.5 shrink-0"
+        >
+          <Printer size={15} /> {t('payments.printLog')}
+        </a>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">

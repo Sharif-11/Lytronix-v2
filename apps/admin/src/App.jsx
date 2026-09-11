@@ -25,6 +25,7 @@ import CustomerForm from './pages/CustomerForm';
 import TrackOrder from './pages/TrackOrder';
 import PrintParcel from './pages/PrintParcel';
 import PrintLogbook from './pages/PrintLogbook';
+import PrintPaymentLog from './pages/PrintPaymentLog';
 import PrintLabels from './pages/PrintLabels';
 import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
@@ -100,6 +101,7 @@ export default function App() {
       <Route path="/customers/:id/edit" element={<RequireAuth permission="customers:manage"><AdminLayout><CustomerForm /></AdminLayout></RequireAuth>} />
 
       <Route path="/payments" element={<RequireAuth permission="payments:manage"><AdminLayout><Payments /></AdminLayout></RequireAuth>} />
+      <Route path="/payments/print" element={<RequireAuth permission="payments:manage"><PrintPaymentLog /></RequireAuth>} />
 
       <Route path="/marketing" element={<RequireAuth permission="customers:manage"><AdminLayout><Marketing /></AdminLayout></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth permission="customers:manage"><AdminLayout><Messages /></AdminLayout></RequireAuth>} />

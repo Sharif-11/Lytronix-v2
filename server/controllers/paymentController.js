@@ -20,16 +20,22 @@ async function notifyPaymentVerified(orderId) {
   }
 }
 
-// GET /api/payments?status=&method=&order=&search=&page=&limit=
+// GET /api/payments?status=&method=&order=&search=&from=&to=&page=&limit=&all=true
 // `search` matches the payment's own fields (sender number, transaction ID,
 // gateway reference) OR the order it belongs to (order number, customer name
 // / phone) — covers "search payment by phone number, transaction ID, ...".
+// Pass all=true to bypass pagination entirely (used by the printable log).
 exports.listPayments = async (req, res) => {
-  const { status, method, order, search, page = 1, limit = 20 } = req.query;
+  const { status, method, order, search, from, to, page = 1, limit = 20, all } = req.query;
   const filter = {};
   if (status) filter.status = status;
   if (method) filter.method = method;
   if (order) filter.order = order;
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to);
+  }
 
   if (search) {
     const re = { $regex: search, $options: 'i' };
@@ -45,6 +51,14 @@ exports.listPayments = async (req, res) => {
       { gatewayReference: re },
       { order: { $in: matchingOrders.map((o) => o._id) } },
     ];
+  }
+
+  if (all === 'true') {
+    const payments = await Payment.find(filter)
+      .populate('order', 'orderNumber customer.name customer.phone pricing.grandTotal pricing.due status')
+      .populate('verifiedBy', 'name')
+      .sort({ createdAt: -1 });
+    return res.json({ payments, total: payments.length, page: 1, pages: 1 });
   }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
