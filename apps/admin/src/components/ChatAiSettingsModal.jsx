@@ -71,7 +71,7 @@ export default function ChatAiSettingsModal({ onClose }) {
               </p>
             )}
 
-            <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <label className="flex items-center justify-between gap-3 cursor-pointer border border-ui-line rounded-xl px-3.5 py-3 hover:border-ui-faint/60 transition-colors">
               <span>
                 <span className="block text-sm font-medium text-ui-ink">Auto-reply to customers</span>
                 <span className="block text-xs text-ui-muted mt-0.5">
@@ -80,24 +80,19 @@ export default function ChatAiSettingsModal({ onClose }) {
                   left for you, untouched.
                 </span>
               </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={enabled}
-                onClick={() => {
-                  setEnabled((v) => !v);
-                  setDirty(true);
-                }}
-                className={`shrink-0 w-11 h-6 rounded-full transition-colors relative ${
-                  enabled ? 'bg-ui-brand' : 'bg-ui-line'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    enabled ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
-                  }`}
+              <span className="relative shrink-0 w-11 h-6">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={enabled}
+                  onChange={(e) => {
+                    setEnabled(e.target.checked);
+                    setDirty(true);
+                  }}
                 />
-              </button>
+                <span className="block w-11 h-6 rounded-full bg-ui-line peer-checked:bg-ui-brand peer-focus-visible:ring-2 peer-focus-visible:ring-ui-brand/30 transition-colors" />
+                <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-[1.375rem]" />
+              </span>
             </label>
 
             <div>
