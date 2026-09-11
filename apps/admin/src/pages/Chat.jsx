@@ -16,6 +16,7 @@ import {
   Pencil,
   Trash2,
   X,
+  Bot,
 } from 'lucide-react';
 import {
   getChatThreads,
@@ -28,6 +29,7 @@ import {
 } from '../api/client';
 import ProgressRing from '../components/ProgressRing';
 import Loader from '../components/Loader';
+import ChatAiSettingsModal from '../components/ChatAiSettingsModal';
 import { useConfirm } from '../context/ConfirmContext';
 
 const POLL_THREADS_MS = 8000;
@@ -100,6 +102,7 @@ export default function Chat() {
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState(null); // { id, body }
   const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null); // newest real message _id (cursor for brand-new rows)
@@ -383,7 +386,17 @@ export default function Chat() {
         <aside className={`w-full sm:w-[20rem] sm:border-r border-ui-line flex-col min-h-0 ${activePhone ? 'hidden sm:flex' : 'flex'}`}>
           <div className="p-3 border-b border-ui-line">
             <h1 className="font-display text-lg text-ui-brand flex items-center gap-2 mb-2 px-1">
-              <MessagesSquare size={20} /> Chat
+              <MessagesSquare size={20} />
+              <span className="flex-1">Chat</span>
+              <button
+                type="button"
+                onClick={() => setAiSettingsOpen(true)}
+                className="w-8 h-8 rounded-lg text-ui-muted hover:text-ui-brand hover:bg-ui-brand/10 flex items-center justify-center"
+                aria-label="AI assistant settings"
+                title="AI assistant settings"
+              >
+                <Bot size={17} />
+              </button>
             </h1>
             <div className="relative">
               <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ui-muted" />
@@ -590,6 +603,8 @@ export default function Chat() {
           )}
         </section>
       </div>
+
+      {aiSettingsOpen && <ChatAiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
     </div>
   );
 }
@@ -610,12 +625,19 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
     <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`relative max-w-[78%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
-          mine ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'
+          mine
+            ? m.isAiReply
+              ? 'bg-[#E4E9FF] rounded-tr-none'
+              : 'bg-[#DCF8C6] rounded-tr-none'
+            : 'bg-white rounded-tl-none'
         }`}
         dir="auto"
       >
-        {mine && m.senderName && !deleted && (
-          <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
+        {mine && !deleted && (m.isAiReply || m.senderName) && (
+          <div className="text-[11px] font-semibold text-[#075E54] mb-0.5 flex items-center gap-1">
+            {m.isAiReply && <Bot size={11} className="text-[#4A5BD4]" />}
+            <span className={m.isAiReply ? 'text-[#4A5BD4]' : ''}>{m.isAiReply ? 'AI auto-reply' : m.senderName}</span>
+          </div>
         )}
 
         {deleted ? (

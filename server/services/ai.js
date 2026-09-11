@@ -169,7 +169,10 @@ async function callAnthropic({ text, image }) {
     .join('\n');
 }
 
-async function callGemini({ text }) {
+// systemPrompt is overridable so other Gemini-backed features (the chat
+// auto-reply assistant) can reuse this same request/error/parsing plumbing
+// with their own instructions, instead of duplicating the axios call.
+async function callGemini({ text, systemPrompt = SYSTEM_PROMPT }) {
   if (!process.env.GEMINI_API_KEY) {
     const err = new Error(
       'AI extraction is not configured. Add a free GEMINI_API_KEY from https://aistudio.google.com/apikey to server/.env.'
@@ -183,7 +186,7 @@ async function callGemini({ text }) {
     const res = await axios.post(
       geminiUrl(GEMINI_MODEL),
       {
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: text || 'Extract the order.' }] }],
         generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
       },
@@ -338,4 +341,11 @@ module.exports = {
   get MODEL() {
     return provider() === 'gemini' ? GEMINI_MODEL : ANTHROPIC_MODEL;
   },
+  // Reused by the chat auto-reply assistant (server/services/chatAi.js),
+  // which is deliberately Gemini-only (free tier) rather than following
+  // AI_PROVIDER/ANTHROPIC_API_KEY like order extraction does.
+  callGemini,
+  parseJsonBlock,
+  isGeminiConfigured: () => Boolean(process.env.GEMINI_API_KEY),
+  GEMINI_MODEL,
 };

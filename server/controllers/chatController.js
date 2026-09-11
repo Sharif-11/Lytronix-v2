@@ -5,6 +5,8 @@ const notificationCenter = require('../services/notificationCenter');
 const webPush = require('../services/webPush');
 const logger = require('../services/logger');
 const sms = require('../services/sms');
+const chatAi = require('../services/chatAi');
+const ai = require('../services/ai');
 
 const MAX_BODY = 4000;
 // The customer always sees replies as coming from the brand — never an
@@ -16,9 +18,12 @@ const normPhone = (raw) => {
 };
 
 // Strip staff identity from admin messages before they reach the customer.
+// An AI auto-reply keeps its own sender label instead (set at creation —
+// see chatAi.js) so the customer can tell it was automated, rather than
+// being folded into the generic brand name like a human reply is.
 function forCustomer(messages) {
   return messages.map((m) =>
-    m.from === 'admin' ? { ...m, senderName: BRAND_SENDER } : m
+    m.from === 'admin' && !m.isAiReply ? { ...m, senderName: BRAND_SENDER } : m
   );
 }
 
@@ -236,6 +241,11 @@ exports.customerSend = async (req, res) => {
 
   logger.info('chat: customer message', { phoneLast4: thread.phone.slice(-4), type: c.type });
   res.status(201).json({ message: msg });
+
+  // Text-only, fire-and-forget — never delays or affects the response
+  // above. Image/voice messages never reach this: chatAi checks type/
+  // mediaUrl again itself, but the fast path is decided right here.
+  if (c.type === 'text') chatAi.maybeAutoReply(thread, msg);
 };
 
 // POST /api/chat/upload  (multipart: file) — image or voice note.
@@ -419,4 +429,29 @@ exports.updateThread = async (req, res) => {
   if (['open', 'closed'].includes(req.body.status)) thread.status = req.body.status;
   await thread.save();
   res.json({ phone: thread.phone, status: thread.status });
+};
+
+// ---------------------------------------------------------------------------
+// Chat AI assistant settings (admin)
+// ---------------------------------------------------------------------------
+
+// GET /api/chat/ai-settings
+exports.getAiSettings = async (req, res) => {
+  const settings = await chatAi.getSettings();
+  res.json({
+    enabled: settings.enabled,
+    knowledgeBase: settings.knowledgeBase,
+    geminiConfigured: ai.isGeminiConfigured(),
+    updatedAt: settings.updatedAt,
+  });
+};
+
+// PUT /api/chat/ai-settings   { enabled?, knowledgeBase? }
+exports.updateAiSettings = async (req, res) => {
+  const settings = await chatAi.updateSettings({
+    enabled: req.body.enabled,
+    knowledgeBase: req.body.knowledgeBase,
+    userId: req.user?._id,
+  });
+  res.json({ enabled: settings.enabled, knowledgeBase: settings.knowledgeBase, updatedAt: settings.updatedAt });
 };

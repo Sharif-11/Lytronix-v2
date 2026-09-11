@@ -6,6 +6,10 @@ const chatMessageSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true, index: true }, // denormalised for fast per-phone queries
     from: { type: String, enum: ['customer', 'admin'], required: true },
     senderName: { type: String, trim: true, default: '' },
+    // Set on messages the chat AI assistant auto-posted (from:'admin' still —
+    // it speaks as the shop) so the admin inbox can visibly flag them apart
+    // from a human reply and jump in if the answer needs correcting.
+    isAiReply: { type: Boolean, default: false },
 
     type: { type: String, enum: ['text', 'image', 'voice'], default: 'text' },
     body: { type: String, trim: true, default: '', maxlength: 4000 }, // caption / text
