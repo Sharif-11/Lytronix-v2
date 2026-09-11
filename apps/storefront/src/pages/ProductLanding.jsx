@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ShieldCheck, Truck, Timer, CheckCircle2, Copy, Check, Minus, Plus,
-  Smartphone, ImagePlus, Loader2, ArrowLeft, Zap,
+  Smartphone, ImagePlus, Loader2, ArrowLeft, Zap, ShoppingBag,
 } from 'lucide-react';
 import {
   getProduct, getPoliceStations, createOrder, uploadPaymentProof, recordProductView,
@@ -48,6 +48,14 @@ export default function ProductLanding() {
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   const formRef = useRef(null);
+  const nameInputRef = useRef(null);
+  const submitBtnRef = useRef(null);
+  // A Facebook ad click usually lands on mobile, where the order form sits
+  // well below the fold (gallery, then title/price, then the description,
+  // then this). A sticky bottom bar keeps "order now" reachable at all
+  // times, and hides itself once the real submit button is already visible
+  // so it never sits redundantly on top of it.
+  const [showFloatingCta, setShowFloatingCta] = useState(true);
 
   // Autosave the in-progress order form (guest-only page) so a reload doesn't
   // wipe a half-filled form. Restored silently. Address is shared across
@@ -90,6 +98,22 @@ export default function ProductLanding() {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
     getPaymentMeta().then((m) => setBkashAutoOn(Boolean(m.bkashAutomated)));
   }, []);
+
+  // Hide the floating "order now" bar once the real submit button scrolls
+  // into view — no need for a duplicate CTA once the actual one is visible.
+  useEffect(() => {
+    if (status !== 'ok' || !submitBtnRef.current) return undefined;
+    const obs = new IntersectionObserver(([entry]) => setShowFloatingCta(!entry.isIntersecting), {
+      rootMargin: '0px 0px -10% 0px',
+    });
+    obs.observe(submitBtnRef.current);
+    return () => obs.disconnect();
+  }, [status]);
+
+  const scrollToOrderForm = () => {
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => nameInputRef.current?.focus(), 450);
+  };
 
   const unitPrice = product?.price || 0;
   const perUnitDelivery = product?.deliveryCharge || 0;
@@ -248,7 +272,7 @@ export default function ProductLanding() {
 
   return (
     <Shell>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-10 overflow-x-clip">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-10 pb-24 sm:pb-10 overflow-x-clip">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
           {/* Gallery */}
           <div className="md:sticky md:top-6 self-start min-w-0">
@@ -325,6 +349,7 @@ export default function ProductLanding() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label="পূর্ণ নাম" required>
                   <input
+                    ref={nameInputRef}
                     className="input font-bangla" dir="auto" placeholder="আপনার নাম"
                     value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
@@ -446,6 +471,7 @@ export default function ProductLanding() {
               </div>
 
               <button
+                ref={submitBtnRef}
                 type="submit"
                 disabled={submitting || outOfStock}
                 className="btn-primary w-full min-w-0 py-3 text-sm sm:text-base gap-2 text-center leading-tight"
@@ -472,6 +498,28 @@ export default function ProductLanding() {
           </div>
         </div>
       </div>
+
+      {/* Mobile-only floating "order now" bar — an ad click usually lands
+          here well above the actual form, so this keeps the order button
+          reachable at all times and jumps straight to the form on tap.
+          Hides itself once the real submit button is already on screen. */}
+      {showFloatingCta && (
+        <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 bg-white border-t border-ui-line shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-4 py-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex items-center gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] text-ui-muted uppercase tracking-wide leading-none">মোট</div>
+            <div className="font-mono font-semibold text-ui-ink leading-tight truncate">{formatMoney(grandTotal)}</div>
+          </div>
+          <button
+            type="button"
+            onClick={scrollToOrderForm}
+            disabled={outOfStock}
+            className="btn-primary flex-1 min-w-0 py-2.5 gap-1.5 disabled:opacity-50"
+          >
+            <ShoppingBag size={16} />
+            {outOfStock ? 'স্টকে নেই' : 'অর্ডার করুন'}
+          </button>
+        </div>
+      )}
     </Shell>
   );
 }
