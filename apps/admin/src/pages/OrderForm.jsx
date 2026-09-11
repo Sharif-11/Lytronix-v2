@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { User, Package, Wallet, Truck, ArrowLeft } from 'lucide-react';
 import { getProducts, getOrder, createOrder, updateOrder, getSuggestedStatuses, getPoliceStations } from '../api/client';
@@ -40,6 +40,18 @@ export default function OrderForm() {
   const [createdOrder, setCreatedOrder] = useState(null); // set once, right after a successful create — drives the "book courier?" modal
   const { phoneticOn } = usePhonetic(); // universal — set once from the navbar, applies here too
 
+  // Which customer fields the admin has actually typed/picked by hand, vs.
+  // ones only ever set by an AI-assist apply or a restored autosave draft.
+  // applyDraft uses this (not "is it non-empty") to decide what's safe to
+  // overwrite — otherwise a field left over from an earlier, wrongly-matched
+  // AI attempt (or a stale restored draft) would silently block a correct
+  // re-extraction from ever filling it in.
+  const touchedFieldsRef = useRef(new Set());
+  const touchCustomer = (field, value) => {
+    touchedFieldsRef.current.add(field);
+    setCustomer((c) => ({ ...c, [field]: value }));
+  };
+
   // Autosave a new-order form so navigating away mid-entry doesn't lose it.
   // Create-mode only — never restore over a loaded order.
   const orderFormDraft = useMemo(
@@ -50,7 +62,15 @@ export default function OrderForm() {
     'admin-order-new',
     orderFormDraft,
     (d) => {
-      if (d.customer) setCustomer((c) => ({ ...c, ...d.customer }));
+      if (d.customer) {
+        // Restored data is the admin's own from an earlier session — mark
+        // every non-blank field touched so a later AI-assist apply treats
+        // it like anything else they typed, not a blank slate to overwrite.
+        for (const [field, value] of Object.entries(d.customer)) {
+          if (value) touchedFieldsRef.current.add(field);
+        }
+        setCustomer((c) => ({ ...c, ...d.customer }));
+      }
       if (Array.isArray(d.items)) setItems(d.items);
       if (d.orderDiscount !== undefined) setOrderDiscount(d.orderDiscount);
       if (d.deliveryChargeOverride !== undefined) setDeliveryChargeOverride(d.deliveryChargeOverride);
@@ -80,17 +100,17 @@ export default function OrderForm() {
   const namePhonetic = usePhoneticField({
     enabled: phoneticOn,
     value: customer.name,
-    onChangeValue: (v) => setCustomer((c) => ({ ...c, name: v })),
+    onChangeValue: (v) => touchCustomer('name', v),
   });
   const addressPhonetic = usePhoneticField({
     enabled: phoneticOn,
     value: customer.address,
-    onChangeValue: (v) => setCustomer((c) => ({ ...c, address: v })),
+    onChangeValue: (v) => touchCustomer('address', v),
   });
   const commentsPhonetic = usePhoneticField({
     enabled: phoneticOn,
     value: customer.comments,
-    onChangeValue: (v) => setCustomer((c) => ({ ...c, comments: v })),
+    onChangeValue: (v) => touchCustomer('comments', v),
   });
   const draftNamePhonetic = usePhoneticField({
     enabled: phoneticOn,
@@ -129,18 +149,25 @@ export default function OrderForm() {
       .finally(() => setLoading(false));
   }, [id, isEdit]);
 
-  // Prefill the form from an AI-extracted draft. Only fills blanks / appends
-  // items — it never clobbers something the admin already typed.
+  // Prefill the form from an AI-extracted draft. Fields the admin has typed
+  // or picked by hand are never overwritten; anything else (blank, or only
+  // ever set by a previous AI apply / restored autosave draft) takes the
+  // new extraction's value whenever it has one — so re-running AI-assist
+  // with better input always gets to correct its own earlier guess.
   const applyDraft = (d) => {
     const dc = d.customer || {};
-    setCustomer((c) => ({
-      name: c.name || dc.name || '',
-      phone: c.phone || dc.phone || '',
-      zilla: c.zilla || dc.zilla || '',
-      thana: c.thana || dc.thana || '',
-      address: c.address || dc.address || '',
-      comments: d.notes ? (c.comments ? `${c.comments}\n${d.notes}` : d.notes) : c.comments,
-    }));
+    const touched = touchedFieldsRef.current;
+    setCustomer((c) => {
+      const merge = (field) => (touched.has(field) ? c[field] || dc[field] || '' : dc[field] || c[field] || '');
+      return {
+        name: merge('name'),
+        phone: merge('phone'),
+        zilla: merge('zilla'),
+        thana: merge('thana'),
+        address: merge('address'),
+        comments: d.notes ? (c.comments ? `${c.comments}\n${d.notes}` : d.notes) : c.comments,
+      };
+    });
     if (Array.isArray(d.items) && d.items.length) {
       setItems((prev) => [
         ...prev,
@@ -301,14 +328,14 @@ export default function OrderForm() {
                 dir="auto"
                 lang="bn"
                 value={customer.name}
-                onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                onChange={(e) => touchCustomer('name', e.target.value)}
                 onKeyDown={namePhonetic.onKeyDown}
                 onClick={namePhonetic.onClick}
                 onBlur={namePhonetic.onBlur}
               />
             </Field>
             <Field label="Phone number" required mobileFull>
-              <input className="input" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
+              <input className="input" value={customer.phone} onChange={(e) => touchCustomer('phone', e.target.value)} />
             </Field>
 
             {/* Custom, searchable pickers — not the OS-native <select>, which
@@ -318,7 +345,11 @@ export default function OrderForm() {
                 placeholder={districts.length ? 'Select district…' : 'Loading districts…'}
                 loading={!districts.length}
                 value={customer.zilla}
-                onChange={(v) => setCustomer({ ...customer, zilla: v, thana: '' })}
+                onChange={(v) => {
+                  touchedFieldsRef.current.add('zilla');
+                  touchedFieldsRef.current.delete('thana'); // district changed — thana no longer decided
+                  setCustomer((c) => ({ ...c, zilla: v, thana: '' }));
+                }}
                 options={districtOptions}
               />
             </Field>
@@ -328,7 +359,7 @@ export default function OrderForm() {
                 disabledHint="Pick a district first"
                 disabled={!customer.zilla}
                 value={customer.thana}
-                onChange={(v) => setCustomer({ ...customer, thana: v })}
+                onChange={(v) => touchCustomer('thana', v)}
                 options={thanaOptions}
               />
             </Field>
@@ -340,7 +371,7 @@ export default function OrderForm() {
                 lang="bn"
                 rows={2}
                 value={customer.address}
-                onChange={(e) => setCustomer({ ...customer, address: e.target.value })}
+                onChange={(e) => touchCustomer('address', e.target.value)}
                 onKeyDown={addressPhonetic.onKeyDown}
                 onClick={addressPhonetic.onClick}
                 onBlur={addressPhonetic.onBlur}
@@ -354,7 +385,7 @@ export default function OrderForm() {
                 rows={2}
                 placeholder="আপনার কোনো কিছু বলার থাকলে বলুন"
                 value={customer.comments}
-                onChange={(e) => setCustomer({ ...customer, comments: e.target.value })}
+                onChange={(e) => touchCustomer('comments', e.target.value)}
                 onKeyDown={commentsPhonetic.onKeyDown}
                 onClick={commentsPhonetic.onClick}
                 onBlur={commentsPhonetic.onBlur}
