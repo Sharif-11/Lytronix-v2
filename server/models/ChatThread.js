@@ -22,6 +22,13 @@ const chatThreadSchema = new mongoose.Schema(
     unreadForAdmin: { type: Number, default: 0 },
     unreadForCustomer: { type: Number, default: 0 },
 
+    // Last time each side pinged "I'm typing" (see chatController's
+    // customerTyping/adminTyping). Read as "currently typing" only while
+    // recent — see TYPING_TTL_MS — so a side that stopped typing without
+    // sending anything doesn't show as typing forever.
+    customerTypingAt: { type: Date, default: null },
+    adminTypingAt: { type: Date, default: null },
+
     status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
   },
   { timestamps: true }

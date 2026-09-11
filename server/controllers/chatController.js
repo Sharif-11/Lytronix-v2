@@ -9,6 +9,13 @@ const chatAi = require('../services/chatAi');
 const ai = require('../services/ai');
 
 const MAX_BODY = 4000;
+// A typing ping older than this reads as "stopped typing" — long enough to
+// survive a gap between debounced pings (each side pings at most every ~2s
+// while actively typing) and a poll cycle (admin polls every 3s, the
+// storefront widget every 4s while open), short enough to clear promptly
+// once someone actually stops.
+const TYPING_TTL_MS = 6000;
+const isTypingRecently = (at) => Boolean(at) && Date.now() - new Date(at).getTime() < TYPING_TTL_MS;
 // The customer always sees replies as coming from the brand — never an
 // individual staff member's name or number.
 const BRAND_SENDER = 'Lytronix';
@@ -187,7 +194,21 @@ exports.customerMessages = async (req, res) => {
   const messages = forCustomer(
     await messagesSince(thread, { after: req.query.after, updatedAfter: req.query.updatedAfter })
   );
-  res.json({ messages, unreadForCustomer: thread.unreadForCustomer });
+  res.json({
+    messages,
+    unreadForCustomer: thread.unreadForCustomer,
+    adminTyping: isTypingRecently(thread.adminTypingAt),
+  });
+};
+
+// POST /api/chat/typing   { phone?, guestKey? }
+// Fire-and-forget ping from the customer's input box — debounced client-side
+// to roughly one call per ~2s of active typing, not per keystroke.
+exports.customerTyping = async (req, res) => {
+  const r = await customerThread(req);
+  if (r.error) return res.status(r.error).json({ message: r.message });
+  await ChatThread.updateOne({ _id: r.thread._id }, { customerTypingAt: new Date() });
+  res.json({ ok: true });
 };
 
 // POST /api/chat/send   { phone?, guestKey?, body?, type?, mediaUrl?, mediaMime?, durationSec? }
@@ -212,6 +233,7 @@ exports.customerSend = async (req, res) => {
   thread.lastMessageAt = msg.createdAt;
   thread.lastMessagePreview = previewFor(c);
   thread.lastMessageFrom = 'customer';
+  thread.customerTypingAt = null; // the message itself supersedes the typing indicator
   thread.unreadForAdmin += 1;
   if (thread.status === 'closed') thread.status = 'open';
   await thread.save();
@@ -339,7 +361,25 @@ exports.adminMessages = async (req, res) => {
   }
 
   const messages = await messagesSince(thread, { after: req.query.after, updatedAfter: req.query.updatedAfter });
-  res.json({ messages, thread: { phone: thread.phone, name: thread.name, status: thread.status, unreadForAdmin: 0 } });
+  res.json({
+    messages,
+    thread: {
+      phone: thread.phone,
+      name: thread.name,
+      status: thread.status,
+      unreadForAdmin: 0,
+      customerTyping: isTypingRecently(thread.customerTypingAt),
+    },
+  });
+};
+
+// POST /api/chat/threads/:phone/typing
+// Fire-and-forget ping from the admin's reply box — debounced client-side.
+exports.adminTypingPing = async (req, res) => {
+  const thread = await adminThread(req.params.phone);
+  if (!thread) return res.status(404).json({ message: 'Thread not found.' });
+  await ChatThread.updateOne({ _id: thread._id }, { adminTypingAt: new Date() });
+  res.json({ ok: true });
 };
 
 // POST /api/chat/threads/:phone/messages   { body }
@@ -363,6 +403,7 @@ exports.adminSend = async (req, res) => {
   thread.lastMessageAt = msg.createdAt;
   thread.lastMessagePreview = previewFor(c);
   thread.lastMessageFrom = 'admin';
+  thread.adminTypingAt = null; // the message itself supersedes the typing indicator
   thread.unreadForCustomer += 1;
   await thread.save();
 

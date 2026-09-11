@@ -269,6 +269,9 @@ export const getChatMessages = (phone, params) =>
   client.get(`/chat/threads/${phone}/messages`, { params, skipErrorModal: true }).then((r) => r.data);
 export const sendChatMessage = (phone, payload) =>
   client.post(`/chat/threads/${phone}/messages`, payload).then((r) => r.data);
+// Fire-and-forget — a failed typing ping is never worth surfacing to the admin.
+export const sendChatTyping = (phone) =>
+  client.post(`/chat/threads/${phone}/typing`, {}, { skipErrorModal: true }).catch(() => {});
 export const editChatMessage = (phone, id, body) =>
   client.patch(`/chat/threads/${phone}/messages/${id}`, { body }).then((r) => r.data);
 export const deleteChatMessage = (phone, id) =>

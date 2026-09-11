@@ -22,6 +22,7 @@ import {
   getChatThreads,
   getChatMessages,
   sendChatMessage,
+  sendChatTyping,
   editChatMessage,
   deleteChatMessage,
   updateChatThread,
@@ -103,10 +104,12 @@ export default function Chat() {
   const [editing, setEditing] = useState(null); // { id, body }
   const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [customerTyping, setCustomerTyping] = useState(false);
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null); // newest real message _id (cursor for brand-new rows)
   const updatedAtRef = useRef(null); // newest updatedAt seen (cursor for changed rows)
+  const lastTypingPingRef = useRef(0); // throttle our own "I'm typing" pings
 
   const activeThread = threads.find((t) => t.phone === activePhone) || null;
 
@@ -140,6 +143,7 @@ export default function Chat() {
       setMessages([]);
       lastIdRef.current = null;
       updatedAtRef.current = null;
+      setCustomerTyping(false);
       return undefined;
     }
     let alive = true;
@@ -149,14 +153,16 @@ export default function Chat() {
     lastIdRef.current = null;
     updatedAtRef.current = null;
     setMessages([]);
+    setCustomerTyping(false);
 
     const tick = async (initial) => {
       try {
-        const { messages: fresh } = await getChatMessages(activePhone, {
+        const { messages: fresh, thread } = await getChatMessages(activePhone, {
           after: lastIdRef.current || undefined,
           updatedAfter: updatedAtRef.current || undefined,
         });
         if (!alive) return;
+        setCustomerTyping(Boolean(thread?.customerTyping));
         absorb(fresh);
         if (initial) loadThreads(); // reflect the now-zeroed unread badge
       } catch {
@@ -176,7 +182,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, customerTyping]);
 
   const openThread = (phone) => setParams(phone ? { phone } : {}, { replace: true });
 
@@ -222,6 +228,16 @@ export default function Chat() {
     setDraft('');
     await pushMessage({ type: 'text', body });
     setSending(false);
+  };
+
+  // Throttled to roughly once per ~2.5s of active typing — not per keystroke.
+  const onDraftChange = (value) => {
+    setDraft(value);
+    if (!value.trim() || !activePhone) return;
+    const now = Date.now();
+    if (now - lastTypingPingRef.current < 2500) return;
+    lastTypingPingRef.current = now;
+    sendChatTyping(activePhone);
   };
 
   const copyMsg = async (m) => {
@@ -502,6 +518,7 @@ export default function Chat() {
                     />
                   )
                 )}
+                {customerTyping && <TypingBubble />}
               </div>
 
               {editing ? (
@@ -570,7 +587,7 @@ export default function Chat() {
                     className="flex-1 resize-none max-h-28 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
                     placeholder="Type a reply…"
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={(e) => onDraftChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -716,6 +733,23 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function TypingBubble() {
+  return (
+    <div className="flex justify-start">
+      <style>{`@keyframes lx-admin-typing{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-3px);opacity:.9}}`}</style>
+      <div className="bg-white rounded-lg rounded-tl-none px-3 py-2.5 shadow-sm inline-flex items-center gap-1">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="w-1.5 h-1.5 rounded-full bg-black/40"
+            style={{ animation: 'lx-admin-typing 1.2s infinite ease-in-out', animationDelay: `${i * 0.16}s` }}
+          />
+        ))}
       </div>
     </div>
   );

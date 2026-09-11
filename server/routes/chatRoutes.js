@@ -28,6 +28,7 @@ const onUploadError = (err, req, res, next) => {
 router.post('/start', attachCustomer, asyncHandler(ctrl.startChat));
 router.get('/messages', attachCustomer, asyncHandler(ctrl.customerMessages));
 router.post('/send', attachCustomer, asyncHandler(ctrl.customerSend));
+router.post('/typing', attachCustomer, asyncHandler(ctrl.customerTyping));
 router.patch('/messages/:id', attachCustomer, asyncHandler(ctrl.customerEditMessage));
 router.delete('/messages/:id', attachCustomer, asyncHandler(ctrl.customerDeleteMessage));
 
@@ -43,6 +44,7 @@ router.post(
 router.get('/threads', protect, authorize('customers:manage'), asyncHandler(ctrl.listThreads));
 router.get('/threads/:phone/messages', protect, authorize('customers:manage'), asyncHandler(ctrl.adminMessages));
 router.post('/threads/:phone/messages', protect, authorize('customers:manage'), asyncHandler(ctrl.adminSend));
+router.post('/threads/:phone/typing', protect, authorize('customers:manage'), asyncHandler(ctrl.adminTypingPing));
 router.patch('/threads/:phone/messages/:id', protect, authorize('customers:manage'), asyncHandler(ctrl.adminEditMessage));
 router.delete('/threads/:phone/messages/:id', protect, authorize('customers:manage'), asyncHandler(ctrl.adminDeleteMessage));
 router.patch('/threads/:phone', protect, authorize('customers:manage'), asyncHandler(ctrl.updateThread));

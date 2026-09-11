@@ -18,6 +18,7 @@ import {
   chatStart,
   chatMessages,
   chatSend,
+  chatTyping,
   chatUploadMedia,
   chatEditMessage,
   chatDeleteMessage,
@@ -95,8 +96,8 @@ export default function ChatWidget({ hint = '' }) {
   const [recSecs, setRecSecs] = useState(0);
   const [editing, setEditing] = useState(null); // { id, body }
   const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
-  const [typing, setTyping] = useState(false); // show the "…" bubble just before an admin reply renders
-  const typingTimerRef = useRef(null);
+  const [typing, setTyping] = useState(false); // real signal: is the admin actively typing right now?
+  const lastTypingPingRef = useRef(0); // throttle our own "I'm typing" pings
 
   const bodyRef = useRef(null);
   const lastIdRef = useRef(null);
@@ -170,13 +171,16 @@ export default function ChatWidget({ hint = '' }) {
   const poll = async (s = session) => {
     if (!s?.phone) return;
     try {
-      const { messages: fresh } = await chatMessages({
+      const { messages: fresh, adminTyping } = await chatMessages({
         phone: s.phone,
         guestKey: s.guestKey,
         after: lastIdRef.current || undefined,
         updatedAfter: updatedAtRef.current || undefined,
         seen: openRef.current ? 1 : undefined,
       });
+      // Real signal, not cosmetic — read every poll regardless of whether
+      // there are new messages, since "typing" usually precedes one.
+      setTyping(Boolean(adminTyping) && openRef.current);
       if (!fresh?.length) return;
 
       // Which of these are genuinely new (not just a receipt/edit update)?
@@ -191,19 +195,7 @@ export default function ChatWidget({ hint = '' }) {
         }
       }
 
-      // A brand-new admin reply, panel open → show a "typing…" bubble for a
-      // beat, then reveal the message. Purely cosmetic.
-      const adminIncoming = brandNew.some((m) => m.from === 'admin');
-      if (adminIncoming && openRef.current) {
-        setTyping(true);
-        clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = setTimeout(() => {
-          setTyping(false);
-          setMessages((prev) => mergeMessages(prev, fresh));
-        }, 850);
-      } else {
-        setMessages((prev) => mergeMessages(prev, fresh));
-      }
+      setMessages((prev) => mergeMessages(prev, fresh));
 
       if (!openRef.current) {
         const adminNewMsgs = brandNew.filter(
@@ -267,7 +259,6 @@ export default function ChatWidget({ hint = '' }) {
       setEditing(null);
       setMenuFor(null);
       setTyping(false);
-      clearTimeout(typingTimerRef.current);
     }
   }, [open]);
 
@@ -382,6 +373,16 @@ export default function ChatWidget({ hint = '' }) {
     setDraft('');
     await pushMessage({ type: 'text', body });
     setSending(false);
+  };
+
+  // Throttled to roughly once per ~2.5s of active typing — not per keystroke.
+  const onDraftChange = (value) => {
+    setDraft(value);
+    if (!value.trim() || !session?.phone) return;
+    const now = Date.now();
+    if (now - lastTypingPingRef.current < 2500) return;
+    lastTypingPingRef.current = now;
+    chatTyping({ phone: session.phone, guestKey: session.guestKey });
   };
 
   const auth = () => ({ phone: session?.phone, guestKey: session?.guestKey });
@@ -749,7 +750,7 @@ export default function ChatWidget({ hint = '' }) {
                     className="flex-1 resize-none max-h-24 rounded-2xl bg-white border border-black/10 px-3.5 py-2 text-sm outline-none focus:border-[#075E54]/40 font-bangla"
                     placeholder="মেসেজ লিখুন…"
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={(e) => onDraftChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
