@@ -16,6 +16,7 @@ export default function AiOrderAssist({ onApply }) {
   const [image, setImage] = useState(null); // { preview, base64, mediaType }
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState(null);
+  const [applied, setApplied] = useState(false);
   const [cfg, setCfg] = useState({ configured: true, imageSupported: false }); // optimistic until loaded
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function AiOrderAssist({ onApply }) {
     }
     setLoading(true);
     setDraft(null);
+    setApplied(false);
     try {
       const { draft: d } = await aiExtractOrder({
         text: text.trim() || undefined,
@@ -74,8 +76,16 @@ export default function AiOrderAssist({ onApply }) {
   const apply = () => {
     if (!draft) return;
     onApply(draft);
-    setOpen(false);
+    setApplied(true);
+    // Deliberately leave the panel open with the pasted input and the
+    // extracted draft both still visible — the admin needs to compare the
+    // two while reviewing the filled-in form, not have them vanish the
+    // moment "Fill the form" is clicked.
+  };
+
+  const startNew = () => {
     setDraft(null);
+    setApplied(false);
     setText('');
     setImage(null);
   };
@@ -211,11 +221,18 @@ export default function AiOrderAssist({ onApply }) {
                 </p>
               )}
               {draft.notes && <p className="text-ui-faint text-xs">Note: {draft.notes}</p>}
-              <div className="pt-1">
+              <div className="pt-1 flex flex-wrap items-center gap-2">
                 <button type="button" onClick={apply} className="btn-primary">
-                  Fill the form ↓
+                  {applied ? 'Re-fill the form ↓' : 'Fill the form ↓'}
                 </button>
-                <span className="text-xs text-ui-muted ml-2">Review everything before saving.</span>
+                <button type="button" onClick={startNew} className="text-xs text-ui-muted underline">
+                  Clear &amp; start a new one
+                </button>
+                {applied ? (
+                  <span className="text-xs text-ui-brand">Applied — compare against the pasted text above before saving.</span>
+                ) : (
+                  <span className="text-xs text-ui-muted">Review everything before saving.</span>
+                )}
               </div>
             </div>
           )}

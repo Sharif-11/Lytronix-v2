@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 const logger = require('./logger');
 const { resolveZillaThana } = require('./geoResolve');
 
@@ -22,6 +23,51 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || process.env.AI_MODEL || '
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const geminiUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+// Same pasted text (a retried extraction, a double-click, the admin flipping
+// back to a previous order tab and back) re-hits the paid/free-tier API for
+// an identical result otherwise. Cache the normalised draft in memory, keyed
+// on the exact input (+ provider/model, since a config change should bypass
+// a stale cache entry), for a short TTL — long enough to absorb retries in
+// one sitting, short enough that a correction to the pasted text is never
+// stuck behind a stale answer.
+const AI_CACHE_TTL_MS = (Number(process.env.AI_CACHE_TTL_MINUTES) || 15) * 60 * 1000;
+const aiCache = new Map(); // key -> { data, expiresAt }
+
+function aiCacheKey({ text, image }) {
+  const h = crypto.createHash('sha256');
+  h.update(provider());
+  h.update('|');
+  h.update(provider() === 'gemini' ? GEMINI_MODEL : ANTHROPIC_MODEL);
+  h.update('|');
+  h.update(String(text || ''));
+  if (image) {
+    h.update('|img|');
+    h.update(image.media_type || '');
+    h.update(image.data || '');
+  }
+  return h.digest('hex');
+}
+
+function aiCacheGet(key) {
+  const hit = aiCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    aiCache.delete(key);
+    return null;
+  }
+  return hit.data;
+}
+
+function aiCacheSet(key, data) {
+  aiCache.set(key, { data, expiresAt: Date.now() + AI_CACHE_TTL_MS });
+  // Opportunistic cleanup so a long-running server doesn't accumulate
+  // expired entries forever — cheap since extraction calls are infrequent.
+  if (aiCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of aiCache) if (now > v.expiresAt) aiCache.delete(k);
+  }
+}
 
 function provider() {
   const explicit = String(process.env.AI_PROVIDER || '').toLowerCase();
@@ -196,6 +242,13 @@ async function extractOrder({ text, image }) {
     throw err;
   }
 
+  const cacheKey = aiCacheKey({ text, image });
+  const cached = aiCacheGet(cacheKey);
+  if (cached) {
+    logger.info('ai.extractOrder: cache hit', { provider: p });
+    return cached;
+  }
+
   logger.info('ai.extractOrder: request received', { provider: p, hasText: Boolean(text), hasImage: Boolean(image) });
 
   // Provider-call failures (bad key, rate limit, network) already carry a
@@ -222,6 +275,7 @@ async function extractOrder({ text, image }) {
     zillaMatched: result.customer.zillaMatched,
     thanaMatched: result.customer.thanaMatched,
   });
+  aiCacheSet(cacheKey, result);
   return result;
 }
 
