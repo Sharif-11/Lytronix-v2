@@ -6,18 +6,18 @@ const { protect, authorize } = require('../middleware/auth');
 const { attachCustomer } = require('../middleware/customerAuth');
 const ctrl = require('../controllers/chatController');
 
-const MEDIA_MAX_BYTES = 8 * 1024 * 1024; // 8MB — covers a photo or a short voice note
+const MEDIA_MAX_BYTES = 20 * 1024 * 1024; // 20MB — covers a photo, a voice note, or a short video clip
 const mediaUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MEDIA_MAX_BYTES },
   fileFilter: (req, file, cb) => {
-    if (/^(image|audio)\//.test(file.mimetype)) return cb(null, true);
-    cb(new Error('Only images and voice notes can be attached.'));
+    if (/^(image|audio|video)\//.test(file.mimetype)) return cb(null, true);
+    cb(new Error('Only images, voice notes, and videos can be attached.'));
   },
 });
 const onUploadError = (err, req, res, next) => {
   if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ message: 'File is too large — the limit is 8MB.' });
+    return res.status(400).json({ message: 'File is too large — the limit is 20MB.' });
   }
   if (err) return res.status(400).json({ message: err.message });
   next();

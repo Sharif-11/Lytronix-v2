@@ -13,6 +13,9 @@ import {
   Copy,
   Pencil,
   Trash2,
+  Video,
+  Music,
+  UploadCloud,
 } from 'lucide-react';
 import {
   chatStart,
@@ -49,8 +52,12 @@ function saveSession(s) {
 }
 
 const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+const DROP_MAX_BYTES = 20 * 1024 * 1024; // matches the server's chat-upload limit
 const previewOf = (m) =>
-  m.type === 'image' ? '📷 ছবি' : m.type === 'voice' ? '🎤 ভয়েস মেসেজ' : (m.body || '').slice(0, 120);
+  m.type === 'image' ? '📷 ছবি' :
+  m.type === 'voice' ? '🎤 ভয়েস মেসেজ' :
+  m.type === 'video' ? '🎥 ভিডিও' :
+  (m.body || '').slice(0, 120);
 
 const isRealId = (id) => /^[a-f\d]{24}$/i.test(String(id || ''));
 
@@ -92,6 +99,13 @@ export default function ChatWidget({ hint = '' }) {
   const [toast, setToast] = useState(null); // { text } — small popup when a reply arrives with the panel closed
   const [attaching, setAttaching] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
+  // Whole-panel drag & drop, WhatsApp-style: dropping files never sends
+  // them immediately — they queue as pending previews (image/video/audio)
+  // until the customer explicitly hits Send.
+  const [dragActive, setDragActive] = useState(false);
+  const [pendingDrops, setPendingDrops] = useState([]); // [{ id, file, kind, previewUrl }]
+  const [sendingDrops, setSendingDrops] = useState(false);
+  const dragCounterRef = useRef(0);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
   const [editing, setEditing] = useState(null); // { id, body }
@@ -459,6 +473,80 @@ export default function ChatWidget({ hint = '' }) {
     }
   };
 
+  const kindForFile = (file) =>
+    file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'voice';
+
+  // dragCounterRef survives dragenter/dragleave firing on every child
+  // element as the pointer moves over them — without it the overlay would
+  // flicker on/off while dragging across the panel instead of staying up
+  // the whole time a file is over it.
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    dragCounterRef.current += 1;
+    setDragActive(true);
+  };
+  const onDragOver = (e) => {
+    e.preventDefault(); // required, or the browser refuses the drop entirely
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setDragActive(false);
+  };
+  const onDropFiles = (e) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setDragActive(false);
+    if (!session?.phone) return; // no started chat to attach to
+
+    const dropped = Array.from(e.dataTransfer?.files || []);
+    const accepted = dropped.filter((f) => /^(image|video|audio)\//.test(f.type) && f.size <= DROP_MAX_BYTES);
+    const skipped = dropped.length - accepted.length;
+    if (skipped) setError(`${skipped}টি ফাইল বাদ দেওয়া হয়েছে — ছবি, ভিডিও ও অডিও, সর্বোচ্চ ২০ MB।`);
+    if (!accepted.length) return;
+
+    const withPreviews = accepted.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      kind: kindForFile(file),
+      previewUrl: file.type.startsWith('audio/') ? '' : URL.createObjectURL(file),
+    }));
+    setPendingDrops((prev) => [...prev, ...withPreviews]);
+  };
+
+  const removePendingDrop = (id) => {
+    setPendingDrops((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+  const cancelPendingDrops = () => {
+    pendingDrops.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+    setPendingDrops([]);
+  };
+
+  const sendPendingDrops = async () => {
+    if (!pendingDrops.length || sendingDrops || !session?.phone) return;
+    setSendingDrops(true);
+    const queue = pendingDrops;
+    setPendingDrops([]);
+    try {
+      for (const item of queue) {
+        // eslint-disable-next-line no-await-in-loop
+        const { url, mime } = await chatUploadMedia(item.file, session?.phone, session?.guestKey);
+        // eslint-disable-next-line no-await-in-loop
+        await pushMessage({ type: item.kind, mediaUrl: url, mediaMime: mime });
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'ফাইল পাঠানো যায়নি।');
+    } finally {
+      setSendingDrops(false);
+    }
+  };
+
   const startRec = async () => {
     if (recording) return;
     setError('');
@@ -595,7 +683,21 @@ export default function ChatWidget({ hint = '' }) {
 
       {/* Panel */}
       {open && (
-        <div className="fixed inset-0 sm:inset-auto sm:right-5 sm:bottom-5 z-50 sm:w-[24rem] sm:h-[34rem] sm:rounded-2xl overflow-hidden shadow-floating flex flex-col bg-[#ECE5DD]">
+        <div
+          className="fixed inset-0 sm:inset-auto sm:right-5 sm:bottom-5 z-50 sm:w-[24rem] sm:h-[34rem] sm:rounded-2xl overflow-hidden shadow-floating flex flex-col bg-[#ECE5DD]"
+          onDragEnter={onDragEnter}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDropFiles}
+        >
+          {dragActive && (
+            <div className="absolute inset-0 z-30 bg-ui-brand/10 border-4 border-dashed border-ui-brand flex items-center justify-center pointer-events-none">
+              <div className="bg-white rounded-2xl shadow-floating px-5 py-4 flex flex-col items-center gap-2 text-center mx-4">
+                <UploadCloud size={28} className="text-ui-brand" />
+                <span className="text-sm font-medium text-ui-ink">এখানে ছেড়ে দিন — ছবি, ভিডিও বা অডিও পাঠাতে</span>
+              </div>
+            </div>
+          )}
           {/* Header */}
           <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
             <button onClick={() => setOpen(false)} className="sm:hidden -ml-1 p-1" aria-label="বন্ধ করুন">
@@ -676,7 +778,50 @@ export default function ChatWidget({ hint = '' }) {
                   {error}
                 </div>
               )}
-              {editing ? (
+              {pendingDrops.length > 0 ? (
+                <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-ui-muted font-bangla">{pendingDrops.length}টি ফাইল পাঠানোর জন্য প্রস্তুত</span>
+                    <button type="button" onClick={cancelPendingDrops} className="text-xs text-ui-rust hover:underline font-bangla">
+                      বাতিল করুন
+                    </button>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {pendingDrops.map((p) => (
+                      <div key={p.id} className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden border border-black/10 bg-white">
+                        {p.kind === 'image' && <img src={p.previewUrl} alt="" className="w-full h-full object-cover" />}
+                        {p.kind === 'video' && (
+                          <div className="w-full h-full flex items-center justify-center bg-black/5 text-black/50">
+                            <Video size={20} />
+                          </div>
+                        )}
+                        {p.kind === 'voice' && (
+                          <div className="w-full h-full flex items-center justify-center bg-black/5 text-black/50">
+                            <Music size={20} />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removePendingDrop(p.id)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-black/10 text-ui-rust flex items-center justify-center shadow-sm"
+                          aria-label="Remove"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={sendPendingDrops}
+                    disabled={sendingDrops}
+                    className="w-full h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center gap-2 text-sm font-medium font-bangla disabled:opacity-60"
+                  >
+                    {sendingDrops ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    {sendingDrops ? 'পাঠানো হচ্ছে…' : `পাঠান (${pendingDrops.length})`}
+                  </button>
+                </div>
+              ) : editing ? (
                 <form onSubmit={submitEdit} className="shrink-0 bg-[#F0F0F0] px-2 py-2">
                   <div className="flex items-center justify-between px-1.5 pb-1 text-[11px] text-[#075E54]">
                     <span className="inline-flex items-center gap-1 font-medium font-bangla">
@@ -846,6 +991,9 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
             )}
             {m.type === 'voice' && m.mediaUrl && (
               <audio src={m.mediaUrl} controls preload="none" className="h-9 w-52 max-w-full mt-0.5" />
+            )}
+            {m.type === 'video' && m.mediaUrl && (
+              <video src={m.mediaUrl} controls preload="none" className="rounded-md max-h-56 w-auto" />
             )}
             {m.body && <span>{m.body}</span>}
           </>

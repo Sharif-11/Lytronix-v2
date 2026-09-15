@@ -11,9 +11,9 @@ const chatMessageSchema = new mongoose.Schema(
     // from a human reply and jump in if the answer needs correcting.
     isAiReply: { type: Boolean, default: false },
 
-    type: { type: String, enum: ['text', 'image', 'voice'], default: 'text' },
+    type: { type: String, enum: ['text', 'image', 'voice', 'video'], default: 'text' },
     body: { type: String, trim: true, default: '', maxlength: 4000 }, // caption / text
-    mediaUrl: { type: String, trim: true, default: '' }, // Cloudinary URL for image/voice
+    mediaUrl: { type: String, trim: true, default: '' }, // Cloudinary URL for image/voice/video
     mediaMime: { type: String, trim: true, default: '' },
     durationSec: { type: Number, default: 0 }, // voice length
 

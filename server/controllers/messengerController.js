@@ -5,9 +5,12 @@ const logger = require('../services/logger');
 const MAX_BODY = 4000;
 
 // Facebook attachments (image/audio/video/file/fallback) map onto the same
-// ChatMessage.type enum the storefront widget uses ('text'|'image'|'voice')
-// where there's a direct match; anything else becomes a short text note so
-// the message isn't silently dropped from the thread's history.
+// ChatMessage.type enum both apps use ('text'|'image'|'voice'|'video')
+// where there's a direct match; anything else (file/fallback) becomes a
+// short text note so the message isn't silently dropped from history.
+// Note: mediaUrl here is Facebook's own CDN link, not a Cloudinary one —
+// it isn't covered by chatCleanup.js's Cloudinary-attachment deletion,
+// only by the message row itself aging out.
 function contentFromMessengerEvent(evt) {
   if (evt.attachment?.url) {
     if (evt.attachment.type === 'image') {
@@ -16,8 +19,11 @@ function contentFromMessengerEvent(evt) {
     if (evt.attachment.type === 'audio') {
       return { type: 'voice', body: '', mediaUrl: evt.attachment.url, mediaMime: 'audio/mpeg', durationSec: 0 };
     }
-    // video/file/fallback — no matching ChatMessage type; keep a text note
-    // with the link rather than drop the message entirely.
+    if (evt.attachment.type === 'video') {
+      return { type: 'video', body: '', mediaUrl: evt.attachment.url, mediaMime: 'video/mp4', durationSec: 0 };
+    }
+    // file/fallback — no matching ChatMessage type; keep a text note with
+    // the link rather than drop the message entirely.
     return { type: 'text', body: `[${evt.attachment.type} attachment] ${evt.attachment.url}`.slice(0, MAX_BODY), mediaUrl: '', mediaMime: '', durationSec: 0 };
   }
   const body = String(evt.text || '').trim().slice(0, MAX_BODY);

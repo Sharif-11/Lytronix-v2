@@ -70,11 +70,16 @@ function uploadVideoBuffer(buffer, folder) {
   });
 }
 
-// Chat attachment (image or voice note). Audio goes in as a Cloudinary
-// "video" resource, same as product clips.
+// Chat attachment: image, voice note, or video clip. Cloudinary only has
+// two resource types that matter here — 'image' and 'video' (audio files
+// are stored under 'video' too) — so anything that isn't an image goes
+// through uploadVideoBuffer. Previously this sent real video mimetypes
+// through uploadBuffer (resource_type: 'image'), which Cloudinary rejects
+// for actual video files — harmless before now since video wasn't an
+// accepted upload type yet (see chatRoutes.js), but wrong on its own terms.
 function uploadChatMedia(buffer, mime, folder = 'lytronix/chat') {
-  const isAudio = String(mime || '').startsWith('audio/');
-  return isAudio ? uploadVideoBuffer(buffer, folder) : uploadBuffer(buffer, folder);
+  const isImage = String(mime || '').startsWith('image/');
+  return isImage ? uploadBuffer(buffer, folder) : uploadVideoBuffer(buffer, folder);
 }
 
 function destroy(publicId, resourceType = 'image') {

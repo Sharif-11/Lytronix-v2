@@ -37,7 +37,7 @@ function forCustomer(messages) {
 
 // Pull the media/text fields off a send request into a message payload.
 function contentFrom(reqBody) {
-  const type = ['image', 'voice'].includes(reqBody.type) ? reqBody.type : 'text';
+  const type = ['image', 'voice', 'video'].includes(reqBody.type) ? reqBody.type : 'text';
   const body = String(reqBody.body || '').trim().slice(0, MAX_BODY);
   const mediaUrl = type === 'text' ? '' : String(reqBody.mediaUrl || '').trim();
   if (type !== 'text' && !/^https?:\/\//.test(mediaUrl)) return { error: 'A valid attachment URL is required.' };
@@ -53,7 +53,10 @@ function contentFrom(reqBody) {
 
 const previewFor = (c) => {
   if (c.deletedAt) return 'এই মেসেজটি মুছে ফেলা হয়েছে';
-  return c.type === 'image' ? '📷 ছবি' : c.type === 'voice' ? '🎤 ভয়েস মেসেজ' : String(c.body || '').slice(0, 120);
+  if (c.type === 'image') return '📷 ছবি';
+  if (c.type === 'voice') return '🎤 ভয়েস মেসেজ';
+  if (c.type === 'video') return '🎥 ভিডিও';
+  return String(c.body || '').slice(0, 120);
 };
 
 // Rows the caller doesn't have yet: brand-new ones (`_id > after`) plus any
