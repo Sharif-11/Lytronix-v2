@@ -10,7 +10,6 @@ import {
   Mic,
   Check,
   CheckCheck,
-  MoreVertical,
   Copy,
   Pencil,
   Trash2,
@@ -56,6 +55,7 @@ function saveSession(s) {
 
 const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
 const DROP_MAX_BYTES = 20 * 1024 * 1024; // matches the server's chat-upload limit
+const LONG_PRESS_MS = 450; // press-and-hold a message to open its action menu
 const previewOf = (m) =>
   m.type === 'image' ? '📷 ছবি' :
   m.type === 'voice' ? '🎤 ভয়েস মেসেজ' :
@@ -1180,14 +1180,34 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
   const deleted = Boolean(m.deletedAt);
   const canAct = mine && !deleted && !m.pending && !m.failed;
   const [lightboxIdx, setLightboxIdx] = useState(null); // index into m.media, or null when closed
+  const pressTimerRef = useRef(null);
+
+  // Press-and-hold the message itself opens the action menu — no separate
+  // three-dot button to hunt for. A normal tap on the bubble's own content
+  // (an image link, the album grid, audio controls) still works exactly
+  // as before: the timer starts on press but gets cleared on release well
+  // under LONG_PRESS_MS for anything that isn't an actual hold.
+  const startPress = () => {
+    if (!canAct) return;
+    clearTimeout(pressTimerRef.current);
+    pressTimerRef.current = setTimeout(onToggleMenu, LONG_PRESS_MS);
+  };
+  const cancelPress = () => clearTimeout(pressTimerRef.current);
 
   return (
-    <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`relative max-w-[80%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
           mine ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'
         }`}
         dir="auto"
+        onMouseDown={startPress}
+        onMouseUp={cancelPress}
+        onMouseLeave={cancelPress}
+        onTouchStart={startPress}
+        onTouchEnd={cancelPress}
+        onTouchMove={cancelPress}
+        onContextMenu={(e) => canAct && e.preventDefault()}
       >
         {!mine && m.senderName && !deleted && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
@@ -1224,21 +1244,6 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
           {mine && !m.pending && !m.failed && !deleted && <Ticks m={m} />}
         </span>
 
-        {canAct && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleMenu();
-            }}
-            className={`absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white shadow border border-black/5 text-black/50 flex items-center justify-center transition-opacity ${
-              menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-            }`}
-            aria-label="মেসেজ অপশন"
-          >
-            <MoreVertical size={13} />
-          </button>
-        )}
 
         {canAct && menuOpen && (
           <div className="absolute z-20 top-5 right-0 min-w-[8.5rem] bg-white rounded-xl shadow-floating border border-black/10 py-1 text-[13px] text-ui-ink font-bangla">
