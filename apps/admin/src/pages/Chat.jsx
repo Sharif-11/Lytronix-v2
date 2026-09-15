@@ -109,7 +109,8 @@ export default function Chat() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState(null); // { id, body }
-  const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
+  const [menuFor, setMenuFor] = useState(null); // message _id currently selected (long-pressed)
+  const selectedMsg = useMemo(() => messages.find((m) => m._id === menuFor) || null, [messages, menuFor]);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [customerTyping, setCustomerTyping] = useState(false);
 
@@ -635,37 +636,62 @@ export default function Chat() {
             </div>
           ) : (
             <>
-              <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
-                <button onClick={() => openThread('')} className="sm:hidden -ml-1 p-1" aria-label="Back">
-                  <ArrowLeft size={20} />
-                </button>
-                <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center font-semibold shrink-0">
-                  {(activeThread?.name || (activeThread?.channel === 'messenger' ? 'M' : activePhone))[0].toUpperCase()}
+              {selectedMsg ? (
+                // WhatsApp-style selection bar: replaces the header while a
+                // long-pressed message is selected, actions live up here
+                // instead of a dropdown pinned to the bubble.
+                <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
+                  <button onClick={() => setMenuFor(null)} className="-ml-1 p-1" aria-label="Cancel selection">
+                    <X size={20} />
+                  </button>
+                  <div className="flex-1" />
+                  {selectedMsg.body && (
+                    <button onClick={() => copyMsg(selectedMsg)} className="p-1.5" aria-label="Copy">
+                      <Copy size={19} />
+                    </button>
+                  )}
+                  {selectedMsg.type === 'text' && (
+                    <button onClick={() => startEdit(selectedMsg)} className="p-1.5" aria-label="Edit">
+                      <Pencil size={19} />
+                    </button>
+                  )}
+                  <button onClick={() => deleteMsg(selectedMsg)} className="p-1.5" aria-label="Delete">
+                    <Trash2 size={19} />
+                  </button>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
-                    {activeThread?.name || (activeThread?.channel === 'messenger' ? 'Messenger ইউজার' : activePhone)}
-                    {activeThread?.channel === 'messenger' && (
-                      <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-white/20 rounded-full px-1.5 py-0.5">
-                        Messenger
-                      </span>
+              ) : (
+                <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
+                  <button onClick={() => openThread('')} className="sm:hidden -ml-1 p-1" aria-label="Back">
+                    <ArrowLeft size={20} />
+                  </button>
+                  <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center font-semibold shrink-0">
+                    {(activeThread?.name || (activeThread?.channel === 'messenger' ? 'M' : activePhone))[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
+                      {activeThread?.name || (activeThread?.channel === 'messenger' ? 'Messenger ইউজার' : activePhone)}
+                      {activeThread?.channel === 'messenger' && (
+                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-white/20 rounded-full px-1.5 py-0.5">
+                          Messenger
+                        </span>
+                      )}
+                    </div>
+                    {activeThread?.channel === 'messenger' ? (
+                      <span className="text-[11px] text-white/70 leading-tight">কোনো ফোন নম্বর নেই — শুধু Messenger</span>
+                    ) : (
+                      <a href={`tel:${activePhone}`} className="text-[11px] text-white/70 leading-tight inline-flex items-center gap-1">
+                        <Phone size={11} /> {activePhone}
+                      </a>
                     )}
                   </div>
-                  {activeThread?.channel === 'messenger' ? (
-                    <span className="text-[11px] text-white/70 leading-tight">কোনো ফোন নম্বর নেই — শুধু Messenger</span>
-                  ) : (
-                    <a href={`tel:${activePhone}`} className="text-[11px] text-white/70 leading-tight inline-flex items-center gap-1">
-                      <Phone size={11} /> {activePhone}
-                    </a>
-                  )}
+                  <button
+                    onClick={toggleClosed}
+                    className="text-[11px] bg-white/15 hover:bg-white/25 rounded-full px-2.5 py-1 transition-colors"
+                  >
+                    {activeThread?.status === 'closed' ? 'Reopen' : 'Close'}
+                  </button>
                 </div>
-                <button
-                  onClick={toggleClosed}
-                  className="text-[11px] bg-white/15 hover:bg-white/25 rounded-full px-2.5 py-1 transition-colors"
-                >
-                  {activeThread?.status === 'closed' ? 'Reopen' : 'Close'}
-                </button>
-              </div>
+              )}
 
               <div
                 ref={bodyRef}
@@ -689,9 +715,6 @@ export default function Chat() {
                       m={row.m}
                       menuOpen={menuFor === row.m._id}
                       onToggleMenu={() => setMenuFor((cur) => (cur === row.m._id ? null : row.m._id))}
-                      onCopy={() => copyMsg(row.m)}
-                      onEdit={() => startEdit(row.m)}
-                      onDelete={() => deleteMsg(row.m)}
                     />
                   )
                 )}
@@ -867,7 +890,7 @@ function Ticks({ m }) {
 
 const LONG_PRESS_MS = 450;
 
-function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
+function Bubble({ m, menuOpen, onToggleMenu }) {
   const mine = m.from === 'admin';
   const deleted = Boolean(m.deletedAt);
   const canAct = mine && !deleted && !m.pending && !m.failed;
@@ -895,7 +918,7 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
               ? 'bg-[#E4E9FF] rounded-tr-none'
               : 'bg-[#DCF8C6] rounded-tr-none'
             : 'bg-white rounded-tl-none'
-        }`}
+        } ${menuOpen ? 'outline outline-2 outline-ui-brand/50' : ''}`}
         dir="auto"
         onMouseDown={startPress}
         onMouseUp={cancelPress}
@@ -903,8 +926,10 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
         onTouchStart={startPress}
         onTouchEnd={cancelPress}
         onTouchMove={cancelPress}
+        onClick={(e) => menuOpen && e.stopPropagation()} // selected: swallow taps so the body's clear-on-click doesn't fire before the top bar's own buttons do
         onContextMenu={(e) => canAct && e.preventDefault()} // don't let the browser's own long-press menu (e.g. on a link/image) beat ours to it
       >
+        {menuOpen && <div className="absolute inset-0 rounded-lg bg-ui-brand/10 pointer-events-none" />}
         {mine && !deleted && (m.isAiReply || m.senderName) && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5 flex items-center gap-1">
             {m.isAiReply && <Bot size={11} className="text-[#4A5BD4]" />}
@@ -937,46 +962,6 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
           {mine && !m.pending && !m.failed && !deleted && <Ticks m={m} />}
         </span>
-
-
-        {canAct && menuOpen && (
-          <div className="absolute z-20 top-5 right-0 min-w-[9rem] bg-white rounded-xl shadow-floating border border-ui-line py-1 text-[13px] text-ui-ink">
-            {m.body && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCopy();
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2"
-              >
-                <Copy size={13} /> Copy
-              </button>
-            )}
-            {m.type === 'text' && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2"
-              >
-                <Pencil size={13} /> Edit
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="w-full text-left px-3 py-1.5 hover:bg-ui-bg flex items-center gap-2 text-ui-rust"
-            >
-              <Trash2 size={13} /> Delete
-            </button>
-          </div>
-        )}
       </div>
 
       {lightboxIdx !== null && m.media && (

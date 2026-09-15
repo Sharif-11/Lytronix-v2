@@ -114,7 +114,8 @@ export default function ChatWidget({ hint = '' }) {
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
   const [editing, setEditing] = useState(null); // { id, body }
-  const [menuFor, setMenuFor] = useState(null); // message _id whose action menu is open
+  const [menuFor, setMenuFor] = useState(null); // message _id currently selected (long-pressed)
+  const selectedMsg = useMemo(() => messages.find((m) => m._id === menuFor) || null, [messages, menuFor]);
   const [typing, setTyping] = useState(false); // real signal: is the admin actively typing right now?
   const lastTypingPingRef = useRef(0); // throttle our own "I'm typing" pings
 
@@ -757,21 +758,46 @@ export default function ChatWidget({ hint = '' }) {
             </div>
           )}
           {/* Header */}
-          <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
-            <button onClick={() => setOpen(false)} className="sm:hidden -ml-1 p-1" aria-label="বন্ধ করুন">
-              <ArrowLeft size={20} />
-            </button>
-            <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center overflow-hidden shrink-0">
-              <img src={logoMark} alt="" className="w-6 h-6 object-contain" />
+          {selectedMsg ? (
+            // WhatsApp-style selection bar: replaces the header while a
+            // long-pressed message is selected, actions live up here
+            // instead of a dropdown pinned to the bubble.
+            <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
+              <button onClick={() => setMenuFor(null)} className="-ml-1 p-1" aria-label="বাতিল">
+                <X size={20} />
+              </button>
+              <div className="flex-1" />
+              {selectedMsg.body && (
+                <button onClick={() => copyMsg(selectedMsg)} className="p-1.5" aria-label="কপি">
+                  <Copy size={19} />
+                </button>
+              )}
+              {selectedMsg.type === 'text' && (
+                <button onClick={() => startEdit(selectedMsg)} className="p-1.5" aria-label="এডিট">
+                  <Pencil size={19} />
+                </button>
+              )}
+              <button onClick={() => deleteMsg(selectedMsg)} className="p-1.5" aria-label="ডিলিট">
+                <Trash2 size={19} />
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-sm leading-tight">Lytronix সাপোর্ট</div>
-              <div className="text-[11px] text-white/70 leading-tight">সাধারণত দ্রুত উত্তর দেওয়া হয়</div>
+          ) : (
+            <div className="bg-[#075E54] text-white px-3 py-2.5 flex items-center gap-3 shrink-0">
+              <button onClick={() => setOpen(false)} className="sm:hidden -ml-1 p-1" aria-label="বন্ধ করুন">
+                <ArrowLeft size={20} />
+              </button>
+              <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center overflow-hidden shrink-0">
+                <img src={logoMark} alt="" className="w-6 h-6 object-contain" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-sm leading-tight">Lytronix সাপোর্ট</div>
+                <div className="text-[11px] text-white/70 leading-tight">সাধারণত দ্রুত উত্তর দেওয়া হয়</div>
+              </div>
+              <button onClick={() => setOpen(false)} className="hidden sm:block p-1" aria-label="বন্ধ করুন">
+                <X size={18} />
+              </button>
             </div>
-            <button onClick={() => setOpen(false)} className="hidden sm:block p-1" aria-label="বন্ধ করুন">
-              <X size={18} />
-            </button>
-          </div>
+          )}
 
           {/* Body */}
           {!hasSession ? (
@@ -821,9 +847,6 @@ export default function ChatWidget({ hint = '' }) {
                       m={row.m}
                       menuOpen={menuFor === row.m._id}
                       onToggleMenu={() => setMenuFor((cur) => (cur === row.m._id ? null : row.m._id))}
-                      onCopy={() => copyMsg(row.m)}
-                      onEdit={() => startEdit(row.m)}
-                      onDelete={() => deleteMsg(row.m)}
                     />
                   )
                 )}
@@ -1175,7 +1198,7 @@ function TypingBubble() {
   );
 }
 
-function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
+function Bubble({ m, menuOpen, onToggleMenu }) {
   const mine = m.from === 'customer';
   const deleted = Boolean(m.deletedAt);
   const canAct = mine && !deleted && !m.pending && !m.failed;
@@ -1199,7 +1222,7 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
       <div
         className={`relative max-w-[80%] rounded-lg px-2.5 py-1.5 shadow-sm text-sm leading-snug whitespace-pre-wrap break-words font-bangla ${
           mine ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'
-        }`}
+        } ${menuOpen ? 'outline outline-2 outline-ui-brand/50' : ''}`}
         dir="auto"
         onMouseDown={startPress}
         onMouseUp={cancelPress}
@@ -1207,8 +1230,10 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
         onTouchStart={startPress}
         onTouchEnd={cancelPress}
         onTouchMove={cancelPress}
+        onClick={(e) => menuOpen && e.stopPropagation()}
         onContextMenu={(e) => canAct && e.preventDefault()}
       >
+        {menuOpen && <div className="absolute inset-0 rounded-lg bg-ui-brand/10 pointer-events-none" />}
         {!mine && m.senderName && !deleted && (
           <div className="text-[11px] font-semibold text-[#075E54] mb-0.5">{m.senderName}</div>
         )}
@@ -1243,46 +1268,6 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
           {m.pending ? '…' : m.failed ? '⚠' : timeStr(m.createdAt)}
           {mine && !m.pending && !m.failed && !deleted && <Ticks m={m} />}
         </span>
-
-
-        {canAct && menuOpen && (
-          <div className="absolute z-20 top-5 right-0 min-w-[8.5rem] bg-white rounded-xl shadow-floating border border-black/10 py-1 text-[13px] text-ui-ink font-bangla">
-            {m.body && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCopy();
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2"
-              >
-                <Copy size={13} /> কপি
-              </button>
-            )}
-            {m.type === 'text' && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2"
-              >
-                <Pencil size={13} /> এডিট
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="w-full text-left px-3 py-1.5 hover:bg-black/5 flex items-center gap-2 text-ui-rust"
-            >
-              <Trash2 size={13} /> ডিলিট
-            </button>
-          </div>
-        )}
       </div>
 
       {lightboxIdx !== null && m.media && (
