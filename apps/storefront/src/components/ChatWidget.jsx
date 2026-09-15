@@ -1112,10 +1112,10 @@ function ChatLightbox({ media, startIndex, onClose }) {
   const cur = media[idx];
 
   return createPortal(
-    <div className="fixed inset-0 z-[999] bg-black/92 flex flex-col" onClick={onClose}>
+    <div className="fixed inset-0 z-[999] bg-black/80 backdrop-blur-md flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between px-4 h-14 text-white/90 shrink-0">
         <span className="text-sm font-mono">{idx + 1} / {media.length}</span>
-        <button type="button" onClick={onClose} aria-label="বন্ধ করুন" className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center">
+        <button type="button" onClick={onClose} aria-label="বন্ধ করুন" className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
           <X size={20} />
         </button>
       </div>
