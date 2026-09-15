@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { emitError } from '../lib/errorBus';
 
 // In dev, Vite proxies /api -> http://localhost:5000 (see vite.config.js).
 // In production, set VITE_API_URL to the deployed API's base URL.
@@ -57,7 +58,20 @@ client.interceptors.response.use(
         refreshing = null;
         clearShopTokens();
         window.dispatchEvent(new CustomEvent('lytronix:logout'));
+        return Promise.reject(err);
       }
+    }
+
+    // Every other failed request surfaces as a proper modal (see
+    // ErrorModalHost) instead of a bare inline red box — a call site can
+    // opt out with { skipErrorModal: true } in the axios config when it
+    // already handles the error inline (a field-level validation message,
+    // an OTP retry, etc.) and a duplicate popup would just be noise.
+    if (!cfg.skipErrorModal && !axios.isCancel(err)) {
+      const message =
+        err.response?.data?.message ||
+        (err.request && !err.response ? 'সার্ভারে পৌঁছানো যাচ্ছে না। ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।' : 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+      emitError(message);
     }
     return Promise.reject(err);
   }
@@ -76,13 +90,17 @@ export const getCategory = (slug) => client.get(`/categories/${slug}`).then((r) 
 
 // ---- Customer auth (phone + OTP, or optional password) ----
 export const requestOtp = (phone) =>
-  client.post('/auth/customer/request-otp', { phone }).then((r) => r.data);
+  client.post('/auth/customer/request-otp', { phone }, { skipErrorModal: true }).then((r) => r.data);
 export const verifyOtp = (phone, code) =>
-  client.post('/auth/customer/verify-otp', { phone, code }).then((r) => r.data);
+  client.post('/auth/customer/verify-otp', { phone, code }, { skipErrorModal: true }).then((r) => r.data);
 export const passwordLogin = (phone, password) =>
-  client.post('/auth/customer/login', { phone, password }, { _skipAuth: true }).then((r) => r.data);
+  client
+    .post('/auth/customer/login', { phone, password }, { _skipAuth: true, skipErrorModal: true })
+    .then((r) => r.data);
 export const forgotPassword = (phone) =>
-  client.post('/auth/customer/forgot-password', { phone }, { _skipAuth: true }).then((r) => r.data);
+  client
+    .post('/auth/customer/forgot-password', { phone }, { _skipAuth: true, skipErrorModal: true })
+    .then((r) => r.data);
 
 // ---- Account ----
 export const getMe = () => client.get('/account/me').then((r) => r.data);
@@ -162,10 +180,13 @@ export const getPoliceStations = async () => {
 };
 
 // ---- Public order tracking ----
-export const trackOrder = (trackingId) => client.get(`/track/${trackingId}`).then((r) => r.data);
+// skipErrorModal: a wrong/unknown tracking id or phone is an expected outcome
+// here, shown inline on the page rather than as a popup.
+export const trackOrder = (trackingId) =>
+  client.get(`/track/${trackingId}`, { skipErrorModal: true }).then((r) => r.data);
 // Guest "My orders": look up a phone number's orders (phone kept on-device).
 export const getGuestOrders = (phone) =>
-  client.post('/track/by-phone', { phone }).then((r) => r.data);
+  client.post('/track/by-phone', { phone }, { skipErrorModal: true }).then((r) => r.data);
 
 // ---- Live chat (storefront widget) ----
 export const chatStart = (phone, name) => client.post('/chat/start', { phone, name }).then((r) => r.data);

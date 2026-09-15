@@ -7,6 +7,7 @@ import { CustomerAuthProvider } from './context/CustomerAuthContext';
 import { CartProvider } from './context/CartContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { registerServiceWorker } from './lib/push';
+import ErrorModalHost from './components/ErrorModal';
 import './styles/index.css';
 
 // Register the push service worker so an installed PWA can get order-update
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <CartProvider>
             <ConfirmProvider>
               <App />
+              <ErrorModalHost />
             </ConfirmProvider>
           </CartProvider>
         </CustomerAuthProvider>
