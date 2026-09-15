@@ -8,6 +8,7 @@ import { CartProvider } from './context/CartContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { registerServiceWorker } from './lib/push';
 import ErrorModalHost from './components/ErrorModal';
+import OfflineModalHost from './components/OfflineModal';
 import './styles/index.css';
 
 // Register the push service worker so an installed PWA can get order-update
@@ -24,6 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <ConfirmProvider>
               <App />
               <ErrorModalHost />
+              <OfflineModalHost />
             </ConfirmProvider>
           </CartProvider>
         </CustomerAuthProvider>

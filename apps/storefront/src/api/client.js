@@ -67,7 +67,11 @@ client.interceptors.response.use(
     // opt out with { skipErrorModal: true } in the axios config when it
     // already handles the error inline (a field-level validation message,
     // an OTP retry, etc.) and a duplicate popup would just be noise.
-    if (!cfg.skipErrorModal && !axios.isCancel(err)) {
+    // Skip the network-fallback popup while the browser itself is offline —
+    // the dedicated OfflineModalHost already covers that, and firing both
+    // would just stack two overlapping modals for one root cause.
+    const isOffline = err.request && !err.response && !navigator.onLine;
+    if (!cfg.skipErrorModal && !axios.isCancel(err) && !isOffline) {
       const message =
         err.response?.data?.message ||
         (err.request && !err.response ? 'সার্ভারে পৌঁছানো যাচ্ছে না। ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।' : 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');

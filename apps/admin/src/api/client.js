@@ -62,7 +62,11 @@ client.interceptors.response.use(
     // opt out with { skipErrorModal: true } in the axios config when it
     // wants to handle the error entirely on its own (e.g. inline field
     // validation from the server).
-    if (!cfg.skipErrorModal && !cfg._authCheck && !axios.isCancel(err)) {
+    // Skip the network-fallback popup while the browser itself is offline —
+    // the dedicated OfflineModalHost already covers that, and firing both
+    // would just stack two overlapping modals for one root cause.
+    const isOffline = err.request && !err.response && !navigator.onLine;
+    if (!cfg.skipErrorModal && !cfg._authCheck && !axios.isCancel(err) && !isOffline) {
       const message =
         err.response?.data?.message ||
         (err.request && !err.response ? 'Could not reach the server. Check your connection and try again.' : 'Something went wrong. Please try again.');

@@ -8,6 +8,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import ErrorModalHost from './components/ErrorModal';
+import OfflineModalHost from './components/OfflineModal';
 import { registerServiceWorker } from './lib/push';
 import './styles/index.css';
 
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <ConfirmProvider>
                 <App />
                 <ErrorModalHost />
+                <OfflineModalHost />
               </ConfirmProvider>
             </PhoneticProvider>
           </NotificationProvider>
