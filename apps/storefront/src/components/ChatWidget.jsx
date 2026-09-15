@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MessageCircle,
   X,
@@ -16,6 +17,8 @@ import {
   Video,
   Music,
   UploadCloud,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   chatStart,
@@ -1008,7 +1011,7 @@ function Ticks({ m }) {
 // message-per-file flood. Shows up to 4 tiles; a 5th+ item collapses into
 // a "+N" overlay on the 4th so the bubble never grows unbounded.
 const ALBUM_VISIBLE = 4;
-function AlbumGrid({ media }) {
+function AlbumGrid({ media, onOpen }) {
   const visible = media.slice(0, ALBUM_VISIBLE);
   const overflow = media.length - ALBUM_VISIBLE;
   return (
@@ -1016,11 +1019,10 @@ function AlbumGrid({ media }) {
       {visible.map((item, i) => {
         const isLastVisible = i === ALBUM_VISIBLE - 1 && overflow > 0;
         return (
-          <a
+          <button
             key={item.url}
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
+            type="button"
+            onClick={() => onOpen(i)}
             className="relative aspect-square rounded-md overflow-hidden bg-black/5 block"
           >
             {item.type === 'image' && <img src={item.url} alt="" className="w-full h-full object-cover" />}
@@ -1042,10 +1044,116 @@ function AlbumGrid({ media }) {
                 +{overflow}
               </span>
             )}
-          </a>
+          </button>
         );
       })}
     </div>
+  );
+}
+
+const LIGHTBOX_SWIPE_THRESHOLD = 45; // px of horizontal travel before it counts as a swipe
+
+// Full-screen viewer for an album — arrows, swipe, and keyboard nav so
+// every item (not just the 4 visible tiles) is reachable, including the
+// ones collapsed behind AlbumGrid's "+N" overlay. Same fix as the
+// storefront's own product gallery lightbox (touchAction:none + the
+// fixed-body scroll lock — overflow:hidden alone doesn't reliably stop
+// the page moving under a touch drag on iOS Safari).
+function ChatLightbox({ media, startIndex, onClose }) {
+  const [idx, setIdx] = useState(startIndex);
+  const startRef = useRef(null);
+
+  const goTo = useCallback((n) => setIdx((c) => (n(c) + media.length) % media.length), [media.length]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') goTo((i) => i + 1);
+      else if (e.key === 'ArrowLeft') goTo((i) => i - 1);
+    };
+    window.addEventListener('keydown', onKey);
+
+    const scrollY = window.scrollY;
+    const body = document.body.style;
+    const prev = { position: body.position, top: body.top, left: body.left, right: body.right, overflow: body.overflow };
+    body.position = 'fixed';
+    body.top = `-${scrollY}px`;
+    body.left = '0';
+    body.right = '0';
+    body.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      body.position = prev.position;
+      body.top = prev.top;
+      body.left = prev.left;
+      body.right = prev.right;
+      body.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [onClose, goTo]);
+
+  const onTouchStart = (e) => {
+    startRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e) => {
+    const s = startRef.current;
+    startRef.current = null;
+    if (!s) return;
+    const dx = e.changedTouches[0].clientX - s.x;
+    const dy = e.changedTouches[0].clientY - s.y;
+    if (Math.abs(dx) > LIGHTBOX_SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+      goTo((i) => (dx < 0 ? i + 1 : i - 1));
+    } else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) {
+      onClose(); // swipe down to dismiss
+    }
+  };
+
+  const cur = media[idx];
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999] bg-black/92 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between px-4 h-14 text-white/90 shrink-0">
+        <span className="text-sm font-mono">{idx + 1} / {media.length}</span>
+        <button type="button" onClick={onClose} aria-label="বন্ধ করুন" className="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div
+        className="flex-1 flex items-center justify-center px-4 pb-4 min-h-0"
+        style={{ touchAction: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {cur.type === 'video' && <video src={cur.url} controls autoPlay className="max-h-full max-w-full rounded-lg" />}
+        {cur.type === 'voice' && <audio src={cur.url} controls className="w-72" />}
+        {cur.type === 'image' && <img src={cur.url} alt="" className="max-h-full max-w-full object-contain rounded-lg" draggable={false} />}
+      </div>
+
+      {media.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goTo((i) => i - 1); }}
+            aria-label="আগেরটি"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goTo((i) => i + 1); }}
+            aria-label="পরেরটি"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+          >
+            <ChevronRight size={24} />
+          </button>
+        </>
+      )}
+    </div>,
+    document.body
   );
 }
 
@@ -1071,6 +1179,7 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
   const mine = m.from === 'customer';
   const deleted = Boolean(m.deletedAt);
   const canAct = mine && !deleted && !m.pending && !m.failed;
+  const [lightboxIdx, setLightboxIdx] = useState(null); // index into m.media, or null when closed
 
   return (
     <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
@@ -1104,7 +1213,7 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
             {m.type === 'video' && m.mediaUrl && (
               <video src={m.mediaUrl} controls preload="none" className="rounded-md max-h-56 w-auto" />
             )}
-            {m.type === 'album' && m.media?.length > 0 && <AlbumGrid media={m.media} />}
+            {m.type === 'album' && m.media?.length > 0 && <AlbumGrid media={m.media} onOpen={setLightboxIdx} />}
             {m.body && <span>{m.body}</span>}
           </>
         )}
@@ -1170,6 +1279,10 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
           </div>
         )}
       </div>
+
+      {lightboxIdx !== null && m.media && (
+        <ChatLightbox media={m.media} startIndex={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      )}
     </div>
   );
 }
