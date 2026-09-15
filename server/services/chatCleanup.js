@@ -21,13 +21,17 @@ async function purgeOldChatMessages({ olderThanDays = RETENTION_DAYS } = {}) {
     const q = { thread: t._id, createdAt: { $lt: cutoff } };
     if (first) q._id = { $ne: first._id };
 
-    const old = await ChatMessage.find(q).select('_id mediaUrl').lean();
+    const old = await ChatMessage.find(q).select('_id mediaUrl media').lean();
     if (old.length === 0) continue;
 
     for (const m of old) {
-      if (m.mediaUrl) {
+      // A single attachment (image/voice/video) uses mediaUrl; an album
+      // (2+ files sent as one message) uses media[] instead — every item
+      // in it needs its own Cloudinary asset destroyed too.
+      const urls = m.mediaUrl ? [m.mediaUrl] : (m.media || []).map((x) => x.url);
+      for (const url of urls) {
         // eslint-disable-next-line no-await-in-loop
-        await cloudinary.destroyByUrl(m.mediaUrl).catch(() => {});
+        await cloudinary.destroyByUrl(url).catch(() => {});
         mediaRemoved += 1;
       }
     }

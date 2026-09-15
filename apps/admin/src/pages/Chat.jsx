@@ -199,6 +199,7 @@ export default function Chat() {
   const [dragActive, setDragActive] = useState(false);
   const [pendingDrops, setPendingDrops] = useState([]); // [{ id, file, kind, previewUrl }]
   const [sendingDrops, setSendingDrops] = useState(false);
+  const [dropUploadPct, setDropUploadPct] = useState(0);
   const dragCounterRef = useRef(0);
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
@@ -299,6 +300,9 @@ export default function Chat() {
     }
   };
 
+  // Several images picked at once become ONE album message (like
+  // WhatsApp), same as a multi-file drag-drop — not one message per file.
+  // uploadPct is a single byte-weighted percentage across every file.
   const onPickFile = async (e) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = '';
@@ -309,18 +313,33 @@ export default function Chat() {
     if (!images.length) return;
     setAttaching(true);
     setUploadPct(0);
+
+    const totalBytes = images.reduce((sum, f) => sum + f.size, 0) || 1;
+    const loadedByIndex = new Array(images.length).fill(0);
+    const reportProgress = () => {
+      const loaded = loadedByIndex.reduce((sum, n) => sum + n, 0);
+      setUploadPct(Math.min(99, Math.round((loaded / totalBytes) * 100)));
+    };
+
     try {
+      const uploaded = [];
       for (let i = 0; i < images.length; i += 1) {
-        const base = i / images.length;
         // eslint-disable-next-line no-await-in-loop
         const { url, mime } = await uploadChatMedia(images[i], {
           onUploadProgress: (ev) => {
-            if (!ev.total) return;
-            setUploadPct(Math.round((base + ev.loaded / ev.total / images.length) * 100));
+            loadedByIndex[i] = ev.total ? ev.loaded : 0;
+            reportProgress();
           },
         });
-        // eslint-disable-next-line no-await-in-loop
-        await pushMessage({ type: 'image', mediaUrl: url, mediaMime: mime });
+        loadedByIndex[i] = images[i].size;
+        reportProgress();
+        uploaded.push({ url, mime, type: 'image' });
+      }
+      setUploadPct(100);
+      if (uploaded.length === 1) {
+        await pushMessage({ type: 'image', mediaUrl: uploaded[0].url, mediaMime: uploaded[0].mime });
+      } else {
+        await pushMessage({ type: 'album', media: uploaded });
       }
     } catch {
       /* surfaced globally */
@@ -385,23 +404,59 @@ export default function Chat() {
     setPendingDrops([]);
   };
 
+  // Multiple files dropped/queued at once become ONE album message (like
+  // WhatsApp) instead of one message per file — uploaded first, sent only
+  // once every upload has finished. dropUploadPct is a single byte-weighted
+  // percentage across every file's upload, not a per-file count, since a
+  // few small images finishing instantly alongside one large video would
+  // otherwise make a naive "files done / total files" percentage lie.
   const sendPendingDrops = async () => {
     if (!pendingDrops.length || sendingDrops || !activePhone) return;
     setSendingDrops(true);
+    setDropUploadPct(0);
+    // Thumbnails intentionally stay visible (pendingDrops isn't cleared yet)
+    // for the whole upload, like WhatsApp's own send progress — only
+    // cleared below once the message is actually sent. On failure they're
+    // left in place so the admin can just hit Send again without re-
+    // picking the files.
     const queue = pendingDrops;
-    setPendingDrops([]);
+
+    const totalBytes = queue.reduce((sum, item) => sum + item.file.size, 0) || 1;
+    const loadedByIndex = new Array(queue.length).fill(0);
+    const reportProgress = () => {
+      const loaded = loadedByIndex.reduce((sum, n) => sum + n, 0);
+      setDropUploadPct(Math.min(99, Math.round((loaded / totalBytes) * 100)));
+    };
+
     try {
-      for (const item of queue) {
+      const uploaded = [];
+      for (let i = 0; i < queue.length; i += 1) {
+        const item = queue[i];
         // eslint-disable-next-line no-await-in-loop
-        const { url, mime } = await uploadChatMedia(item.file);
-        // eslint-disable-next-line no-await-in-loop
-        await pushMessage({ type: item.kind, mediaUrl: url, mediaMime: mime });
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        const { url, mime } = await uploadChatMedia(item.file, {
+          onUploadProgress: (ev) => {
+            loadedByIndex[i] = ev.total ? ev.loaded : 0;
+            reportProgress();
+          },
+        });
+        loadedByIndex[i] = item.file.size; // done, regardless of the last progress event's rounding
+        reportProgress();
+        uploaded.push({ url, mime, type: item.kind });
       }
+
+      setDropUploadPct(100);
+      if (uploaded.length === 1) {
+        await pushMessage({ type: uploaded[0].type, mediaUrl: uploaded[0].url, mediaMime: uploaded[0].mime });
+      } else {
+        await pushMessage({ type: 'album', media: uploaded });
+      }
+      queue.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+      setPendingDrops([]);
     } catch {
-      /* surfaced globally via the ErrorModal */
+      /* surfaced globally via the ErrorModal — pendingDrops left as-is so Send can be retried */
     } finally {
       setSendingDrops(false);
+      setDropUploadPct(0);
     }
   };
 
@@ -641,11 +696,11 @@ export default function Chat() {
                 {customerTyping && <TypingBubble />}
               </div>
 
-              {pendingDrops.length > 0 ? (
+              {pendingDrops.length > 0 || sendingDrops ? (
                 <div className="shrink-0 bg-[#F0F0F0] px-3 py-2.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-ui-muted">{pendingDrops.length}টি ফাইল পাঠানোর জন্য প্রস্তুত</span>
-                    <button type="button" onClick={cancelPendingDrops} className="text-xs text-ui-rust hover:underline">
+                    <button type="button" onClick={cancelPendingDrops} disabled={sendingDrops} className="text-xs text-ui-rust hover:underline disabled:opacity-40">
                       বাতিল করুন
                     </button>
                   </div>
@@ -666,7 +721,8 @@ export default function Chat() {
                         <button
                           type="button"
                           onClick={() => removePendingDrop(p.id)}
-                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-ui-line text-ui-rust flex items-center justify-center shadow-card"
+                          disabled={sendingDrops}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-ui-line text-ui-rust flex items-center justify-center shadow-card disabled:opacity-40"
                           aria-label="Remove"
                         >
                           <X size={11} />
@@ -674,6 +730,14 @@ export default function Chat() {
                       </div>
                     ))}
                   </div>
+                  {sendingDrops && (
+                    <div className="h-1.5 rounded-full bg-black/10 overflow-hidden">
+                      <div
+                        className="h-full bg-[#075E54] transition-[width] duration-200"
+                        style={{ width: `${dropUploadPct}%` }}
+                      />
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={sendPendingDrops}
@@ -681,7 +745,7 @@ export default function Chat() {
                     className="w-full h-10 rounded-full bg-[#075E54] text-white flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-60"
                   >
                     {sendingDrops ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    {sendingDrops ? 'পাঠানো হচ্ছে…' : `পাঠান (${pendingDrops.length})`}
+                    {sendingDrops ? `আপলোড হচ্ছে… ${dropUploadPct}%` : `পাঠান (${pendingDrops.length})`}
                   </button>
                 </div>
               ) : editing ? (
@@ -838,6 +902,7 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
             {m.type === 'video' && m.mediaUrl && (
               <video src={m.mediaUrl} controls className="rounded-md max-h-56 max-w-full" />
             )}
+            {m.type === 'album' && m.media?.length > 0 && <AlbumGrid media={m.media} />}
             {m.body && <span>{m.body}</span>}
           </>
         )}
@@ -903,6 +968,51 @@ function Bubble({ m, menuOpen, onToggleMenu, onCopy, onEdit, onDelete }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// A 2+ file message sent together — WhatsApp-style grid instead of a
+// message-per-file flood. Shows up to 4 tiles; a 5th+ item collapses into
+// a "+N" overlay on the 4th so the bubble never grows unbounded.
+const ALBUM_VISIBLE = 4;
+function AlbumGrid({ media }) {
+  const visible = media.slice(0, ALBUM_VISIBLE);
+  const overflow = media.length - ALBUM_VISIBLE;
+  return (
+    <div className="grid grid-cols-2 gap-1 w-56">
+      {visible.map((item, i) => {
+        const isLastVisible = i === ALBUM_VISIBLE - 1 && overflow > 0;
+        return (
+          <a
+            key={item.url}
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="relative aspect-square rounded-md overflow-hidden bg-black/5 block"
+          >
+            {item.type === 'image' && <img src={item.url} alt="" className="w-full h-full object-cover" />}
+            {item.type === 'video' && (
+              <>
+                <video src={item.url} className="w-full h-full object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                  <Video size={18} />
+                </span>
+              </>
+            )}
+            {item.type === 'voice' && (
+              <span className="absolute inset-0 flex items-center justify-center text-ui-muted">
+                <Music size={18} />
+              </span>
+            )}
+            {isLastVisible && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm font-semibold">
+                +{overflow}
+              </span>
+            )}
+          </a>
+        );
+      })}
     </div>
   );
 }

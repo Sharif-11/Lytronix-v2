@@ -35,8 +35,33 @@ function forCustomer(messages) {
   );
 }
 
+const MAX_ALBUM_ITEMS = 20;
+
 // Pull the media/text fields off a send request into a message payload.
+// An 'album' (2+ files sent together — a multi-file drag-drop or
+// multi-select) is validated separately: it needs `media`, an array of
+// { url, mime, type }, not the single mediaUrl/mediaMime/type fields.
 function contentFrom(reqBody) {
+  if (reqBody.type === 'album') {
+    const media = (Array.isArray(reqBody.media) ? reqBody.media : [])
+      .filter((m) => m && /^https?:\/\//.test(m.url) && ['image', 'voice', 'video'].includes(m.type))
+      .slice(0, MAX_ALBUM_ITEMS)
+      .map((m) => ({ url: String(m.url).trim(), mime: String(m.mime || '').slice(0, 80), type: m.type }));
+    // Exactly 2+ valid items or this isn't really an "album" — a single
+    // leftover item should have been sent as a plain image/voice/video
+    // message instead, so treat a malformed request as an error rather
+    // than silently accepting a one-item "album".
+    if (media.length < 2) return { error: 'An album needs at least two attachments.' };
+    return {
+      type: 'album',
+      body: String(reqBody.body || '').trim().slice(0, MAX_BODY),
+      media,
+      mediaUrl: '',
+      mediaMime: '',
+      durationSec: 0,
+    };
+  }
+
   const type = ['image', 'voice', 'video'].includes(reqBody.type) ? reqBody.type : 'text';
   const body = String(reqBody.body || '').trim().slice(0, MAX_BODY);
   const mediaUrl = type === 'text' ? '' : String(reqBody.mediaUrl || '').trim();
@@ -46,13 +71,19 @@ function contentFrom(reqBody) {
     type,
     body,
     mediaUrl,
+    media: [],
     mediaMime: type === 'text' ? '' : String(reqBody.mediaMime || '').slice(0, 80),
     durationSec: type === 'voice' ? Math.max(0, Math.min(600, Number(reqBody.durationSec) || 0)) : 0,
   };
 }
 
+const ALBUM_ICONS = { image: '📷', voice: '🎤', video: '🎥' };
 const previewFor = (c) => {
   if (c.deletedAt) return 'এই মেসেজটি মুছে ফেলা হয়েছে';
+  if (c.type === 'album') {
+    const icon = ALBUM_ICONS[c.media?.[0]?.type] || '📎';
+    return `${icon} ${c.media?.length || 0}টি ফাইল`;
+  }
   if (c.type === 'image') return '📷 ছবি';
   if (c.type === 'voice') return '🎤 ভয়েস মেসেজ';
   if (c.type === 'video') return '🎥 ভিডিও';
@@ -118,14 +149,17 @@ async function applyEdit(msg, thread, rawBody) {
 }
 
 async function applyDelete(msg, thread) {
-  if (msg.mediaUrl) {
-    await require('../services/cloudinary').destroyByUrl(msg.mediaUrl).catch(() => {});
+  const urls = msg.mediaUrl ? [msg.mediaUrl] : (msg.media || []).map((m) => m.url);
+  if (urls.length) {
+    const cloudinary = require('../services/cloudinary');
+    await Promise.all(urls.map((url) => cloudinary.destroyByUrl(url).catch(() => {})));
   }
   msg.deletedAt = new Date();
   msg.body = '';
   msg.mediaUrl = '';
   msg.mediaMime = '';
   msg.durationSec = 0;
+  msg.media = [];
   await msg.save();
   await refreshThreadPreview(thread);
 }

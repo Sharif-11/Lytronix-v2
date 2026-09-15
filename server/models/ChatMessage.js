@@ -11,11 +11,25 @@ const chatMessageSchema = new mongoose.Schema(
     // from a human reply and jump in if the answer needs correcting.
     isAiReply: { type: Boolean, default: false },
 
-    type: { type: String, enum: ['text', 'image', 'voice', 'video'], default: 'text' },
+    // 'album' = 2+ attachments sent together (e.g. a multi-file drag-drop)
+    // as ONE message, WhatsApp-style — see `media` below. A single-file
+    // send still uses 'image'/'voice'/'video' + mediaUrl exactly as before;
+    // 'album' only exists to avoid flooding the thread with one row per
+    // file when several were sent in the same batch.
+    type: { type: String, enum: ['text', 'image', 'voice', 'video', 'album'], default: 'text' },
     body: { type: String, trim: true, default: '', maxlength: 4000 }, // caption / text
-    mediaUrl: { type: String, trim: true, default: '' }, // Cloudinary URL for image/voice/video
+    mediaUrl: { type: String, trim: true, default: '' }, // Cloudinary URL for image/voice/video (not albums)
     mediaMime: { type: String, trim: true, default: '' },
     durationSec: { type: Number, default: 0 }, // voice length
+    // Only populated for type:'album' — every attachment in the batch.
+    media: [
+      {
+        _id: false,
+        url: { type: String, trim: true, required: true },
+        mime: { type: String, trim: true, default: '' },
+        type: { type: String, enum: ['image', 'voice', 'video'], required: true },
+      },
+    ],
 
     // WhatsApp-style receipts. "delivered" = the other side's client has
     // pulled the message; "read" = they actually had the conversation open.
@@ -30,10 +44,11 @@ const chatMessageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// A message must carry either text or media — unless it's a deleted tombstone.
+// A message must carry either text or media (a single attachment, or an
+// album of several) — unless it's a deleted tombstone.
 chatMessageSchema.pre('validate', function requireContent(next) {
   if (this.deletedAt) return next();
-  if (!String(this.body || '').trim() && !this.mediaUrl) {
+  if (!String(this.body || '').trim() && !this.mediaUrl && !(this.media && this.media.length)) {
     return next(new Error('A chat message needs text or an attachment.'));
   }
   next();
