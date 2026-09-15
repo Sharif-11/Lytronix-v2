@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Loader2, ImagePlus, X, ChevronDown, ChevronUp, Wand2 } from 'lucide-react';
+import { Sparkles, Loader2, ImagePlus, X, ChevronDown, ChevronUp, Wand2, ClipboardPaste } from 'lucide-react';
 import { aiExtractOrder, getAiConfig } from '../api/client';
 import { formatMoney } from '../utils/format';
 import { emitError } from '../lib/errorBus';
@@ -51,6 +51,35 @@ export default function AiOrderAssist({ onApply }) {
     }
   };
 
+  // Read whatever's on the system clipboard straight into the textarea, so a
+  // message copied from Messenger/WhatsApp/SMS elsewhere lands here with one
+  // tap instead of focusing the field and pressing paste. Best-effort and
+  // silent: some browsers (Firefox, iOS Safari outside a direct tap) refuse
+  // clipboard reads or need a permission prompt — those just fall back to a
+  // normal manual paste into the textarea, so failures aren't worth an error
+  // popup.
+  const pasteFromClipboard = async () => {
+    try {
+      const clip = await navigator.clipboard.readText();
+      if (clip && clip.trim()) setText(clip);
+    } catch {
+      // Clipboard read blocked/denied — the textarea still accepts a normal paste.
+    }
+  };
+
+  const toggleOpen = () => {
+    setOpen((o) => {
+      const next = !o;
+      // Opening the panel is itself a user gesture, so browsers that allow it
+      // (Chrome/Edge, desktop and Android) let this clipboard read piggyback
+      // on that same tap — the customer's text is often already sitting in
+      // the box the moment the panel appears. Only when it's still empty, so
+      // this never clobbers something already typed or extracted.
+      if (next && !text.trim()) pasteFromClipboard();
+      return next;
+    });
+  };
+
   const extract = async () => {
     if (!text.trim() && !image) {
       emitError('Paste some text or an image first.');
@@ -92,11 +121,7 @@ export default function AiOrderAssist({ onApply }) {
 
   return (
     <section className="border border-dashed border-ui-brand/40 bg-ui-brand/[0.04] rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-3 text-left"
-      >
+      <button type="button" onClick={toggleOpen} className="w-full flex items-center gap-2 px-4 py-3 text-left">
         <span className="w-8 h-8 rounded-lg bg-ui-brand/15 text-ui-brand flex items-center justify-center">
           <Sparkles size={16} />
         </span>
@@ -121,17 +146,28 @@ export default function AiOrderAssist({ onApply }) {
             </p>
           )}
 
-          <textarea
-            className="input min-h-[90px]"
-            placeholder={
-              cfg.imageSupported
-                ? "Paste the customer's message here… (Bangla or English). You can also paste a screenshot directly."
-                : "Paste the customer's message here… (Bangla or English)."
-            }
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onPaste={cfg.imageSupported ? onPaste : undefined}
-          />
+          <div className="relative">
+            <textarea
+              className="input min-h-[90px] pr-8"
+              placeholder={
+                cfg.imageSupported
+                  ? "Paste the customer's message here… (Bangla or English). You can also paste a screenshot directly."
+                  : "Paste the customer's message here… (Bangla or English)."
+              }
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onPaste={cfg.imageSupported ? onPaste : undefined}
+            />
+            <button
+              type="button"
+              onClick={pasteFromClipboard}
+              title="Paste from clipboard"
+              aria-label="Paste from clipboard"
+              className="absolute top-2 right-2 w-6 h-6 rounded-md text-ui-faint hover:text-ui-brand hover:bg-ui-brand/10 flex items-center justify-center"
+            >
+              <ClipboardPaste size={14} />
+            </button>
+          </div>
           {!cfg.imageSupported && (
             <p className="text-[11px] text-ui-muted -mt-1.5">
               Image/screenshot extraction isn't available on the current AI provider yet — text only for now.
