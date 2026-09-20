@@ -45,6 +45,7 @@ export default function OrderForm() {
   const [paySender, setPaySender] = useState('');
   const [payNote, setPayNote] = useState('');
   const [bank, setBank] = useState(null);
+  const [payAccountId, setPayAccountId] = useState('');
   const [source, setSource] = useState('');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -297,6 +298,7 @@ export default function OrderForm() {
               transactionId: payTxn.trim(),
               senderNumber: paySender.trim(),
               note: payNote.trim(),
+              bankAccountId: payMethod === 'bank_transfer' ? payAccountId || undefined : undefined,
             },
           }
         : {}),
@@ -605,12 +607,26 @@ export default function OrderForm() {
                   </div>
 
                   {payMethod === 'bank_transfer' && (
-                    <div className="rounded-lg border border-ui-line bg-ui-bg/60 px-3 py-2 text-xs text-ui-muted">
-                      {bank?.configured ? (
+                    <div className="rounded-lg border border-ui-line bg-ui-bg/60 px-3 py-2 text-xs text-ui-muted space-y-1.5">
+                      {bank?.accounts?.length ? (
                         <>
-                          <span className="font-medium text-ui-ink">{bank.bankName}</span> · {bank.accountName} ·{' '}
-                          <span className="font-mono">{bank.accountNumber}</span>
-                          {bank.branchName ? ` · ${bank.branchName}` : ''}
+                          <span className="block text-[11px] uppercase tracking-wide">Received in which account?</span>
+                          {bank.accounts.map((a) => (
+                            <label key={a._id} className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="payAccount"
+                                className="mt-0.5 accent-ui-brand"
+                                checked={payAccountId === a._id}
+                                onChange={() => setPayAccountId(a._id)}
+                              />
+                              <span>
+                                <span className="font-medium text-ui-ink">{a.bankName}</span> · {a.accountName} ·{' '}
+                                <span className="font-mono">{a.accountNumber}</span>
+                                {a.branchName ? ` · ${a.branchName}` : ''}
+                              </span>
+                            </label>
+                          ))}
                         </>
                       ) : (
                         'Our bank details aren’t set up yet — a super admin can add them under Bank details.'

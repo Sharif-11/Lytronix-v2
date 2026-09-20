@@ -339,11 +339,17 @@ exports.createOrder = async (req, res) => {
       senderNumber: String(e.senderNumber || '').trim(),
       note: String(e.note || '').trim(),
     };
+    if (e.method === 'bank_transfer' && e.bankAccountId) {
+      const label = (await BankSettings.load()).labelFor(e.bankAccountId);
+      if (label) adminEntry.note = [`Received in: ${label}`, adminEntry.note].filter(Boolean).join(' — ');
+    }
   }
 
   const method = adminEntry ? adminEntry.method : paymentMethod || 'cod';
+  let bankAccountLabel = ''; // which of the merchant's accounts a bank transfer went to
   if (!adminEntry && method === 'bank_transfer') {
     const bank = await BankSettings.load();
+    if (paymentDetails?.bankAccountId) bankAccountLabel = bank.labelFor(paymentDetails.bankAccountId);
     if (!bank.isConfigured()) {
       return res.status(400).json({ message: 'ব্যাংক ট্রান্সফার এখন চালু নেই। অন্য পেমেন্ট পদ্ধতি বেছে নিন।' });
     }
@@ -520,6 +526,7 @@ exports.createOrder = async (req, res) => {
         senderNumber: paymentDetails.senderNumber || '',
         transactionId: paymentDetails.transactionId,
         proofImageUrl: paymentDetails.proofImageUrl || '',
+        note: bankAccountLabel ? `Paid to: ${bankAccountLabel}` : '',
       });
     } else if (method === 'bkash_manual') {
       // A product's payment policy may require only a partial advance —

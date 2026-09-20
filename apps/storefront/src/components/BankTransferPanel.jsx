@@ -42,6 +42,7 @@ function Row({ label, value, mono, copy }) {
 // manual-bKash form uses, since only one of the two is ever active.
 export default function BankTransferPanel({ bank, amount, advanceInfo, details, setDetails, onProofChange, Field }) {
   const required = advanceInfo?.requiredAdvance > 0;
+  const accounts = bank.accounts || [];
   return (
     <div className="mt-4 rounded-2xl border border-ui-line overflow-hidden">
       <div className="bg-ui-dark text-white px-4 py-3 flex items-center gap-2">
@@ -56,23 +57,48 @@ export default function BankTransferPanel({ bank, amount, advanceInfo, details, 
           <li>আমরা যাচাই করার পর আপনার অর্ডার কনফার্ম হবে</li>
         </ol>
 
+        {accounts.length > 1 && (
+          <p className="text-xs text-ui-muted">নিচের যেকোনো একটি অ্যাকাউন্টে পাঠাতে পারেন।</p>
+        )}
+        {accounts.map((a) => (
+          <div key={a._id}>
+            <div className="rounded-xl bg-white border border-ui-line px-3.5 py-1">
+              <Row label="ব্যাংকের নাম" value={a.bankName} />
+              <Row label="অ্যাকাউন্টের নাম" value={a.accountName} />
+              <Row label="অ্যাকাউন্ট নম্বর" value={a.accountNumber} mono copy />
+              <Row label="শাখা" value={a.branchName} />
+              <Row label="জেলা" value={a.district} />
+              <Row label="রাউটিং নম্বর" value={a.routingNumber} mono copy />
+              <Row label="SWIFT" value={a.swiftCode} mono />
+            </div>
+            {a.instructions && <p className="text-xs text-ui-muted mt-1.5">{a.instructions}</p>}
+          </div>
+        ))}
         <div className="rounded-xl bg-white border border-ui-line px-3.5 py-1">
-          <Row label="ব্যাংকের নাম" value={bank.bankName} />
-          <Row label="অ্যাকাউন্টের নাম" value={bank.accountName} />
-          <Row label="অ্যাকাউন্ট নম্বর" value={bank.accountNumber} mono copy />
-          <Row label="শাখা" value={bank.branchName} />
-          <Row label="জেলা" value={bank.district} />
-          <Row label="রাউটিং নম্বর" value={bank.routingNumber} mono copy />
-          <Row label="SWIFT" value={bank.swiftCode} mono />
           <Row label={required ? 'অগ্রিম পাঠাতে হবে' : 'পাঠানোর পরিমাণ'} value={formatMoney(amount)} mono />
         </div>
-
-        {bank.instructions && <p className="text-xs text-ui-muted">{bank.instructions}</p>}
 
         {required && advanceInfo.codRemainder > 0 && (
           <p className="text-xs text-ui-muted">
             বাকি {formatMoney(advanceInfo.codRemainder)} ডেলিভারির সময় ক্যাশে পরিশোধ করতে পারবেন।
           </p>
+        )}
+
+        {accounts.length > 1 && (
+          <Field label="কোন অ্যাকাউন্টে পাঠিয়েছেন">
+            <select
+              className="input"
+              value={details.bankAccountId || ''}
+              onChange={(e) => setDetails({ ...details, bankAccountId: e.target.value })}
+            >
+              <option value="">বেছে নিন</option>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {a.bankName} · {a.accountNumber}
+                </option>
+              ))}
+            </select>
+          </Field>
         )}
 
         <div className="grid sm:grid-cols-2 gap-4">
