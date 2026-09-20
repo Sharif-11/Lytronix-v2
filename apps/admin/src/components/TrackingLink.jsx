@@ -33,7 +33,7 @@ export default function TrackingLink({ link, orderNumber, compact = false, class
     'inline-flex items-center justify-center gap-1 rounded-md border border-ui-line bg-white px-2 py-1 text-[11px] text-ui-ink hover:bg-ui-bg active:scale-[0.97]';
 
   return (
-    <div className={`rounded-lg border border-ui-line bg-ui-bg/60 px-2.5 py-2 ${className}`}>
+    <div className={`min-w-0 max-w-full rounded-lg border border-ui-line bg-ui-bg/60 px-2.5 py-2 ${className}`}>
       {!compact && (
         <div className="flex items-center gap-1.5 text-[11px] text-ui-muted mb-1">
           <Truck size={12} /> Tracking link
@@ -42,7 +42,7 @@ export default function TrackingLink({ link, orderNumber, compact = false, class
       <a href={link} target="_blank" rel="noreferrer" className="block text-xs text-ui-brand underline underline-offset-2 break-all">
         {link}
       </a>
-      <div className="flex gap-1.5 mt-1.5">
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
         <button type="button" onClick={copy} className={btn}>
           {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? 'Copied' : 'Copy'}
         </button>

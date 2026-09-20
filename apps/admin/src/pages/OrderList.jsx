@@ -213,7 +213,7 @@ export default function OrderList() {
       {!loading && orders.length > 0 && (
         <div className="sm:hidden space-y-3">
           {orders.map((o) => (
-            <div key={o._id} className="relative">
+            <div key={o._id} className="relative bg-ui-panel border border-ui-line rounded-xl shadow-card overflow-hidden">
               <label
                 className="absolute top-4 right-4 z-10"
                 onClick={(e) => e.stopPropagation()}
@@ -227,7 +227,7 @@ export default function OrderList() {
               </label>
               <Link
                 to={`/orders/${o._id}`}
-                className="block bg-ui-panel border border-ui-line rounded-xl shadow-card p-4 pr-10"
+                className="block p-4 pr-10"
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <span className="font-mono text-ui-brand text-sm">{o.orderNumber}</span>
@@ -248,7 +248,9 @@ export default function OrderList() {
                 <div className="text-xs text-ui-muted mt-1">{formatDateShort(o.createdAt)}</div>
               </Link>
               {o.courierTrackingLink && (
-                <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} className="mt-1.5" />
+                <div className="px-4 pb-4 -mt-1">
+                  <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} />
+                </div>
               )}
             </div>
           ))}
@@ -295,7 +297,7 @@ export default function OrderList() {
                   <td className="py-3 px-4">
                     <Link to={`/orders/${o._id}`} className="font-mono text-ui-brand hover:underline">{o.orderNumber}</Link>
                     {o.courierTrackingLink && (
-                      <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} compact className="mt-1.5 max-w-[16rem]" />
+                      <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} compact className="mt-1.5 w-full max-w-[16rem]" />
                     )}
                   </td>
                   <td className="py-3 px-4">{o.customer?.name}</td>

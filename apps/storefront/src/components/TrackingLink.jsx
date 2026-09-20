@@ -31,14 +31,14 @@ export default function TrackingLink({ link, orderNumber, className = '' }) {
   };
 
   return (
-    <div className={`rounded-lg border border-ui-line bg-ui-bg/60 px-3 py-2 font-bangla ${className}`}>
+    <div className={`min-w-0 max-w-full rounded-lg border border-ui-line bg-ui-bg/60 px-3 py-2 font-bangla ${className}`}>
       <div className="flex items-center gap-1.5 text-[11px] text-ui-muted mb-1">
         <Truck size={12} /> কুরিয়ার ট্র্যাকিং লিংক
       </div>
       <a href={link} target="_blank" rel="noreferrer" className="block text-xs text-ui-brand underline underline-offset-2 break-all">
         {link}
       </a>
-      <div className="flex gap-2 mt-2">
+      <div className="flex flex-wrap gap-2 mt-2">
         <button type="button" onClick={copy} className="btn-secondary py-1.5 px-3 text-xs gap-1.5 flex-1 sm:flex-none">
           {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'কপি হয়েছে' : 'কপি'}
         </button>
