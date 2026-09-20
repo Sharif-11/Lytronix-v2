@@ -256,6 +256,10 @@ export const getPayment = (id) => client.get(`/payments/${id}`).then((r) => r.da
 export const verifyPayment = (id, data) => client.patch(`/payments/${id}/verify`, data).then((r) => r.data);
 export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/reject`, { reason }).then((r) => r.data);
 
+// ---- Bank details (customers pay into this account for bank transfer) ----
+export const getBankSettings = () => client.get('/settings/bank').then((r) => r.data);
+export const updateBankSettings = (data) => client.put('/settings/bank', data).then((r) => r.data);
+
 // ---- Courier callback log ----
 export const getSteadfastWebhookLogs = (params) =>
   client.get('/couriers/steadfast/webhook-logs', { params }).then((r) => r.data);

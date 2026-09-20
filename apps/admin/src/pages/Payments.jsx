@@ -36,6 +36,7 @@ export default function Payments() {
     cod: t('payments.methodCod'),
     bkash_manual: t('payments.methodBkashManual'),
     bkash_automated: t('payments.methodBkashAuto'),
+    bank_transfer: t('payments.methodBank'),
     sslcommerz: t('payments.methodSslcommerz'),
     other: t('payments.methodOther'),
   };

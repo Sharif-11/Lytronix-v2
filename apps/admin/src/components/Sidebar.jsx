@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, PlusCircle, Package, FolderTree, TrendingUp, BookUser, Users,
-  ShieldCheck, LogOut, Wallet, Truck, Megaphone, Inbox, MessagesSquare,
+  ShieldCheck, LogOut, Wallet, Truck, Landmark, Megaphone, Inbox, MessagesSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -44,6 +44,8 @@ const NAV_SECTIONS = [
     items: [
       { to: '/staff', end: false, labelKey: 'nav.staff', icon: Users, permission: 'users:manage' },
       { to: '/roles', end: false, labelKey: 'nav.roles', icon: ShieldCheck, permission: 'roles:manage' },
+      // 'superadmin' is not a real permission, so only a super admin passes hasPermission().
+      { to: '/bank-details', end: false, labelKey: 'nav.bankDetails', icon: Landmark, permission: 'superadmin' },
     ],
   },
 ];

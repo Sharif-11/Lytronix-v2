@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock,
+  ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock, Landmark,
 } from 'lucide-react';
 import {
-  createOrder, getPoliceStations, uploadPaymentProof, getPaymentMeta, initiateBkashCheckout,
+  createOrder, getPoliceStations, uploadPaymentProof, getPaymentMeta, initiateBkashCheckout, getBankInfo,
 } from '../api/client';
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import SearchableSelect from '../components/SearchableSelect';
+import BankTransferPanel from '../components/BankTransferPanel';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
@@ -39,6 +40,7 @@ export default function Checkout() {
   const [confirmed, setConfirmed] = useState(null);
   usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : 'চেকআউট');
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
+  const [bank, setBank] = useState(null); // { configured, bankName, ... } — bank transfer shows only once configured
 
   const grandTotal = subtotal + deliveryTotal;
 
@@ -68,6 +70,7 @@ export default function Checkout() {
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
     getPaymentMeta().then((m) => setBkashAutoOn(Boolean(m.bkashAutomated)));
+    getBankInfo().then(setBank);
   }, []);
 
   // Whenever the cart contains a product that isn't fully COD-eligible, bKash
@@ -152,12 +155,16 @@ export default function Checkout() {
       setError('যে বিকাশ নম্বর থেকে পাঠিয়েছেন এবং ট্রানজেকশন আইডি দিন।');
       return;
     }
+    if (paymentMethod === 'bank_transfer' && !bkash.transactionId.trim()) {
+      setError('ব্যাংক ট্রান্সফারের ট্রানজেকশন আইডি দিন।');
+      return;
+    }
 
     setSubmitting(true);
 
     let proofImageUrl = '';
     try {
-      if (paymentMethod === 'bkash_manual' && bkash.proofFile) {
+      if ((paymentMethod === 'bkash_manual' || paymentMethod === 'bank_transfer') && bkash.proofFile) {
         setUploadingProof(true);
         proofImageUrl = (await uploadPaymentProof(bkash.proofFile)).url;
       }
@@ -192,7 +199,7 @@ export default function Checkout() {
       sessionId: getSessionId(),
       paymentMethod,
       paymentDetails:
-        paymentMethod === 'bkash_manual'
+        paymentMethod === 'bkash_manual' || paymentMethod === 'bank_transfer'
           ? { senderNumber: bkash.senderNumber, transactionId: bkash.transactionId, proofImageUrl }
           : undefined,
     };
@@ -446,7 +453,7 @@ export default function Checkout() {
             </p>
           )}
 
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${bank?.configured ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
             <PaymentOption
               icon={Truck}
               label="ক্যাশ অন ডেলিভারি"
@@ -474,7 +481,28 @@ export default function Checkout() {
               badge={bkashAutoOn ? undefined : 'শীঘ্রই আসছে'}
               accent="bkash"
             />
+            {bank?.configured && (
+              <PaymentOption
+                icon={Landmark}
+                label="ব্যাংক ট্রান্সফার"
+                sub="ব্যাংক অ্যাকাউন্টে পাঠান"
+                active={paymentMethod === 'bank_transfer'}
+                onClick={() => setPaymentMethod('bank_transfer')}
+              />
+            )}
           </div>
+
+          {paymentMethod === 'bank_transfer' && bank?.configured && (
+            <BankTransferPanel
+              bank={bank}
+              amount={advanceRequired ? advanceInfo.requiredAdvance : grandTotal}
+              advanceInfo={advanceInfo}
+              details={bkash}
+              setDetails={setBkash}
+              onProofChange={handleProofChange}
+              Field={Field}
+            />
+          )}
 
           {paymentMethod === 'bkash_manual' && (
             <BkashPanel grandTotal={grandTotal} advanceInfo={advanceInfo} bkash={bkash} setBkash={setBkash} onProofChange={handleProofChange} />
@@ -679,6 +707,7 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
   let paymentSummary = {
     cod: 'ক্যাশ অন ডেলিভারি — প্রোডাক্ট হাতে পেয়ে পেমেন্ট করুন।',
     bkash_manual: 'বিকাশ পেমেন্ট গ্রহণ করা হয়েছে — শীঘ্রই ভেরিফাই করা হবে।',
+    bank_transfer: 'ব্যাংক ট্রান্সফারের তথ্য গ্রহণ করা হয়েছে — যাচাই করার পর অর্ডার কনফার্ম হবে।',
     bkash_automated: 'বিকাশ পেমেন্ট এখনও সম্পন্ন হয়নি — নিচের ট্র্যাকিং লিংকে গিয়ে "আবার বিকাশে পেমেন্ট করুন" বাটনে চাপ দিন।',
   }[paymentMethod];
 

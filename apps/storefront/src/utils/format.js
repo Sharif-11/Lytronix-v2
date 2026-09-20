@@ -97,6 +97,7 @@ const PAYMENT_METHOD_BN = {
   cod: 'ক্যাশ অন ডেলিভারি',
   bkash_manual: 'বিকাশ (ম্যানুয়াল)',
   bkash_automated: 'বিকাশ চেকআউট',
+  bank_transfer: 'ব্যাংক ট্রান্সফার',
   sslcommerz: 'এসএসএলকমার্জ',
   other: 'আদার',
 };

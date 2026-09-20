@@ -157,6 +157,10 @@ export const initiateBkashCheckout = (orderId) =>
 export const getPaymentMeta = () =>
   client.get('/meta/payments').then((r) => r.data).catch(() => ({ bkashAutomated: false }));
 
+// The bank account for bank-transfer payments ({ configured, bankName, ... }).
+export const getBankInfo = () =>
+  client.get('/meta/bank', { skipErrorModal: true }).then((r) => r.data).catch(() => ({ configured: false }));
+
 // ---- Contact ----
 export const submitContact = (data) => client.post('/contact', data).then((r) => r.data);
 

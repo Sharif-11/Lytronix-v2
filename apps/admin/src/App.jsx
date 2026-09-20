@@ -31,6 +31,7 @@ import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
 import Payments from './pages/Payments';
 import CourierLogs from './pages/CourierLogs';
+import BankDetails from './pages/BankDetails';
 import Marketing from './pages/Marketing';
 import Messages from './pages/Messages';
 import Chat from './pages/Chat';
@@ -101,6 +102,7 @@ export default function App() {
       <Route path="/customers/new" element={<RequireAuth permission="customers:manage"><AdminLayout><CustomerForm /></AdminLayout></RequireAuth>} />
       <Route path="/customers/:id/edit" element={<RequireAuth permission="customers:manage"><AdminLayout><CustomerForm /></AdminLayout></RequireAuth>} />
 
+      <Route path="/bank-details" element={<RequireAuth permission="superadmin"><AdminLayout><BankDetails /></AdminLayout></RequireAuth>} />
       <Route path="/courier-logs" element={<RequireAuth permission="orders:manage"><AdminLayout><CourierLogs /></AdminLayout></RequireAuth>} />
       <Route path="/payments" element={<RequireAuth permission="payments:manage"><AdminLayout><Payments /></AdminLayout></RequireAuth>} />
       <Route path="/payments/print" element={<RequireAuth permission="payments:manage"><PrintPaymentLog /></RequireAuth>} />

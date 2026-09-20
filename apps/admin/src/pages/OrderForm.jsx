@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { User, Package, Wallet, Truck, ArrowLeft } from 'lucide-react';
-import { getProducts, getOrder, createOrder, updateOrder, getSuggestedStatuses, getPoliceStations } from '../api/client';
+import { User, Package, Wallet, Truck, ArrowLeft, Banknote, HandCoins } from 'lucide-react';
+import { getProducts, getOrder, createOrder, updateOrder, getSuggestedStatuses, getPoliceStations, getBankSettings } from '../api/client';
 import { formatMoney } from '../utils/format';
 import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
@@ -36,6 +36,15 @@ export default function OrderForm() {
   const [cashOnAmount, setCashOnAmount] = useState(0);
   const [weightKg, setWeightKg] = useState('0.5');
   const [status, setStatus] = useState('pending');
+  // How the order is paid (new orders only). 'cod' = collect on delivery;
+  // 'paid' = the admin records a payment on the customer's behalf.
+  const [payMode, setPayMode] = useState('cod');
+  const [payMethod, setPayMethod] = useState('bkash_manual'); // 'bkash_manual' | 'bank_transfer'
+  const [payAmount, setPayAmount] = useState('');
+  const [payTxn, setPayTxn] = useState('');
+  const [paySender, setPaySender] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [bank, setBank] = useState(null);
   const [source, setSource] = useState('');
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -45,8 +54,8 @@ export default function OrderForm() {
   // Autosave a new-order form so navigating away mid-entry doesn't lose it.
   // Create-mode only — never restore over a loaded order.
   const orderFormDraft = useMemo(
-    () => ({ customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source }),
-    [customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source]
+    () => ({ customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source, payMode, payMethod, payAmount, payTxn, paySender, payNote }),
+    [customer, items, orderDiscount, deliveryChargeOverride, advancePaid, cashOnAmount, weightKg, status, source, payMode, payMethod, payAmount, payTxn, paySender, payNote]
   );
   const { clearDraft } = useFormDraft(
     'admin-order-new',
@@ -61,6 +70,12 @@ export default function OrderForm() {
       if (d.weightKg) setWeightKg(d.weightKg);
       if (d.status) setStatus(d.status);
       if (d.source !== undefined) setSource(d.source);
+      if (d.payMode) setPayMode(d.payMode);
+      if (d.payMethod) setPayMethod(d.payMethod);
+      if (d.payAmount !== undefined) setPayAmount(d.payAmount);
+      if (d.payTxn !== undefined) setPayTxn(d.payTxn);
+      if (d.paySender !== undefined) setPaySender(d.paySender);
+      if (d.payNote !== undefined) setPayNote(d.payNote);
     },
     { enabled: !isEdit }
   );
@@ -72,6 +87,12 @@ export default function OrderForm() {
     // cheap — the upstream Packzy API is only ever hit on a cache miss.
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
   }, []);
+
+  useEffect(() => {
+    if (payMode === 'paid' && payMethod === 'bank_transfer' && !bank) {
+      getBankSettings().then(setBank).catch(() => {});
+    }
+  }, [payMode, payMethod, bank]);
 
   const districtOptions = useMemo(() => districts.map((d) => ({ value: d.name, label: d.name })), [districts]);
   const thanaOptions = useMemo(() => {
@@ -160,7 +181,15 @@ export default function OrderForm() {
       );
     }
     if (d.deliveryCharge > 0) setDeliveryChargeOverride(String(d.deliveryCharge));
-    if (d.advancePaid > 0) setAdvancePaid(d.advancePaid);
+    if (d.advancePaid > 0) {
+      setAdvancePaid(d.advancePaid);
+      // New orders record the advance as a payment entry — the admin only
+      // has to add the transaction ID.
+      if (!isEdit) {
+        setPayMode('paid');
+        setPayAmount(String(d.advancePaid));
+      }
+    }
     if (d.codAmount > 0) setCashOnAmount(d.codAmount);
     setSource('AI import');
   };
@@ -210,7 +239,10 @@ export default function OrderForm() {
   const itemsDeliverySum = useMemo(() => items.reduce((s, it) => s + (Number(it.deliveryCharge) || 0), 0), [items]);
   const effectiveDelivery = deliveryChargeOverride !== '' ? Number(deliveryChargeOverride) : itemsDeliverySum;
   const grandTotal = Math.max(0, subtotal - (Number(orderDiscount) || 0) + (Number(effectiveDelivery) || 0));
-  const due = grandTotal - (Number(advancePaid) || 0);
+  // New orders: what the admin records as received now. Editing keeps the
+  // legacy advance field (payments are managed on the order page).
+  const paidNow = !isEdit && payMode === 'paid' ? Number(payAmount) || 0 : 0;
+  const due = grandTotal - (isEdit ? Number(advancePaid) || 0 : paidNow);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -222,6 +254,16 @@ export default function OrderForm() {
     if (items.length === 0) {
       emitError('Add at least one product to the order.');
       return;
+    }
+    if (!isEdit && payMode === 'paid') {
+      if (!(Number(payAmount) > 0)) {
+        emitError('Enter the amount the customer paid.');
+        return;
+      }
+      if (!payTxn.trim()) {
+        emitError('Enter the transaction ID for this payment.');
+        return;
+      }
     }
 
     const payload = {
@@ -238,13 +280,26 @@ export default function OrderForm() {
       pricing: {
         discount: Number(orderDiscount) || 0,
         deliveryCharge: deliveryChargeOverride !== '' ? Number(deliveryChargeOverride) : itemsDeliverySum,
-        advancePaid: Number(advancePaid) || 0,
-        cashOnAmount: Number(cashOnAmount) || 0,
+        // New orders: the payment entry below carries the money, and the cash
+        // on delivery amount is simply whatever is still due.
+        advancePaid: isEdit ? Number(advancePaid) || 0 : 0,
+        cashOnAmount: isEdit ? Number(cashOnAmount) || 0 : Math.max(0, grandTotal - paidNow),
       },
       weightKg: Number(weightKg) || 0.5,
       status,
       source,
       createdVia: 'admin',
+      ...(!isEdit && payMode === 'paid'
+        ? {
+            paymentEntry: {
+              method: payMethod,
+              amount: Number(payAmount),
+              transactionId: payTxn.trim(),
+              senderNumber: paySender.trim(),
+              note: payNote.trim(),
+            },
+          }
+        : {}),
     };
 
     setSaving(true);
@@ -494,13 +549,96 @@ export default function OrderForm() {
             <Field label="Delivery charge (override)">
               <input type="number" min="0" className="input" placeholder={String(itemsDeliverySum)} value={deliveryChargeOverride} onChange={(e) => setDeliveryChargeOverride(e.target.value)} />
             </Field>
-            <Field label="Advance paid">
-              <input type="number" min="0" className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} />
-            </Field>
-            <Field label="Cash on delivery amount">
-              <input type="number" min="0" className="input" value={cashOnAmount} onChange={(e) => setCashOnAmount(e.target.value)} />
-            </Field>
+            {isEdit && (
+              <>
+                <Field label="Advance paid">
+                  <input type="number" min="0" className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} />
+                </Field>
+                <Field label="Cash on delivery amount">
+                  <input type="number" min="0" className="input" value={cashOnAmount} onChange={(e) => setCashOnAmount(e.target.value)} />
+                </Field>
+              </>
+            )}
           </div>
+
+          {!isEdit && (
+            <div className="mt-4 sm:mt-5 border-t border-dashed border-ui-line pt-3.5 sm:pt-4">
+              <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-2">
+                How is this order paid?
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <PayModeCard
+                  active={payMode === 'cod'}
+                  onClick={() => setPayMode('cod')}
+                  icon={HandCoins}
+                  title="Cash on delivery"
+                  hint={`Collect ${formatMoney(grandTotal)} when the parcel arrives`}
+                />
+                <PayModeCard
+                  active={payMode === 'paid'}
+                  onClick={() => {
+                    setPayMode('paid');
+                    if (payAmount === '') setPayAmount(String(grandTotal || ''));
+                  }}
+                  icon={Banknote}
+                  title="Payment received"
+                  hint="Record a payment on the customer's behalf"
+                />
+              </div>
+
+              {payMode === 'paid' && (
+                <div className="mt-3.5 space-y-3">
+                  <div className="inline-flex rounded-xl border border-ui-line overflow-hidden text-sm">
+                    {[
+                      ['bkash_manual', 'bKash'],
+                      ['bank_transfer', 'Bank transfer'],
+                    ].map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setPayMethod(val)}
+                        className={`px-4 py-2 ${payMethod === val ? 'bg-ui-brand text-white' : 'bg-white text-ui-ink hover:bg-ui-bg'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {payMethod === 'bank_transfer' && (
+                    <div className="rounded-lg border border-ui-line bg-ui-bg/60 px-3 py-2 text-xs text-ui-muted">
+                      {bank?.configured ? (
+                        <>
+                          <span className="font-medium text-ui-ink">{bank.bankName}</span> · {bank.accountName} ·{' '}
+                          <span className="font-mono">{bank.accountNumber}</span>
+                          {bank.branchName ? ` · ${bank.branchName}` : ''}
+                        </>
+                      ) : (
+                        'Our bank details aren’t set up yet — a super admin can add them under Bank details.'
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <Field label="Amount received" required>
+                      <input type="number" min="0" className="input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                    </Field>
+                    <Field label="Transaction ID" required>
+                      <input className="input font-mono" value={payTxn} onChange={(e) => setPayTxn(e.target.value)} />
+                    </Field>
+                    <Field label={payMethod === 'bkash_manual' ? 'Sender bKash number' : 'Sender account / name'}>
+                      <input className="input" value={paySender} onChange={(e) => setPaySender(e.target.value)} />
+                    </Field>
+                    <Field label="Note (optional)">
+                      <input className="input" value={payNote} onChange={(e) => setPayNote(e.target.value)} />
+                    </Field>
+                  </div>
+                  <p className="text-[11px] text-ui-muted">
+                    Entered by you, so it counts as verified and the order starts as pending.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-4 sm:mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 font-mono text-xs sm:text-sm border-t border-dashed border-ui-line pt-3.5 sm:pt-4">
             <Summary label="Subtotal" value={subtotal} />
@@ -541,6 +679,26 @@ export default function OrderForm() {
         </div>
       </form>
     </div>
+  );
+}
+
+function PayModeCard({ active, onClick, icon: Icon, title, hint }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+        active ? 'border-ui-brand bg-ui-brand/[0.06]' : 'border-ui-line bg-white hover:bg-ui-bg'
+      }`}
+    >
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-ui-brand text-white' : 'bg-ui-brand/10 text-ui-brand'}`}>
+        <Icon size={15} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ui-ink">{title}</span>
+        <span className="block text-xs text-ui-muted">{hint}</span>
+      </span>
+    </button>
   );
 }
 
