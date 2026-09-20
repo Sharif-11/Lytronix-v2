@@ -81,7 +81,7 @@ async function notifyAdminsNewOrder(order) {
 async function notifyCustomerConsignmentBooked(order) {
   const trackingUrl = order.courierTrackingLink;
   const message = trackingUrl
-    ? `Lytronix: ${order.orderNumber} কুরিয়ারে পাঠানো হয়েছে।\n${trackingUrl}`
+    ? `Lytronix: ${order.orderNumber} কুরিয়ারে গেছে।\n${trackingUrl}`
     : `Lytronix: ${order.orderNumber} কুরিয়ারে গেছে। কোড: ${
         order.courier?.trackingCode || 'N/A'
       }`;
