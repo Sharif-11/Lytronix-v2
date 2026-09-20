@@ -13,6 +13,7 @@ const { computeOrderAdvance } = require('../utils/paymentPolicy');
 const { transactionIdTakenBy } = require('../utils/transactionId');
 const { bkashAutoEnabled } = require('../services/payments');
 const webPush = require('../services/webPush');
+const WebhookLog = require('../models/WebhookLog');
 
 // Bangla status labels for the shopper's push notification.
 const STATUS_BN = {
@@ -903,6 +904,18 @@ exports.getSteadfastBalance = async (req, res) => {
   }
 };
 
+// GET /api/couriers/steadfast/webhook-logs?outcome=&invoice=&consignmentId=&limit=
+// Every callback Steadfast sent us (raw payload + what we did with it).
+exports.listSteadfastWebhookLogs = async (req, res) => {
+  const filter = { provider: 'steadfast' };
+  if (req.query.outcome) filter.outcome = String(req.query.outcome);
+  if (req.query.invoice) filter.invoice = String(req.query.invoice);
+  if (req.query.consignmentId) filter.consignmentId = String(req.query.consignmentId);
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const logs = await WebhookLog.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
+  res.json({ logs });
+};
+
 // POST /api/webhooks/steadfast  (public — Steadfast calls this directly)
 // Handles both "delivery_status" and "tracking_update" notification types.
 exports.steadfastWebhook = async (req, res) => {
@@ -913,11 +926,44 @@ exports.steadfastWebhook = async (req, res) => {
     status: req.body?.status,
   });
 
+  // Persist the raw callback up front so even rejected/crashed calls leave a
+  // trace. Logging must never break the webhook itself, so every write is
+  // best-effort and errors are swallowed (Steadfast retries on non-2xx).
+  const { authorization: _auth, ...safeHeaders } = req.headers || {};
+  const logDoc = await WebhookLog.create({
+    provider: 'steadfast',
+    notificationType: String(req.body?.notification_type ?? ''),
+    consignmentId: String(req.body?.consignment_id ?? ''),
+    invoice: String(req.body?.invoice ?? ''),
+    status: String(req.body?.status ?? ''),
+    payload: req.body ?? null,
+    headers: safeHeaders,
+    ip: req.ip || '',
+  }).catch((err) => {
+    logger.error('webhook log write failed', { error: err.message });
+    return null;
+  });
+  const finishLog = (outcome, extra = {}) =>
+    logDoc
+      ? WebhookLog.updateOne({ _id: logDoc._id }, { $set: { outcome, ...extra } }).catch(() => {})
+      : Promise.resolve();
+
+  try {
+    return await handleSteadfastWebhook(req, res, finishLog);
+  } catch (err) {
+    await finishLog('error', { note: err.message });
+    throw err;
+  }
+};
+
+async function handleSteadfastWebhook(req, res, finishLog) {
+
   const configuredToken = process.env.STEADFAST_WEBHOOK_TOKEN;
   if (configuredToken) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     if (token !== configuredToken) {
+      await finishLog('unauthorized', { note: 'Invalid or missing webhook auth token.' });
       return res.status(401).json({ status: 'error', message: 'Invalid or missing webhook auth token.' });
     }
   }
@@ -925,6 +971,7 @@ exports.steadfastWebhook = async (req, res) => {
   const { notification_type, consignment_id, invoice, status, tracking_message, delivery_charge, cod_amount } = req.body;
 
   if (!consignment_id && !invoice) {
+    await finishLog('invalid', { note: 'Missing consignment_id or invoice.' });
     return res.status(400).json({ status: 'error', message: 'Missing consignment_id or invoice.' });
   }
 
@@ -943,6 +990,7 @@ exports.steadfastWebhook = async (req, res) => {
       body: `${notification_type || 'event'} · consignment ${consignment_id || '—'} · invoice ${invoice || '—'}`,
       meta: req.body,
     });
+    await finishLog('unknown_order', { note: 'No matching order found; ignored.' });
     return res.status(200).json({ status: 'success', message: 'No matching order found; ignored.' });
   }
 
@@ -1020,8 +1068,15 @@ exports.steadfastWebhook = async (req, res) => {
     meta: req.body,
   });
 
+  await finishLog('processed', {
+    order: order._id,
+    orderNumber: order.orderNumber,
+    previousStatus,
+    newStatus: order.status,
+  });
+
   res.status(200).json({ status: 'success', message: 'Webhook received successfully.' });
-};
+}
 
 // POST /api/orders/ai-extract  { text?, imageBase64?, imageMediaType?, imageUrl? }
 // Admin helper: turn pasted customer text or a screenshot into a draft order
