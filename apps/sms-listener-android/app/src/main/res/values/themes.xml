@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LytronixSms" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#0F766E</item>
+        <item name="colorPrimaryDark">#0B5A54</item>
+        <item name="colorSecondary">#0F766E</item>
+    </style>
+</resources>
