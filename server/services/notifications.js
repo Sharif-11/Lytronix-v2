@@ -76,11 +76,13 @@ async function notifyAdminsNewOrder(order) {
   );
 }
 
+// Keep the no-link text under 70 chars: any Bangla character makes the SMS
+// Unicode (70 chars/segment, not 160), and a second segment doubles the cost.
 async function notifyCustomerConsignmentBooked(order) {
   const trackingUrl = order.courierTrackingLink;
   const message = trackingUrl
     ? `Lytronix: ${order.orderNumber} কুরিয়ারে পাঠানো হয়েছে।\n${trackingUrl}`
-    : `Lytronix: ${order.orderNumber} কুরিয়ারে পাঠানো হয়েছে। কোড: ${
+    : `Lytronix: ${order.orderNumber} কুরিয়ারে গেছে। কোড: ${
         order.courier?.trackingCode || 'N/A'
       }`;
 
