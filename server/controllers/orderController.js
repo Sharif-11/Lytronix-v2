@@ -347,6 +347,12 @@ exports.createOrder = async (req, res) => {
 
   const method = adminEntry ? adminEntry.method : paymentMethod || 'cod';
   let bankAccountLabel = ''; // which of the merchant's accounts a bank transfer went to
+
+  // A super admin can switch payment methods off; customers can't use them
+  // (an admin recording a payment on someone's behalf is exempt).
+  if (!isAdminCreated && require('../services/paymentSettings').get()[method] === false) {
+    return res.status(400).json({ message: 'এই পেমেন্ট পদ্ধতিটি এখন চালু নেই। অন্য পদ্ধতি বেছে নিন।' });
+  }
   if (!adminEntry && method === 'bank_transfer') {
     const bank = await BankSettings.load();
     const activeBank = bank.activeAccount();

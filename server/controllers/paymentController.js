@@ -179,7 +179,7 @@ exports.initiateBkash = async (req, res) => {
   if (!order) return res.status(404).json({ message: 'Order not found' });
 
   const gateway = getGateway('bkash');
-  if (!gateway || !gateway.isEnabled || !gateway.isEnabled()) {
+  if (!gateway || !gateway.isEnabled || !gateway.isEnabled() || !require('../services/paymentSettings').get().bkash_automated) {
     return res.status(400).json({ message: 'bKash automated checkout is not available right now.' });
   }
 

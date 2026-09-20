@@ -3,6 +3,7 @@ const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
 const { protect } = require('../middleware/auth');
 const BankSettings = require('../models/BankSettings');
+const paymentSettings = require('../services/paymentSettings');
 
 const MAX_ACCOUNTS = 10;
 
@@ -51,6 +52,41 @@ router.put(
     doc.updatedBy = req.user._id;
     await doc.save();
     res.json(doc.toAdmin());
+  })
+);
+
+// GET /api/settings/payments — which methods customers may choose.
+router.get(
+  '/payments',
+  protect,
+  asyncHandler(async (req, res) => {
+    const bkash = require('../services/payments').getGateway('bkash');
+    res.json({
+      methods: await paymentSettings.refresh(),
+      // Automated bKash also needs the gateway itself to be set up on the server.
+      bkashGatewayReady: Boolean(bkash && bkash.isEnabled && bkash.isEnabled()),
+    });
+  })
+);
+
+// PUT /api/settings/payments  { cod?, bkash_manual?, bkash_automated?, bank_transfer? } — super admin only.
+router.put(
+  '/payments',
+  protect,
+  asyncHandler(async (req, res) => {
+    if (!req.user?.role?.isSuperAdmin) {
+      return res.status(403).json({ message: 'Only a super admin can change the payment methods.' });
+    }
+    // Never leave checkout with nothing to pay by: check the result before saving.
+    const next = { ...paymentSettings.get() };
+    Object.keys(next).forEach((m) => {
+      if (typeof req.body?.[m] === 'boolean') next[m] = req.body[m];
+    });
+    if (!Object.values(next).some(Boolean)) {
+      return res.status(400).json({ message: 'At least one payment method must stay enabled.' });
+    }
+    const methods = await paymentSettings.update(req.body || {}, req.user._id);
+    res.json({ methods });
   })
 );
 

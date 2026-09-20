@@ -20,7 +20,7 @@ function listGateways() {
 // button on the tracking / my-orders screens.
 function bkashAutoEnabled() {
   const g = gateways.bkash
-  return Boolean(g && typeof g.isEnabled === 'function' && g.isEnabled())
+  return Boolean(g && typeof g.isEnabled === 'function' && g.isEnabled() && require('../paymentSettings').get().bkash_automated)
 }
 
 module.exports = { registerGateway, getGateway, listGateways, bkashAutoEnabled }

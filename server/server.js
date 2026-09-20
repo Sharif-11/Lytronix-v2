@@ -98,7 +98,12 @@ app.get('/api/meta/steadfast', (req, res) =>
 // Which online payment methods the storefront checkout should offer.
 app.get('/api/meta/payments', (req, res) => {
   const bkash = require('./services/payments').getGateway('bkash');
-  res.json({ bkashAutomated: Boolean(bkash && bkash.isEnabled && bkash.isEnabled()) });
+  const methods = require('./services/paymentSettings').get();
+  res.json({
+    bkashAutomated: Boolean(bkash && bkash.isEnabled && bkash.isEnabled() && methods.bkash_automated),
+    // Which methods a super admin has switched on (bank transfer also needs an active bank account).
+    methods,
+  });
 });
 
 // Public: the bank account customers transfer to (storefront checkout shows it
@@ -107,7 +112,12 @@ app.get(
   '/api/meta/bank',
   asyncHandler(async (req, res) => {
     const doc = await require('./models/BankSettings').load();
-    res.json(doc.toPublic());
+    const pub = doc.toPublic();
+    if (!require('./services/paymentSettings').get().bank_transfer) {
+      pub.configured = false;
+      pub.accounts = [];
+    }
+    res.json(pub);
   })
 );
 
@@ -140,6 +150,7 @@ app.use(errorHandler);
 // Periodically trims old chat messages + their Cloudinary media (keeps each
 // thread + its first message).
 require('./services/chatCleanup').scheduleChatCleanup();
+require('./services/paymentSettings').startRefreshing();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`API server running on port ${PORT}`));
