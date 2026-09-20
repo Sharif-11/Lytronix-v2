@@ -301,3 +301,7 @@ exports.bkashCallback = async (req, res) => {
     return res.redirect(dest('error'));
   }
 };
+
+// Used by the SMS-listener auto-verification (services/smsPaymentMatcher.js).
+exports.mirrorIntoOrderLedger = mirrorIntoOrderLedger;
+exports.notifyPaymentVerified = notifyPaymentVerified;

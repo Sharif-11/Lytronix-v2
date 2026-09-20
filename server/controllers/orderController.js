@@ -539,7 +539,7 @@ exports.createOrder = async (req, res) => {
       // A product's payment policy may require only a partial advance —
       // that's the amount actually expected via bKash, not the full total
       // (the rest is collected on delivery, see pricing.cashOnAmount above).
-      await Payment.create({
+      const manualPayment = await Payment.create({
         order: order._id,
         method: 'bkash_manual',
         amount: requiredAdvance > 0 ? requiredAdvance : order.pricing.grandTotal,
@@ -548,6 +548,10 @@ exports.createOrder = async (req, res) => {
         transactionId: paymentDetails.transactionId,
         proofImageUrl: paymentDetails.proofImageUrl || '',
       });
+      // The bKash receipt SMS usually arrives before the customer finishes this
+      // form — if the phone already forwarded it, verify right away. Not awaited:
+      // the order must never wait on (or fail because of) this.
+      require('../services/smsPaymentMatcher').tryMatchNewPayment(manualPayment);
     } else if (method === 'bkash_automated') {
       // Same as manual bKash: only the required up-front amount is charged
       // online; the cash-on-delivery leg (incl. delivery charge) is not.

@@ -123,6 +123,7 @@ app.get(
 
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/sms-listener', require('./routes/smsListenerRoutes'));
 app.use('/api/account', accountRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
