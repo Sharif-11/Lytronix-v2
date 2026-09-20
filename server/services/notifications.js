@@ -81,7 +81,7 @@ async function notifyAdminsNewOrder(order) {
 // courier tracking code and link are deliberately left out — the code is
 // useless to the customer and the link alone would push it to a second segment.
 async function notifyCustomerConsignmentBooked(order) {
-  const message = `Lytronix: ${order.orderNumber} কুরিয়ারে booked hoyeche`;
+  const message = `Lytronix: ${order.orderNumber} কুরিয়ারে বুকড হয়েছে`;
 
   return sendAndLog({
     to: order.customer.phone,
