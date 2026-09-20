@@ -685,7 +685,7 @@ exports.sendOrderMessage = async (req, res) => {
 // GET /api/track/:trackingId  (public, no admin data like payments/comments exposed)
 exports.trackOrder = async (req, res) => {
   const order = await Order.findOne({ trackingId: req.params.trackingId }).select(
-    'orderNumber trackingId status statusHistory courierEvents courier.trackingCode courier.status courier.lastMessage items pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt customer.name'
+    'orderNumber trackingId status statusHistory courierEvents courier.trackingCode courier.status courier.lastMessage courierTrackingLink items pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt customer.name'
   );
   if (!order) return res.status(404).json({ message: 'Tracking ID not found' });
 
@@ -713,7 +713,7 @@ exports.trackOrdersByPhone = async (req, res) => {
   if (!/^01\d{9}$/.test(phone)) return res.json({ orders: [] });
 
   const found = await Order.find({ 'customer.phone': phone })
-    .select('orderNumber trackingId status items.name items.quantity pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt')
+    .select('orderNumber trackingId status courierTrackingLink items.name items.quantity pricing.grandTotal pricing.deliveryCharge pricing.cashOnAmount pricing.due createdAt')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();

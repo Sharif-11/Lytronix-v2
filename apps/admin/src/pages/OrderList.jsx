@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getOrders, getOrderStats } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
+import TrackingLink from '../components/TrackingLink';
 import { formatMoney, formatDateShort } from '../utils/format';
 import { Printer, Plus, Search, Tag, Loader2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -243,6 +244,9 @@ export default function OrderList() {
                 </div>
                 <div className="text-xs text-ui-muted mt-1">{formatDateShort(o.createdAt)}</div>
               </Link>
+              {o.courierTrackingLink && (
+                <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} className="mt-1.5" />
+              )}
             </div>
           ))}
         </div>
@@ -287,6 +291,9 @@ export default function OrderList() {
                   </td>
                   <td className="py-3 px-4">
                     <Link to={`/orders/${o._id}`} className="font-mono text-ui-brand hover:underline">{o.orderNumber}</Link>
+                    {o.courierTrackingLink && (
+                      <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} compact className="mt-1.5 max-w-[16rem]" />
+                    )}
                   </td>
                   <td className="py-3 px-4">{o.customer?.name}</td>
                   <td className="py-3 px-4 font-mono">{o.customer?.phone}</td>

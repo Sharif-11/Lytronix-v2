@@ -4,6 +4,7 @@ import { MapPin, Package, CheckCircle2, XCircle, Loader2, Zap } from 'lucide-rea
 import { trackOrder, initiateBkashCheckout } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
+import TrackingLink from '../components/TrackingLink';
 import { formatMoney, formatTime, mergeTrackingTimeline, groupTimelineByDate } from '../utils/format';
 import usePageTitle from '../lib/usePageTitle';
 
@@ -82,6 +83,10 @@ export default function TrackOrder() {
               <div className="font-display text-xl text-ui-brand">{order.orderNumber}</div>
               <StatusBadge status={order.status} />
             </div>
+
+            {order.courierTrackingLink && (
+              <TrackingLink link={order.courierTrackingLink} orderNumber={order.orderNumber} className="mb-4" />
+            )}
 
             {order.courier?.trackingCode && (
               <div className="mb-4 text-xs font-mono text-ui-muted">

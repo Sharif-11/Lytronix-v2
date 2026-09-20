@@ -7,6 +7,7 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import { formatMoney, formatDate } from '../utils/format';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
+import TrackingLink from '../components/TrackingLink';
 import usePageTitle from '../lib/usePageTitle';
 
 // Guest-facing order history. The device only remembers the shopper's phone
@@ -109,6 +110,10 @@ export default function GuestOrders() {
                 </div>
                 <ChevronRight size={16} className="text-ui-faint shrink-0 group-hover:text-ui-brand" />
               </Link>
+
+              {o.courierTrackingLink && (
+                <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} className="mt-3" />
+              )}
 
               {o.canPayOnline && (
                 <>

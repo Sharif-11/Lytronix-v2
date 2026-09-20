@@ -128,7 +128,7 @@ exports.deleteAddress = async (req, res) => {
 exports.listOrders = async (req, res) => {
   const orders = await Order.find({ customerAccount: req.customer._id })
     .sort({ createdAt: -1 })
-    .select('orderNumber trackingId status statusHistory items pricing courier createdAt')
+    .select('orderNumber trackingId status statusHistory items pricing courier courierTrackingLink createdAt')
     .lean()
   res.json({
     orders: orders.map((o) => ({ ...o, canPayOnline: canPayOnline(o), onlinePayAmount: onlinePayAmount(o) })),

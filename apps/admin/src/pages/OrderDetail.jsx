@@ -13,6 +13,7 @@ import {
   getSmsLogs,
   sendOrderMessage,
 } from '../api/client';
+import TrackingLink from '../components/TrackingLink';
 import StatusBadge from '../components/StatusBadge';
 import CourierTracker from '../components/CourierTracker';
 import Loader from '../components/Loader';
@@ -472,9 +473,7 @@ export default function OrderDetail() {
               <button disabled={savingLink} className="btn-secondary w-full">{savingLink ? 'Saving…' : 'Save tracking link'}</button>
             </form>
             {order.courierTrackingLink && (
-              <a href={order.courierTrackingLink} target="_blank" rel="noreferrer" className="block mt-2 text-xs text-ui-brand underline underline-offset-4 break-all">
-                {order.courierTrackingLink}
-              </a>
+              <TrackingLink link={order.courierTrackingLink} orderNumber={order.orderNumber} compact className="mt-2" />
             )}
           </section>
 

@@ -7,6 +7,7 @@ import {
   mergeTrackingTimeline, groupTimelineByDate,
 } from '../../utils/format';
 import Loader from '../../components/Loader';
+import TrackingLink from '../../components/TrackingLink';
 import usePageTitle from '../../lib/usePageTitle';
 
 export default function Orders() {
@@ -95,6 +96,9 @@ function OrderList() {
               <span className={`chip mt-1 ${statusStyle(o.status)}`}>{statusLabel(o.status)}</span>
             </div>
           </Link>
+          {o.courierTrackingLink && (
+            <TrackingLink link={o.courierTrackingLink} orderNumber={o.orderNumber} className="mt-3" />
+          )}
           {o.canPayOnline && (
             <div className="mt-3">
               <PayNowButton orderId={o._id} amount={o.onlinePayAmount ?? o.pricing?.due ?? o.pricing?.grandTotal} />
@@ -224,14 +228,7 @@ function OrderDetail({ id }) {
           ))}
         </div>
         {order.courierTrackingLink && (
-          <a
-            href={order.courierTrackingLink}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-secondary mt-4 py-2"
-          >
-            কুরিয়ারে ট্র্যাক করুন
-          </a>
+          <TrackingLink link={order.courierTrackingLink} orderNumber={order.orderNumber} className="mt-4" />
         )}
       </div>
 
