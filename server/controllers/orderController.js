@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Payment = require('../models/Payment');
+const BankSettings = require('../models/BankSettings');
 const CustomerAccount = require('../models/CustomerAccount');
 const steadfast = require('../services/steadfast');
 const notifications = require('../services/notifications');
@@ -284,6 +285,17 @@ exports.createOrder = async (req, res) => {
   // "a guest/customer checked out" reads this flag, not req.user.
   const isAdminCreated = req.body.createdVia === 'admin';
 
+  // The route is public, so nothing stops a guest from sending
+  // createdVia:'admin' to skip the payment-policy / stock-status rules or to
+  // record a "verified" payment for themselves. Claiming it now requires a
+  // real, signed-in admin who can manage orders.
+  if (isAdminCreated) {
+    const role = req.user?.role;
+    if (!role || !(role.isSuperAdmin || (role.permissions || []).includes('orders:manage'))) {
+      return res.status(403).json({ message: 'Only a signed-in admin can create an order for a customer.' });
+    }
+  }
+
   logger.info('order: request received', {
     via: isAdminCreated ? 'admin' : req.customer ? 'customer' : 'guest',
     source: source || '',
@@ -298,8 +310,54 @@ exports.createOrder = async (req, res) => {
     return res.status(400).json({ message: 'At least one order item is required' });
   }
 
-  const method = paymentMethod || 'cod';
-  if (method === 'bkash_manual') {
+  // Admin flow: either cash on delivery (no entry) or a payment the admin
+  // records on the customer's behalf (bKash manual / bank transfer). It is
+  // entered by an admin, so it is verified straight away.
+  const ADMIN_ENTRY_METHODS = ['bkash_manual', 'bank_transfer'];
+  let adminEntry = null;
+  if (isAdminCreated && req.body.paymentEntry) {
+    const e = req.body.paymentEntry;
+    const amount = Math.round((Number(e.amount) || 0) * 100) / 100;
+    if (!ADMIN_ENTRY_METHODS.includes(e.method)) {
+      return res.status(400).json({ message: 'Choose bKash or bank transfer for the payment entry.' });
+    }
+    if (!(amount > 0)) {
+      return res.status(400).json({ message: 'Enter the amount the customer paid.' });
+    }
+    if (!String(e.transactionId || '').trim()) {
+      return res.status(400).json({ message: 'Enter the transaction ID for this payment.' });
+    }
+    if (await transactionIdTakenBy(e.transactionId)) {
+      return res.status(409).json({
+        message: 'This transaction ID is already recorded on a payment. Each payment needs a unique transaction ID.',
+      });
+    }
+    adminEntry = {
+      method: e.method,
+      amount,
+      transactionId: String(e.transactionId).trim(),
+      senderNumber: String(e.senderNumber || '').trim(),
+      note: String(e.note || '').trim(),
+    };
+  }
+
+  const method = adminEntry ? adminEntry.method : paymentMethod || 'cod';
+  if (!adminEntry && method === 'bank_transfer') {
+    const bank = await BankSettings.load();
+    if (!bank.isConfigured()) {
+      return res.status(400).json({ message: 'ব্যাংক ট্রান্সফার এখন চালু নেই। অন্য পেমেন্ট পদ্ধতি বেছে নিন।' });
+    }
+    if (!paymentDetails?.transactionId) {
+      return res.status(400).json({ message: 'ব্যাংক ট্রান্সফারের ট্রান্সেকশন আইডি দিন।' });
+    }
+    const takenBy = await transactionIdTakenBy(paymentDetails.transactionId);
+    if (takenBy) {
+      return res.status(409).json({
+        message: 'এই ট্রান্সেকশন আইডি ইতিমধ্যে ব্যবহৃত হয়েছে। সঠিক আইডিটি দিন।',
+      });
+    }
+  }
+  if (!adminEntry && method === 'bkash_manual') {
     if (!paymentDetails?.transactionId || !paymentDetails?.senderNumber) {
       return res.status(400).json({
         message: 'For bKash payments, please include the sender number and the transaction ID from your SMS.',
@@ -354,7 +412,7 @@ exports.createOrder = async (req, res) => {
 
     // A required advance can be settled by either bKash flow (manual send-money
     // or automated checkout). Only pure COD is rejected for such an order.
-    if (requiredAdvance > 0 && method !== 'bkash_manual' && method !== 'bkash_automated') {
+    if (requiredAdvance > 0 && !['bkash_manual', 'bkash_automated', 'bank_transfer'].includes(method)) {
       return res.status(400).json({
         message:
           codRemainder > 0
@@ -379,7 +437,7 @@ exports.createOrder = async (req, res) => {
   // (manual bKash), otherwise "pending".
   const initialStatus = isAdminCreated
     ? status || 'pending'
-    : method === 'bkash_manual' || method === 'bkash_automated'
+    : method === 'bkash_manual' || method === 'bkash_automated' || method === 'bank_transfer'
     ? 'unverified'
     : 'pending';
 
@@ -392,7 +450,20 @@ exports.createOrder = async (req, res) => {
     customer,
     items,
     pricing: finalPricing,
-    payments,
+    // An admin-recorded payment goes straight into the ledger (so the due
+    // amount drops); everything else starts with an empty ledger.
+    payments: adminEntry
+      ? [
+          {
+            walletName: adminEntry.method === 'bank_transfer' ? 'Bank transfer' : 'bKash',
+            walletPhoneNo: adminEntry.senderNumber,
+            transactionId: adminEntry.transactionId,
+            amount: adminEntry.amount,
+            time: new Date(),
+            note: adminEntry.note || 'Recorded by admin on behalf of the customer.',
+          },
+        ]
+      : payments,
     status: initialStatus,
     source,
     createdBy,
@@ -426,8 +497,30 @@ exports.createOrder = async (req, res) => {
   // Payment record, so "log every payment and order request" holds even
   // for "pay on delivery" intents where no money has moved yet.
   try {
-    if (method === 'cod') {
+    if (adminEntry) {
+      await Payment.create({
+        order: order._id,
+        method: adminEntry.method,
+        amount: adminEntry.amount,
+        status: 'verified',
+        senderNumber: adminEntry.senderNumber,
+        transactionId: adminEntry.transactionId,
+        verifiedBy: req.user._id,
+        verifiedAt: new Date(),
+        note: adminEntry.note,
+      });
+    } else if (method === 'cod') {
       await Payment.create({ order: order._id, method: 'cod', amount: order.pricing.grandTotal, status: 'pending' });
+    } else if (method === 'bank_transfer') {
+      await Payment.create({
+        order: order._id,
+        method: 'bank_transfer',
+        amount: requiredAdvance > 0 ? requiredAdvance : order.pricing.grandTotal,
+        status: 'pending_verification',
+        senderNumber: paymentDetails.senderNumber || '',
+        transactionId: paymentDetails.transactionId,
+        proofImageUrl: paymentDetails.proofImageUrl || '',
+      });
     } else if (method === 'bkash_manual') {
       // A product's payment policy may require only a partial advance —
       // that's the amount actually expected via bKash, not the full total

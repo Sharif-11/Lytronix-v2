@@ -97,6 +97,7 @@ async function mirrorIntoOrderLedger(payment) {
     cod: 'Cash on Delivery',
     bkash_manual: 'bKash',
     bkash_automated: 'bKash',
+    bank_transfer: 'Bank transfer',
     sslcommerz: 'SSLCommerz',
     other: 'Payment',
   };

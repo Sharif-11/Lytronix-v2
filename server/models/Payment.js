@@ -12,7 +12,7 @@ const paymentSchema = new mongoose.Schema(
     method: {
       type: String,
       required: true,
-      enum: ['cod', 'bkash_manual', 'bkash_automated', 'sslcommerz', 'other'],
+      enum: ['cod', 'bkash_manual', 'bkash_automated', 'bank_transfer', 'sslcommerz', 'other'],
     },
 
     amount: { type: Number, required: true, min: 0 },
@@ -30,7 +30,7 @@ const paymentSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ----- Manual bKash proof (customer-submitted at checkout) -----
+    // ----- Manual bKash / bank-transfer proof (customer-submitted at checkout) -----
     senderNumber: { type: String, trim: true, default: '' },
     transactionId: { type: String, trim: true, default: '' },
     proofImageUrl: { type: String, trim: true, default: '' },

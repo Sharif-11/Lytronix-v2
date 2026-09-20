@@ -101,7 +101,18 @@ app.get('/api/meta/payments', (req, res) => {
   res.json({ bkashAutomated: Boolean(bkash && bkash.isEnabled && bkash.isEnabled()) });
 });
 
+// Public: the bank account customers transfer to (storefront checkout shows it
+// only when bank transfer is set up).
+app.get(
+  '/api/meta/bank',
+  asyncHandler(async (req, res) => {
+    const doc = await require('./models/BankSettings').load();
+    res.json(doc.toPublic());
+  })
+);
+
 app.use('/api/auth', authRoutes);
+app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/account', accountRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);

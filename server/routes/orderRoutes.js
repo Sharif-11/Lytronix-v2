@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const asyncHandler = require('../middleware/asyncHandler');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, optionalAdmin } = require('../middleware/auth');
 const { attachCustomer } = require('../middleware/customerAuth');
 const {
   listOrders,
@@ -24,7 +24,7 @@ const { initiateBkash, bkashCallback } = require('../controllers/paymentControll
 // Public: storefront checkout creates an order without an admin login.
 // attachCustomer links the order to a signed-in shopper's account when a
 // customer token is present, but never requires one (guest checkout stays open).
-router.post('/', attachCustomer, asyncHandler(createOrder));
+router.post('/', attachCustomer, optionalAdmin, asyncHandler(createOrder));
 
 // Public: automated bKash checkout flow for an order the customer just created.
 router.post('/:id/payments/bkash/initiate', asyncHandler(initiateBkash));
