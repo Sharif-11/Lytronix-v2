@@ -10,9 +10,9 @@ const nanoid = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8);
 // Lifecycle (see server/controllers/orderController.js + steadfastStatusMap.js):
 //   unverified -> pending          (payment verified, e.g. bKash manual)
 //   pending    -> processing       (admin books the parcel with a courier)
-//   processing -> pending          (Steadfast reports "pending" / "in_review")
+//   processing -> shipped          (Steadfast reports "pending")
 //   shipped    -> delivered        (Steadfast reports "delivered")
-//   any        -> cancelled/hold/partial_delivered  (mirrors Steadfast 1:1)
+//   any        -> cancelled/hold/partial_delivered/in_review  (mirrors Steadfast 1:1)
 // completed/refunded/returned stay available for manual, non-courier use.
 const SUGGESTED_STATUSES = [
   'unverified',
