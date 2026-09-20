@@ -128,7 +128,7 @@ exports.deleteAddress = async (req, res) => {
 exports.listOrders = async (req, res) => {
   const orders = await Order.find({ customerAccount: req.customer._id })
     .sort({ createdAt: -1 })
-    .select('orderNumber trackingId status statusHistory items pricing courier courierTrackingLink createdAt')
+    .select('orderNumber trackingId status statusHistory items pricing courier.trackingCode courierTrackingLink createdAt')
     .lean()
   res.json({
     orders: orders.map((o) => ({ ...o, canPayOnline: canPayOnline(o), onlinePayAmount: onlinePayAmount(o) })),
@@ -140,8 +140,11 @@ exports.getOrder = async (req, res) => {
   const order = await Order.findOne({ _id: req.params.id, customerAccount: req.customer._id })
   if (!order) return res.status(404).json({ message: 'Order not found.' })
   const payments = await Payment.find({ order: order._id }).sort({ createdAt: -1 })
+  const plain = order.toObject()
+  // The courier's own status/messages are admin-only; customers see ours.
+  if (plain.courier) plain.courier = { trackingCode: plain.courier.trackingCode }
   res.json({
-    order: { ...order.toObject(), canPayOnline: canPayOnline(order), onlinePayAmount: onlinePayAmount(order) },
+    order: { ...plain, canPayOnline: canPayOnline(order), onlinePayAmount: onlinePayAmount(order) },
     payments,
   })
 }

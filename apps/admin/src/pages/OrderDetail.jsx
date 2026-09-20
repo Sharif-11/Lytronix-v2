@@ -14,7 +14,7 @@ import {
   sendOrderMessage,
 } from '../api/client';
 import TrackingLink from '../components/TrackingLink';
-import StatusBadge from '../components/StatusBadge';
+import StatusBadge, { CourierStatus } from '../components/StatusBadge';
 import CourierTracker from '../components/CourierTracker';
 import Loader from '../components/Loader';
 import SuggestInput from '../components/SuggestInput';
@@ -212,7 +212,10 @@ export default function OrderDetail() {
           <h1 className="font-display text-2xl sm:text-3xl text-ui-brand break-all">{order.orderNumber}</h1>
           <p className="text-xs font-mono text-ui-muted mt-1">Logged {formatDate(order.createdAt)}</p>
         </div>
-        <StatusBadge status={order.status} />
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge status={order.status} />
+          <CourierStatus status={order.courier?.status} />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-5">

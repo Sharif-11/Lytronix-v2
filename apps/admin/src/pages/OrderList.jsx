@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getOrders, getOrderStats } from '../api/client';
-import StatusBadge from '../components/StatusBadge';
+import StatusBadge, { CourierStatus } from '../components/StatusBadge';
 import TrackingLink from '../components/TrackingLink';
 import { formatMoney, formatDateShort } from '../utils/format';
 import { Printer, Plus, Search, Tag, Loader2 } from 'lucide-react';
@@ -231,7 +231,10 @@ export default function OrderList() {
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <span className="font-mono text-ui-brand text-sm">{o.orderNumber}</span>
-                  <StatusBadge status={o.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={o.status} />
+                    <CourierStatus status={o.courier?.status} />
+                  </div>
                 </div>
                 <div className="text-sm font-medium">{o.customer?.name}</div>
                 <div className="text-sm font-mono text-ui-muted">{o.customer?.phone}</div>
@@ -300,7 +303,12 @@ export default function OrderList() {
                   <td className="py-3 px-4 text-ui-muted">{[o.customer?.zilla, o.customer?.thana].filter(Boolean).join(' / ') || '—'}</td>
                   <td className="py-3 px-4 text-right font-mono">{formatMoney(o.pricing?.grandTotal)}</td>
                   <td className="py-3 px-4 text-right font-mono">{formatMoney(o.pricing?.due)}</td>
-                  <td className="py-3 px-4"><StatusBadge status={o.status} /></td>
+                  <td className="py-3 px-4">
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={o.status} />
+                      <CourierStatus status={o.courier?.status} />
+                    </div>
+                  </td>
                   <td className="py-3 px-4 text-ui-muted">{formatDateShort(o.createdAt)}</td>
                 </tr>
               ))}
