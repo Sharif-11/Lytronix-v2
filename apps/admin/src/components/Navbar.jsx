@@ -24,6 +24,7 @@ const PAGE_TITLES = [
   { match: /^\/categories/, key: 'nav.categories' },
   { match: /^\/analytics/, key: 'nav.analytics' },
   { match: /^\/payments/, key: 'nav.payments' },
+  { match: /^\/sms-listener/, key: 'nav.smsListener' },
   { match: /^\/courier-logs/, key: 'nav.courierLogs' },
   { match: /^\/bank-details/, key: 'nav.bankDetails' },
   { match: /^\/customers/, key: 'nav.customers' },

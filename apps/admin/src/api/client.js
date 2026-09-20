@@ -256,6 +256,13 @@ export const getPayment = (id) => client.get(`/payments/${id}`).then((r) => r.da
 export const verifyPayment = (id, data) => client.patch(`/payments/${id}/verify`, data).then((r) => r.data);
 export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/reject`, { reason }).then((r) => r.data);
 
+// ---- SMS listener (Android phone forwarding bKash SMS) ----
+export const createSmsPairingCode = () => client.post('/sms-listener/pairing-codes').then((r) => r.data);
+export const getSmsDevices = () => client.get('/sms-listener/devices').then((r) => r.data);
+export const revokeSmsDevice = (id) => client.delete(`/sms-listener/devices/${id}`).then((r) => r.data);
+export const getSmsMessages = (params) => client.get('/sms-listener/messages', { params }).then((r) => r.data);
+export const rematchSmsMessage = (id) => client.post(`/sms-listener/messages/${id}/match`).then((r) => r.data);
+
 // ---- Bank details (customers pay into this account for bank transfer) ----
 export const getBankSettings = () => client.get('/settings/bank').then((r) => r.data);
 export const updateBankSettings = (data) => client.put('/settings/bank', data).then((r) => r.data);
