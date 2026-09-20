@@ -349,7 +349,8 @@ exports.createOrder = async (req, res) => {
   let bankAccountLabel = ''; // which of the merchant's accounts a bank transfer went to
   if (!adminEntry && method === 'bank_transfer') {
     const bank = await BankSettings.load();
-    if (paymentDetails?.bankAccountId) bankAccountLabel = bank.labelFor(paymentDetails.bankAccountId);
+    const activeBank = bank.activeAccount();
+    if (activeBank) bankAccountLabel = bank.labelFor(activeBank._id);
     if (!bank.isConfigured()) {
       return res.status(400).json({ message: 'ব্যাংক ট্রান্সফার এখন চালু নেই। অন্য পেমেন্ট পদ্ধতি বেছে নিন।' });
     }

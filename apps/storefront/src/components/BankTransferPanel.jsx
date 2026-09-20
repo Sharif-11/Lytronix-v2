@@ -42,7 +42,7 @@ function Row({ label, value, mono, copy }) {
 // manual-bKash form uses, since only one of the two is ever active.
 export default function BankTransferPanel({ bank, amount, advanceInfo, details, setDetails, onProofChange, Field }) {
   const required = advanceInfo?.requiredAdvance > 0;
-  const accounts = bank.accounts || [];
+  const accounts = bank.accounts || []; // the server sends only the active account
   return (
     <div className="mt-4 rounded-2xl border border-ui-line overflow-hidden">
       <div className="bg-ui-dark text-white px-4 py-3 flex items-center gap-2">
@@ -57,9 +57,6 @@ export default function BankTransferPanel({ bank, amount, advanceInfo, details, 
           <li>আমরা যাচাই করার পর আপনার অর্ডার কনফার্ম হবে</li>
         </ol>
 
-        {accounts.length > 1 && (
-          <p className="text-xs text-ui-muted">নিচের যেকোনো একটি অ্যাকাউন্টে পাঠাতে পারেন।</p>
-        )}
         {accounts.map((a) => (
           <div key={a._id}>
             <div className="rounded-xl bg-white border border-ui-line px-3.5 py-1">
@@ -82,23 +79,6 @@ export default function BankTransferPanel({ bank, amount, advanceInfo, details, 
           <p className="text-xs text-ui-muted">
             বাকি {formatMoney(advanceInfo.codRemainder)} ডেলিভারির সময় ক্যাশে পরিশোধ করতে পারবেন।
           </p>
-        )}
-
-        {accounts.length > 1 && (
-          <Field label="কোন অ্যাকাউন্টে পাঠিয়েছেন">
-            <select
-              className="input"
-              value={details.bankAccountId || ''}
-              onChange={(e) => setDetails({ ...details, bankAccountId: e.target.value })}
-            >
-              <option value="">বেছে নিন</option>
-              {accounts.map((a) => (
-                <option key={a._id} value={a._id}>
-                  {a.bankName} · {a.accountNumber}
-                </option>
-              ))}
-            </select>
-          </Field>
         )}
 
         <div className="grid sm:grid-cols-2 gap-4">

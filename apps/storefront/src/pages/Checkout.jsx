@@ -200,7 +200,7 @@ export default function Checkout() {
       paymentMethod,
       paymentDetails:
         paymentMethod === 'bkash_manual' || paymentMethod === 'bank_transfer'
-          ? { senderNumber: bkash.senderNumber, transactionId: bkash.transactionId, proofImageUrl, bankAccountId: paymentMethod === 'bank_transfer' ? bkash.bankAccountId || undefined : undefined }
+          ? { senderNumber: bkash.senderNumber, transactionId: bkash.transactionId, proofImageUrl }
           : undefined,
     };
 

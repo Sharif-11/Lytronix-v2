@@ -24,6 +24,8 @@ const bankSettingsSchema = new mongoose.Schema(
   {
     _id: { type: String, default: SINGLETON_ID },
     accounts: { type: [accountSchema], default: [] },
+    // The one account shown to customers. When unset/stale, the first complete account is used.
+    activeAccountId: { type: String, default: '' },
     // Legacy single-account fields (before multiple accounts were supported);
     // moved into `accounts` the first time the settings are loaded.
     bankName: field,
@@ -70,6 +72,11 @@ bankSettingsSchema.methods.isConfigured = function isConfigured() {
   return this.completeAccounts().length > 0;
 };
 
+bankSettingsSchema.methods.activeAccount = function activeAccount() {
+  const complete = this.completeAccounts();
+  return complete.find((a) => String(a._id) === String(this.activeAccountId)) || complete[0] || null;
+};
+
 const shape = (a) => {
   const out = { _id: String(a._id) };
   ACCOUNT_FIELDS.forEach((k) => {
@@ -78,15 +85,20 @@ const shape = (a) => {
   return out;
 };
 
-// What the storefront may see: only usable accounts.
+// What the storefront may see: ONLY the active account.
 bankSettingsSchema.methods.toPublic = function toPublic() {
-  const accounts = this.completeAccounts().map(shape);
-  return { configured: accounts.length > 0, accounts };
+  const active = this.activeAccount();
+  return { configured: Boolean(active), accounts: active ? [shape(active)] : [] };
 };
 
-// What the super admin edits: every account, complete or not.
+// What the super admin edits: every account, plus which one is active.
 bankSettingsSchema.methods.toAdmin = function toAdmin() {
-  return { configured: this.isConfigured(), accounts: this.accounts.map(shape) };
+  const active = this.activeAccount();
+  return {
+    configured: Boolean(active),
+    activeAccountId: active ? String(active._id) : '',
+    accounts: this.accounts.map(shape),
+  };
 };
 
 // Human label for a saved account, used on payment records.

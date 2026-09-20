@@ -91,7 +91,12 @@ export default function OrderForm() {
 
   useEffect(() => {
     if (payMode === 'paid' && payMethod === 'bank_transfer' && !bank) {
-      getBankSettings().then(setBank).catch(() => {});
+      getBankSettings()
+        .then((b) => {
+          setBank(b);
+          setPayAccountId((cur) => cur || b.activeAccountId || '');
+        })
+        .catch(() => {});
     }
   }, [payMode, payMethod, bank]);
 

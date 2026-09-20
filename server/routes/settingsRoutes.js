@@ -18,7 +18,8 @@ router.get(
 );
 
 // PUT /api/settings/bank  { accounts: [ {bankName, accountName, ...} ] } — super admin only.
-// Replaces the whole list (existing accounts keep their _id when sent back).
+// Replaces the whole list (existing accounts keep their _id when sent back);
+// activeIndex = which account in that list customers are shown.
 router.put(
   '/bank',
   protect,
@@ -44,6 +45,9 @@ router.put(
 
     const doc = await BankSettings.load();
     doc.accounts = accounts;
+    // The client says which card (by position) is active; store that account's id.
+    const idx = Number.isInteger(req.body.activeIndex) ? req.body.activeIndex : -1;
+    doc.activeAccountId = doc.accounts[idx] ? String(doc.accounts[idx]._id) : '';
     doc.updatedBy = req.user._id;
     await doc.save();
     res.json(doc.toAdmin());

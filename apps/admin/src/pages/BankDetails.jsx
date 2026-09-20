@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Landmark, Loader2, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { Landmark, Loader2, CheckCircle2, Plus, Trash2, BadgeCheck } from 'lucide-react';
 import { getBankSettings, updateBankSettings } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import usePageTitle from '../lib/usePageTitle';
@@ -25,12 +25,16 @@ export default function BankDetails() {
   const { t } = useLanguage();
   usePageTitle(t('nav.bankDetails'));
   const [accounts, setAccounts] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(0); // the one account customers see
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     getBankSettings()
-      .then((d) => setAccounts(d.accounts.length ? d.accounts : [blankAccount()]))
+      .then((d) => {
+        setAccounts(d.accounts.length ? d.accounts : [blankAccount()]);
+        setActiveIdx(Math.max(0, d.accounts.findIndex((a) => a._id === d.activeAccountId)));
+      })
       .catch(() => {}); // surfaced globally via the ErrorModal
   }, []);
 
@@ -47,6 +51,8 @@ export default function BankDetails() {
   const remove = (idx) => {
     setSaved(false);
     setAccounts((list) => (list.length === 1 ? [blankAccount()] : list.filter((_, i) => i !== idx)));
+    // Keep the active marker on the same account (or fall back to the first).
+    setActiveIdx((cur) => (idx === cur ? 0 : idx < cur ? cur - 1 : cur));
   };
 
   const submit = async (e) => {
@@ -54,9 +60,13 @@ export default function BankDetails() {
     setSaving(true);
     try {
       // Fully blank cards are just dropped; half-filled ones are saved but not offered to customers.
-      const filled = accounts.filter((a) => FIELDS.some((f) => (a[f.key] || '').trim()));
-      const d = await updateBankSettings({ accounts: filled });
+      const keepIdx = accounts.map((a, i) => (FIELDS.some((f) => (a[f.key] || '').trim()) ? i : -1)).filter((i) => i >= 0);
+      const filled = keepIdx.map((i) => accounts[i]);
+      // If the active card is incomplete or dropped, the server falls back to
+      // the first complete account.
+      const d = await updateBankSettings({ accounts: filled, activeIndex: keepIdx.indexOf(activeIdx) });
       setAccounts(d.accounts.length ? d.accounts : [blankAccount()]);
+      setActiveIdx(Math.max(0, d.accounts.findIndex((a) => a._id === d.activeAccountId)));
       setSaved(true);
     } catch {
       /* surfaced globally via the ErrorModal */
@@ -73,8 +83,8 @@ export default function BankDetails() {
         <Landmark size={22} className="text-ui-brand" /> Bank details
       </h1>
       <p className="text-sm text-ui-muted mb-5">
-        Add every bank account customers can transfer to. An account is shown at checkout only once its bank name,
-        account name and account number are filled in.
+        Save as many bank accounts as you like, but only the <b>active</b> one is shown to customers at checkout. It
+        needs a bank name, account name and account number. Admins can still record a transfer against any account.
       </p>
 
       <form onSubmit={submit} className="space-y-4">
@@ -93,6 +103,30 @@ export default function BankDetails() {
                 <Trash2 size={13} /> Remove
               </button>
             </div>
+
+            <label
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                activeIdx === idx ? 'border-ui-brand bg-ui-brand/[0.06] text-ui-ink' : 'border-ui-line text-ui-muted cursor-pointer'
+              }`}
+            >
+              <input
+                type="radio"
+                name="activeBank"
+                className="accent-ui-brand"
+                checked={activeIdx === idx}
+                onChange={() => {
+                  setSaved(false);
+                  setActiveIdx(idx);
+                }}
+              />
+              {activeIdx === idx ? (
+                <span className="inline-flex items-center gap-1 font-medium text-ui-brand">
+                  <BadgeCheck size={15} /> Active — shown to customers
+                </span>
+              ) : (
+                'Make this the active account'
+              )}
+            </label>
 
             <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
               {FIELDS.map((f) => (
