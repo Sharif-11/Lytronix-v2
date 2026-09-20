@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, PlusCircle, Package, FolderTree, TrendingUp, BookUser, Users,
-  ShieldCheck, LogOut, Wallet, Megaphone, Inbox, MessagesSquare,
+  ShieldCheck, LogOut, Wallet, Truck, Megaphone, Inbox, MessagesSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -19,6 +19,7 @@ const NAV_SECTIONS = [
       { to: '/orders', end: true, labelKey: 'nav.orders', icon: ClipboardList },
       { to: '/orders/new', end: false, labelKey: 'nav.newOrder', icon: PlusCircle, permission: 'orders:manage' },
       { to: '/payments', end: false, labelKey: 'nav.payments', icon: Wallet, permission: 'payments:manage' },
+      { to: '/courier-logs', end: false, labelKey: 'nav.courierLogs', icon: Truck, permission: 'orders:manage' },
       { to: '/customers', end: false, labelKey: 'nav.customers', icon: BookUser, permission: 'customers:manage' },
       { to: '/marketing', end: false, labelKey: 'nav.marketing', icon: Megaphone, permission: 'customers:manage' },
       { to: '/messages', end: false, labelKey: 'nav.messages', icon: Inbox, permission: 'customers:manage' },

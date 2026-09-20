@@ -256,6 +256,10 @@ export const getPayment = (id) => client.get(`/payments/${id}`).then((r) => r.da
 export const verifyPayment = (id, data) => client.patch(`/payments/${id}/verify`, data).then((r) => r.data);
 export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/reject`, { reason }).then((r) => r.data);
 
+// ---- Courier callback log ----
+export const getSteadfastWebhookLogs = (params) =>
+  client.get('/couriers/steadfast/webhook-logs', { params }).then((r) => r.data);
+
 // ---- SMS logs ----
 export const getSmsLogs = (orderId) => client.get('/sms-logs', { params: { order: orderId } }).then((r) => r.data);
 // skipErrorModal: the SMS credit chip is passive background chrome — a
