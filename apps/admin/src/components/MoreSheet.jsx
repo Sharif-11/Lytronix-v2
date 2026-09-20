@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BookUser, Users, ShieldCheck, LogOut, X, Wallet, Truck, Landmark, FolderTree, TrendingUp, UserCircle, Megaphone, Inbox, MessagesSquare } from 'lucide-react';
+import { BookUser, Users, ShieldCheck, LogOut, X, Wallet, Landmark, FolderTree, TrendingUp, UserCircle, Megaphone, Inbox, MessagesSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from './LanguageToggle';
@@ -79,11 +79,6 @@ export default function MoreSheet({ open, onClose }) {
           {hasPermission('analytics:view') && (
             <NavLink to="/analytics" onClick={onClose} className={itemClass}>
               <TrendingUp size={18} /> {t('nav.analytics')}
-            </NavLink>
-          )}
-          {hasPermission('orders:manage') && (
-            <NavLink to="/courier-logs" onClick={onClose} className={itemClass}>
-              <Truck size={18} /> {t('nav.courierLogs')}
             </NavLink>
           )}
           {hasPermission('payments:manage') && (

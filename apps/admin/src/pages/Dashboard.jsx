@@ -4,6 +4,7 @@ import { getOrders, getOrderStats, getAnalyticsOverview, getTopProducts, getStea
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import StatusBadge from '../components/StatusBadge';
+import CourierCallbacksPanel from '../components/CourierCallbacksPanel';
 import { formatMoney, formatDateShort } from '../utils/format';
 import {
   Plus, Package, BookUser, Printer, ClipboardList, Wallet, Clock, TrendingUp, ArrowUpRight, ArrowRight,
@@ -275,6 +276,13 @@ export default function Dashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Low-priority: courier callback log, kept at the very bottom */}
+      {hasPermission('orders:manage') && (
+        <div className="mt-6">
+          <CourierCallbacksPanel />
+        </div>
       )}
     </div>
   );

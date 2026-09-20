@@ -41,6 +41,8 @@ export default function Checkout() {
   usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : 'চেকআউট');
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // { configured, bankName, ... } — bank transfer shows only once configured
+  const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
+  const [metaReady, setMetaReady] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;
 
@@ -69,8 +71,12 @@ export default function Checkout() {
 
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
-    getPaymentMeta().then((m) => setBkashAutoOn(Boolean(m.bkashAutomated)));
-    getBankInfo().then(setBank);
+    Promise.all([getPaymentMeta(), getBankInfo()]).then(([m, b]) => {
+      setBkashAutoOn(Boolean(m.bkashAutomated));
+      if (m.methods) setMethods(m.methods);
+      setBank(b);
+      setMetaReady(true);
+    });
   }, []);
 
   // Whenever the cart contains a product that isn't fully COD-eligible, bKash
@@ -80,6 +86,22 @@ export default function Checkout() {
   useEffect(() => {
     if (advanceRequired && paymentMethod === 'cod') setPaymentMethod('bkash_manual');
   }, [advanceRequired, paymentMethod]);
+
+  // If the chosen method was switched off by the merchant (or isn't set up),
+  // fall back to the first one that is available.
+  useEffect(() => {
+    if (!metaReady) return;
+    const available = {
+      cod: methods.cod,
+      bkash_manual: methods.bkash_manual,
+      bank_transfer: Boolean(bank?.configured),
+      bkash_automated: methods.bkash_automated && bkashAutoOn,
+    };
+    if (!available[paymentMethod]) {
+      const first = ['cod', 'bkash_manual', 'bank_transfer', 'bkash_automated'].find((k) => available[k]);
+      if (first) setPaymentMethod(first);
+    }
+  }, [metaReady, methods, bank, bkashAutoOn, paymentMethod]);
 
   useEffect(() => {
     track('checkout_started');
@@ -453,34 +475,40 @@ export default function Checkout() {
             </p>
           )}
 
-          <div className={`grid gap-3 ${bank?.configured ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
-            <PaymentOption
-              icon={Truck}
-              label="ক্যাশ অন ডেলিভারি"
-              sub="প্রোডাক্ট হাতে পেয়ে পেমেন্ট"
-              active={paymentMethod === 'cod'}
-              onClick={() => setPaymentMethod('cod')}
-              disabled={advanceRequired}
-              badge={advanceRequired ? 'অগ্রিম প্রয়োজন' : undefined}
-            />
-            <PaymentOption
-              icon={Smartphone}
-              label="বিকাশ — সেন্ড মানি"
-              sub="ম্যানুয়াল ট্রান্সফার"
-              active={paymentMethod === 'bkash_manual'}
-              onClick={() => setPaymentMethod('bkash_manual')}
-              accent="bkash"
-            />
-            <PaymentOption
-              icon={Zap}
-              label="বিকাশ চেকআউট"
-              sub={bkashAutoOn ? 'অনলাইন পেমেন্ট' : 'অনলাইন পেমেন্ট'}
-              active={paymentMethod === 'bkash_automated'}
-              onClick={() => setPaymentMethod('bkash_automated')}
-              disabled={!bkashAutoOn}
-              badge={bkashAutoOn ? undefined : 'শীঘ্রই আসছে'}
-              accent="bkash"
-            />
+          <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
+            {methods.cod && (
+              <PaymentOption
+                icon={Truck}
+                label="ক্যাশ অন ডেলিভারি"
+                sub="প্রোডাক্ট হাতে পেয়ে পেমেন্ট"
+                active={paymentMethod === 'cod'}
+                onClick={() => setPaymentMethod('cod')}
+                disabled={advanceRequired}
+                badge={advanceRequired ? 'অগ্রিম প্রয়োজন' : undefined}
+              />
+            )}
+            {methods.bkash_manual && (
+              <PaymentOption
+                icon={Smartphone}
+                label="বিকাশ — সেন্ড মানি"
+                sub="ম্যানুয়াল ট্রান্সফার"
+                active={paymentMethod === 'bkash_manual'}
+                onClick={() => setPaymentMethod('bkash_manual')}
+                accent="bkash"
+              />
+            )}
+            {methods.bkash_automated && (
+              <PaymentOption
+                icon={Zap}
+                label="বিকাশ চেকআউট"
+                sub="অনলাইন পেমেন্ট"
+                active={paymentMethod === 'bkash_automated'}
+                onClick={() => setPaymentMethod('bkash_automated')}
+                disabled={!bkashAutoOn}
+                badge={bkashAutoOn ? undefined : 'শীঘ্রই আসছে'}
+                accent="bkash"
+              />
+            )}
             {bank?.configured && (
               <PaymentOption
                 icon={Landmark}

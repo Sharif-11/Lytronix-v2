@@ -44,6 +44,8 @@ export default function ProductLanding() {
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // bank transfer shows only once the bank details are configured
+  const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
+  const [metaReady, setMetaReady] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [bkash, setBkash] = useState(emptyBkash);
   const [submitting, setSubmitting] = useState(false);
@@ -100,9 +102,29 @@ export default function ProductLanding() {
 
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
-    getPaymentMeta().then((m) => setBkashAutoOn(Boolean(m.bkashAutomated)));
-    getBankInfo().then(setBank);
+    Promise.all([getPaymentMeta(), getBankInfo()]).then(([m, b]) => {
+      setBkashAutoOn(Boolean(m.bkashAutomated));
+      if (m.methods) setMethods(m.methods);
+      setBank(b);
+      setMetaReady(true);
+    });
   }, []);
+
+  // If the chosen method was switched off by the merchant (or isn't set up),
+  // fall back to the first one that is available.
+  useEffect(() => {
+    if (!metaReady) return;
+    const available = {
+      cod: methods.cod,
+      bkash_manual: methods.bkash_manual,
+      bank_transfer: Boolean(bank?.configured),
+      bkash_automated: methods.bkash_automated && bkashAutoOn,
+    };
+    if (!available[paymentMethod]) {
+      const first = ['cod', 'bkash_manual', 'bank_transfer', 'bkash_automated'].find((k) => available[k]);
+      if (first) setPaymentMethod(first);
+    }
+  }, [metaReady, methods, bank, bkashAutoOn, paymentMethod]);
 
   // Hide the floating "order now" bar once the real submit button scrolls
   // into view — no need for a duplicate CTA once the actual one is visible.
@@ -416,15 +438,19 @@ export default function ProductLanding() {
                     )}
                   </p>
                 )}
-                <div className={`grid gap-2.5 ${(bkashAutoOn ? 1 : 0) + (bank?.configured ? 1 : 0) === 2 ? 'grid-cols-2 sm:grid-cols-4' : (bkashAutoOn || bank?.configured) ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  <PayOption
-                    icon={Truck} label="ক্যাশ অন ডেলিভারি" active={paymentMethod === 'cod'}
-                    onClick={() => setPaymentMethod('cod')} disabled={advanceRequired}
-                  />
-                  <PayOption
-                    icon={Smartphone} label="বিকাশ — সেন্ড মানি" accent active={paymentMethod === 'bkash_manual'}
-                    onClick={() => setPaymentMethod('bkash_manual')}
-                  />
+                <div className="grid gap-2.5 grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
+                  {methods.cod && (
+                    <PayOption
+                      icon={Truck} label="ক্যাশ অন ডেলিভারি" active={paymentMethod === 'cod'}
+                      onClick={() => setPaymentMethod('cod')} disabled={advanceRequired}
+                    />
+                  )}
+                  {methods.bkash_manual && (
+                    <PayOption
+                      icon={Smartphone} label="বিকাশ — সেন্ড মানি" accent active={paymentMethod === 'bkash_manual'}
+                      onClick={() => setPaymentMethod('bkash_manual')}
+                    />
+                  )}
                   {bkashAutoOn && (
                     <PayOption
                       icon={Zap} label="বিকাশ চেকআউট" accent active={paymentMethod === 'bkash_automated'}

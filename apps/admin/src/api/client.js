@@ -259,6 +259,8 @@ export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/rejec
 // ---- Bank details (customers pay into this account for bank transfer) ----
 export const getBankSettings = () => client.get('/settings/bank').then((r) => r.data);
 export const updateBankSettings = (data) => client.put('/settings/bank', data).then((r) => r.data);
+export const getPaymentSettings = () => client.get('/settings/payments').then((r) => r.data);
+export const updatePaymentSettings = (data) => client.put('/settings/payments', data).then((r) => r.data);
 
 // ---- Courier callback log ----
 export const getSteadfastWebhookLogs = (params) =>
