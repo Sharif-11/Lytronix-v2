@@ -6,6 +6,7 @@ import { formatMoney } from '../utils/format';
 import { usePhoneticField } from '../lib/phonetic';
 import { usePhonetic } from '../context/PhoneticContext';
 import AiOrderAssist from '../components/AiOrderAssist';
+import FraudCheck from '../components/FraudCheck';
 import BookCourierModal from '../components/BookCourierModal';
 import SearchableSelect from '../components/SearchableSelect';
 import SuggestInput from '../components/SuggestInput';
@@ -375,6 +376,7 @@ export default function OrderForm() {
             </Field>
             <Field label="Phone number" required mobileFull>
               <input className="input" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
+              <FraudCheck phone={customer.phone} />
             </Field>
 
             {/* Custom, searchable pickers — not the OS-native <select>, which

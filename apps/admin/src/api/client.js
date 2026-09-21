@@ -269,6 +269,17 @@ export const updateBankSettings = (data) => client.put('/settings/bank', data).t
 export const getPaymentSettings = () => client.get('/settings/payments').then((r) => r.data);
 export const updatePaymentSettings = (data) => client.put('/settings/payments', data).then((r) => r.data);
 
+// ---- Steadfast extras ----
+// Passive: shown inline under the phone field, so no error popup.
+export const getFraudCheck = (phone) =>
+  client.get(`/couriers/steadfast/fraud-check/${phone}`, { skipErrorModal: true }).then((r) => r.data);
+export const getCourierPayouts = () =>
+  client.get('/couriers/steadfast/payments', { skipErrorModal: true }).then((r) => r.data);
+export const getCourierReturns = () =>
+  client.get('/couriers/steadfast/returns', { skipErrorModal: true }).then((r) => r.data);
+export const requestCourierReturn = (orderId, reason) =>
+  client.post(`/orders/${orderId}/steadfast/return`, { reason }).then((r) => r.data);
+
 // ---- Courier callback log ----
 export const getSteadfastWebhookLogs = (params) =>
   client.get('/couriers/steadfast/webhook-logs', { params }).then((r) => r.data);

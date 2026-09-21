@@ -10,12 +10,14 @@ import {
   getSuggestedStatuses,
   bookSteadfastParcel,
   syncSteadfastStatus,
+  requestCourierReturn,
   getSmsLogs,
   sendOrderMessage,
 } from '../api/client';
 import TrackingLink from '../components/TrackingLink';
 import StatusBadge, { CourierStatus } from '../components/StatusBadge';
 import CourierTracker from '../components/CourierTracker';
+import FraudCheck from '../components/FraudCheck';
 import Loader from '../components/Loader';
 import SuggestInput from '../components/SuggestInput';
 import { useConfirm } from '../context/ConfirmContext';
@@ -165,6 +167,19 @@ export default function OrderDetail() {
     }
   };
 
+  const handleRequestReturn = async (reason) => {
+    setSteadfastBusy(true);
+    try {
+      const res = await requestCourierReturn(id, reason);
+      setOrder(res.order);
+      return true;
+    } catch {
+      return false; // Surfaced globally via the ErrorModal.
+    } finally {
+      setSteadfastBusy(false);
+    }
+  };
+
   const handleSyncSteadfast = async ({ silent } = {}) => {
     setSteadfastBusy(true);
     try {
@@ -254,6 +269,7 @@ export default function OrderDetail() {
             <dl className="grid sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <Row label="Name" value={order.customer.name} />
               <Row label="Phone" value={order.customer.phone} mono />
+              <Row label="Delivery risk" value={<FraudCheck phone={order.customer.phone} />} />
               <Row label="Zilla" value={order.customer.zilla || '—'} />
               <Row label="Thana" value={order.customer.thana || '—'} />
               <Row label="Address" value={order.customer.address || '—'} full />
@@ -390,7 +406,7 @@ export default function OrderDetail() {
           </section>
 
           {/* Courier tracker */}
-          <CourierTracker order={order} onBook={handleBookSteadfast} onSync={handleSyncSteadfast} busy={steadfastBusy} />
+          <CourierTracker order={order} onBook={handleBookSteadfast} onSync={handleSyncSteadfast} onReturn={handleRequestReturn} busy={steadfastBusy} />
 
           {/* SMS notifications */}
           <section className="bg-ui-panel border border-ui-line rounded-xl shadow-card p-4 sm:p-5">

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import StatusBadge from '../components/StatusBadge';
 import CourierCallbacksPanel from '../components/CourierCallbacksPanel';
+import CourierInsights from '../components/CourierInsights';
 import { formatMoney, formatDateShort } from '../utils/format';
 import {
   Plus, Package, BookUser, Printer, ClipboardList, Wallet, Clock, TrendingUp, ArrowUpRight, ArrowRight,
@@ -276,6 +277,14 @@ export default function Dashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Steadfast account: parcel statuses, payouts, return requests */}
+      {hasPermission('orders:manage') && (
+        <div className="mt-6">
+          <h2 className="font-display font-bold text-ui-ink mb-3">Courier</h2>
+          <CourierInsights courierByStatus={stats?.courierByStatus} />
+        </div>
       )}
 
       {/* Low-priority: courier callback log, kept at the very bottom */}

@@ -1,4 +1,5 @@
-import { Check, Truck, RefreshCw, AlertTriangle, PauseCircle, MapPin } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Truck, RefreshCw, AlertTriangle, PauseCircle, MapPin, Undo2 } from 'lucide-react';
 import { formatDate, formatTime, groupTimelineByDate } from '../utils/format';
 
 // Step-by-step: which stages an order has passed through on its way to
@@ -27,7 +28,15 @@ const EXCEPTIONS = {
   in_review: { label: 'Under review by courier', icon: AlertTriangle, tone: 'bg-sky-50 text-sky-700 border-sky-200' },
 };
 
-export default function CourierTracker({ order, onBook, onSync, busy }) {
+// A parcel can still be called back until it is delivered or already cancelled.
+const canRequestReturn = (o) => {
+  const s = String(o.courier?.status || o.status || '').toLowerCase();
+  return !['delivered', 'partial_delivered', 'cancelled'].includes(s) && !s.startsWith('cancelled');
+};
+
+export default function CourierTracker({ order, onBook, onSync, onReturn, busy }) {
+  const [returning, setReturning] = useState(false);
+  const [reason, setReason] = useState('');
   const statusKey = order.status.trim().toLowerCase();
   const exception = EXCEPTIONS[statusKey];
   const stepsDone = STEPS.map((s) => s.done(order));
@@ -95,6 +104,44 @@ export default function CourierTracker({ order, onBook, onSync, busy }) {
             <button onClick={onSync} disabled={busy} className="btn-secondary w-full mt-2 gap-1.5">
               <RefreshCw size={15} className={busy ? 'animate-spin' : ''} /> {busy ? 'Syncing…' : 'Sync status'}
             </button>
+
+            {onReturn && canRequestReturn(order) && (
+              <div className="pt-2">
+                {!returning ? (
+                  <button type="button" onClick={() => setReturning(true)} className="text-xs text-ui-rust hover:underline inline-flex items-center gap-1">
+                    <Undo2 size={12} /> Ask Steadfast to bring this parcel back
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-red-200 bg-red-50/50 p-2.5 space-y-2">
+                    <input
+                      className="input"
+                      placeholder="Reason (optional), e.g. Customer changed their mind"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      maxLength={500}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (await onReturn(reason.trim())) {
+                            setReturning(false);
+                            setReason('');
+                          }
+                        }}
+                        className="btn-primary flex-1 text-xs"
+                      >
+                        {busy ? 'Sending…' : 'Request return'}
+                      </button>
+                      <button type="button" onClick={() => setReturning(false)} className="btn-secondary text-xs">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </dl>
         ) : (
           <>
