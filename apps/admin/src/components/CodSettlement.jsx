@@ -39,7 +39,7 @@ export default function CodSettlement() {
   const { awaiting, settled, received } = data;
 
   return (
-    <section className="card p-4 sm:p-5">
+    <section className="card p-4 sm:p-5 min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="font-display font-bold text-ui-ink flex items-center gap-2">
           <HandCoins size={16} className="text-ui-brand" /> COD settlement
@@ -83,7 +83,7 @@ export default function CodSettlement() {
             {awaiting.orders.map((o) => (
               <li key={o._id} className="py-1.5 flex items-center justify-between gap-2 text-sm">
                 <Link to={`/orders/${o._id}`} className="font-mono text-ui-brand hover:underline">{o.orderNumber}</Link>
-                <span className="text-xs text-ui-muted truncate flex-1">{o.customer?.name}</span>
+                <span className="text-xs text-ui-muted truncate flex-1 min-w-0">{o.customer?.name}</span>
                 <span className="font-mono text-ui-ink">{formatMoney(o.courier?.codAmount)}</span>
               </li>
             ))}
