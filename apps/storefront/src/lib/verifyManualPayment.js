@@ -3,7 +3,7 @@ import { trackPaymentState } from '../api/client';
 // After a manual bKash order is placed the checkout stays on the page while the
 // server matches the receipt SMS. This waits for that, and says how it ended.
 const POLL_MS = 2000;
-export const VERIFY_TIMEOUT_MS = 40000;
+export const VERIFY_TIMEOUT_MS = 60000; // stay on the checkout for up to 1 minute
 // How long the result stays visible in the button before the page moves on.
 export const VERIFIED_HOLD_MS = 1200;
 export const FAILED_HOLD_MS = 5000;
