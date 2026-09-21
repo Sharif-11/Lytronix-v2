@@ -4,9 +4,9 @@
  *   - super-admin User(s)    (users whose role.isSuperAdmin === true)
  *   - Role definitions       (the permission system — kept so login/RBAC works)
  *
- * Everything else (orders, payments, products, categories, carts, chats,
- * analytics, notifications, OTPs, SMS logs, contact messages, storefront
- * customer accounts, saved products) is dropped.
+ * Everything else (orders, payments, carts, chats,
+ * analytics, notifications, OTPs, SMS logs, contact messages
+ * saved products) is dropped. Storefront customer accounts, products and categories are KEPT.
  *
  *   node scripts/resetDbKeep.js --yes
  *
@@ -22,16 +22,14 @@ const Role = require('../models/Role');
 const WIPE = [
   'analyticsevents',
   'carts',
-  'categories',
+  'chatailogs',
   'chatmessages',
   'chatthreads',
   'contactmessages',
-  'customeraccounts',
   'notifications',
   'orders',
   'otprequests',
   'payments',
-  'products',
   'savedproducts',
   'smslogs',
 ];
