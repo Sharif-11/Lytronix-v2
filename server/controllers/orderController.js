@@ -865,69 +865,46 @@ function buildTrackingLinkFromTemplate(trackingCode) {
 
 // POST /api/orders/:id/steadfast/book
 // Creates a consignment with Steadfast for this order and stores the result.
-exports.bookSteadfastParcel = async (req, res) => {
-  if (!steadfast.isConfigured()) {
-    return res.status(400).json({
-      message: 'Steadfast API credentials are not configured. Add STEADFAST_API_KEY and STEADFAST_SECRET_KEY to backend/.env.',
-    });
-  }
-
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ message: 'Order not found' });
-
-  if (order.courier?.consignmentId) {
-    return res.status(409).json({
-      message: `This order is already booked with Steadfast (consignment #${order.courier.consignmentId}).`,
-    });
-  }
-
+// Builds the body Steadfast expects for one order, or explains why the order
+// can't be booked yet. Shared by single and bulk booking.
+function buildBookingPayload(order) {
   const phoneDigits = (order.customer.phone || '').replace(/\D/g, '');
   if (phoneDigits.length !== 11) {
-    return res.status(400).json({
-      message: `Steadfast requires an 11-digit recipient phone number. "${order.customer.phone}" doesn't match — please fix the customer's phone number first.`,
-    });
+    return {
+      error: `Steadfast requires an 11-digit recipient phone number. "${order.customer.phone}" doesn't match — please fix the customer's phone number first.`,
+    };
   }
 
   // Steadfast accepts 0 (prepaid) up to 1,000,000 — refuse before booking rather
   // than let it truncate or reject.
   const cod = Math.max(0, Number(order.pricing.due) || 0);
   if (cod > 1000000) {
-    return res.status(400).json({ message: 'Steadfast can collect at most ৳1,000,000 on delivery. Reduce the COD amount first.' });
+    return { error: 'Steadfast can collect at most ৳1,000,000 on delivery. Reduce the COD amount first.' };
   }
 
   // Field lengths follow Steadfast's documented limits (it truncates silently otherwise).
-  const payload = {
-    invoice: order.orderNumber,
-    recipient_name: String(order.customer.name || '').slice(0, 100),
-    recipient_phone: phoneDigits,
-    recipient_address: buildSteadfastAddress(order.customer),
-    cod_amount: cod,
-    note: String(order.customer.comments || '').slice(0, 480),
-    item_description: order.items.map((i) => `${i.name} x${i.quantity}`).join(', ').slice(0, 250),
-    total_lot: order.items.reduce((n, i) => n + (Number(i.quantity) || 1), 0) || 1,
+  return {
+    payload: {
+      invoice: order.orderNumber,
+      recipient_name: String(order.customer.name || '').slice(0, 100),
+      recipient_phone: phoneDigits,
+      recipient_address: buildSteadfastAddress(order.customer),
+      cod_amount: cod,
+      note: String(order.customer.comments || '').slice(0, 480),
+      item_description: order.items.map((i) => `${i.name} x${i.quantity}`).join(', ').slice(0, 250),
+      total_lot: order.items.reduce((n, i) => n + (Number(i.quantity) || 1), 0) || 1,
+    },
   };
+}
 
-  logger.info('courier: booking attempt', { orderNumber: order.orderNumber, provider: 'steadfast' });
-
-  let result;
-  try {
-    result = await steadfast.createOrder(payload);
-  } catch (err) {
-    logger.error('courier: booking failed', { orderNumber: order.orderNumber, error: err.message });
-    return res.status(err.statusCode || 502).json({ message: `Steadfast: ${err.message}` });
-  }
-
-  const consignment = result.consignment;
-  if (!consignment) {
-    return res.status(502).json({ message: 'Steadfast did not return consignment details.' });
-  }
-
+// Records a successful booking on the order and saves it.
+async function applyConsignment(order, consignment, codAmount) {
   order.courier = {
     provider: 'steadfast',
     consignmentId: consignment.consignment_id,
     trackingCode: consignment.tracking_code,
     status: consignment.status || 'in_review',
-    codAmount: Number(consignment.cod_amount) || order.pricing.due,
+    codAmount: Number(consignment.cod_amount) || codAmount || order.pricing.due,
     deliveryCharge: order.courier?.deliveryCharge ?? null,
     lastMessage: 'Consignment created with Steadfast.',
     lastSyncedAt: new Date(),
@@ -957,16 +934,137 @@ exports.bookSteadfastParcel = async (req, res) => {
     consignmentId: consignment.consignment_id,
     trackingCode: consignment.tracking_code,
   });
+}
 
-  // Booking already succeeded — an SMS hiccup shouldn't turn this into an
-  // error response, so this is deliberately not in the try/catch above.
+// Booking already succeeded — an SMS hiccup must never turn it into a failure.
+async function notifyBooked(order) {
   try {
     await notifications.notifyCustomerConsignmentBooked(order);
   } catch (err) {
     logger.error('notifyCustomerConsignmentBooked failed', { error: err.message });
   }
+}
+
+exports.bookSteadfastParcel = async (req, res) => {
+  if (!steadfast.isConfigured()) {
+    return res.status(400).json({
+      message: 'Steadfast API credentials are not configured. Add STEADFAST_API_KEY and STEADFAST_SECRET_KEY to backend/.env.',
+    });
+  }
+
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: 'Order not found' });
+
+  if (order.courier?.consignmentId) {
+    return res.status(409).json({
+      message: `This order is already booked with Steadfast (consignment #${order.courier.consignmentId}).`,
+    });
+  }
+
+  const built = buildBookingPayload(order);
+  if (built.error) return res.status(400).json({ message: built.error });
+
+  logger.info('courier: booking attempt', { orderNumber: order.orderNumber, provider: 'steadfast' });
+
+  let result;
+  try {
+    result = await steadfast.createOrder(built.payload);
+  } catch (err) {
+    logger.error('courier: booking failed', { orderNumber: order.orderNumber, error: err.message });
+    return res.status(err.statusCode || 502).json({ message: `Steadfast: ${err.message}` });
+  }
+
+  const consignment = result.consignment;
+  if (!consignment) {
+    return res.status(502).json({ message: 'Steadfast did not return consignment details.' });
+  }
+
+  await applyConsignment(order, consignment, built.payload.cod_amount);
+  await notifyBooked(order);
 
   res.status(201).json(order);
+};
+
+// POST /api/orders/steadfast/bulk-book  { ids: [orderId, ...] }
+// Books many orders in ONE Steadfast call (their extended bulk endpoint, up to
+// 500). Steadfast answers 200 even when some fail, so every order gets its own
+// result; the ones that failed are left untouched and can be fixed and re-sent.
+exports.bulkBookSteadfast = async (req, res) => {
+  if (!steadfast.isConfigured()) {
+    return res.status(400).json({ message: 'Steadfast API credentials are not configured.' });
+  }
+  const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(String))];
+  if (ids.length === 0) return res.status(400).json({ message: 'Select at least one order.' });
+  if (ids.length > 500) return res.status(400).json({ message: 'Steadfast accepts at most 500 orders at a time.' });
+
+  const orders = await Order.find({ _id: { $in: ids.filter((i) => /^[0-9a-f]{24}$/i.test(i)) } });
+  const byId = new Map(orders.map((o) => [String(o._id), o]));
+
+  const results = [];
+  const queue = []; // { order, payload }
+  for (const id of ids) {
+    const order = byId.get(id);
+    if (!order) {
+      results.push({ orderId: id, orderNumber: '', ok: false, message: 'Order not found.' });
+      continue;
+    }
+    const base = { orderId: id, orderNumber: order.orderNumber };
+    if (order.courier?.consignmentId) {
+      results.push({ ...base, ok: false, skipped: true, message: `Already booked (consignment #${order.courier.consignmentId}).` });
+      continue;
+    }
+    const built = buildBookingPayload(order);
+    if (built.error) {
+      results.push({ ...base, ok: false, message: built.error });
+      continue;
+    }
+    queue.push({ order, payload: built.payload });
+  }
+
+  if (queue.length > 0) {
+    logger.info('courier: bulk booking attempt', { count: queue.length });
+    let response;
+    try {
+      response = await steadfast.createBulkOrderExtended(queue.map((q) => q.payload));
+    } catch (err) {
+      logger.error('courier: bulk booking failed', { error: err.message });
+      return res.status(err.statusCode || 502).json({ message: `Steadfast: ${err.message}` });
+    }
+
+    // Answers come back in the order sent (matched by invoice as well, for safety).
+    const answers = Array.isArray(response.data) ? response.data : [];
+    const byInvoice = new Map(answers.map((a) => [String(a.invoice), a]));
+    for (let i = 0; i < queue.length; i += 1) {
+      const { order, payload } = queue[i];
+      const base = { orderId: String(order._id), orderNumber: order.orderNumber };
+      const a = byInvoice.get(payload.invoice) || answers[i];
+      const errors = Array.isArray(a?.error) ? a.error : a?.error ? [String(a.error)] : [];
+
+      if (a && a.consignment_id && errors.length === 0 && a.status !== 'error') {
+        try {
+          await applyConsignment(
+            order,
+            { consignment_id: a.consignment_id, tracking_code: a.tracking_code, tracking_link: a.tracking_link, status: 'in_review' },
+            payload.cod_amount
+          );
+          results.push({ ...base, ok: true, consignmentId: a.consignment_id, trackingCode: a.tracking_code });
+          notifyBooked(order); // not awaited: one slow SMS must not hold up the whole batch
+        } catch (err) {
+          // Steadfast has the parcel but we could not save it: say so loudly rather than double-book later.
+          logger.error('courier: bulk booked but save failed', { orderNumber: order.orderNumber, error: err.message });
+          results.push({ ...base, ok: false, message: `Booked with Steadfast (consignment #${a.consignment_id}) but saving failed: ${err.message}` });
+        }
+      } else {
+        results.push({ ...base, ok: false, message: errors.join(' · ') || 'Steadfast did not book this order.' });
+      }
+    }
+  }
+
+  res.json({
+    results,
+    booked: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+  });
 };
 
 // POST /api/orders/:id/steadfast/sync

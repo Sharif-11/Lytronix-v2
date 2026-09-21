@@ -11,4 +11,7 @@ router.get('/steadfast/fraud-check/:phone', protect, authorize('orders:manage', 
 router.get('/steadfast/payments', protect, authorize('orders:manage', 'orders:view'), asyncHandler(courier.listPayouts));
 router.get('/steadfast/returns', protect, authorize('orders:manage', 'orders:view'), asyncHandler(courier.listReturns));
 
+router.get('/steadfast/pickup', protect, authorize('orders:manage', 'orders:view'), asyncHandler(courier.getPickup));
+router.post('/steadfast/pickup-requests', protect, authorize('orders:manage'), asyncHandler(courier.createPickup));
+
 module.exports = router;

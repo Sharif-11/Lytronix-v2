@@ -14,6 +14,7 @@ const {
   deletePayment,
   deleteOrder,
   bookSteadfastParcel,
+  bulkBookSteadfast,
   syncSteadfastStatus,
   aiExtractOrder,
   aiConfig,
@@ -47,6 +48,7 @@ router.put('/:id', authorize('orders:manage'), asyncHandler(updateOrder));
 router.patch('/:id/status', authorize('orders:manage'), asyncHandler(updateStatus));
 router.post('/:id/payments', authorize('orders:manage', 'payments:manage'), asyncHandler(addPayment));
 router.delete('/:id/payments/:paymentId', authorize('orders:manage', 'payments:manage'), asyncHandler(deletePayment));
+router.post('/steadfast/bulk-book', authorize('orders:manage'), asyncHandler(bulkBookSteadfast));
 router.post('/:id/steadfast/book', authorize('orders:manage'), asyncHandler(bookSteadfastParcel));
 router.post('/:id/steadfast/sync', authorize('orders:manage'), asyncHandler(syncSteadfastStatus));
 router.post('/:id/steadfast/return', authorize('orders:manage'), asyncHandler(require('../controllers/courierController').requestReturn));

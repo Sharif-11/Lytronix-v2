@@ -105,3 +105,101 @@ exports.requestReturn = async (req, res) => {
   });
   res.status(201).json({ request: result, order });
 };
+
+// ---- Pickup requests -----------------------------------------------------
+const PickupRequest = require('../models/PickupRequest');
+const CourierSettings = require('../models/CourierSettings');
+
+const int = (v) => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+// GET /api/couriers/steadfast/pickup
+// Saved defaults, recent requests, and a suggested quantity: parcels booked but
+// not yet picked up (still 'in_review' or 'pending' on Steadfast's side).
+exports.getPickup = async (req, res) => {
+  const [settings, recent, waiting] = await Promise.all([
+    CourierSettings.load(),
+    PickupRequest.find().sort({ createdAt: -1 }).limit(10).lean(),
+    Order.countDocuments({
+      'courier.consignmentId': { $exists: true, $ne: null },
+      'courier.status': { $in: ['in_review', 'pending'] },
+    }),
+  ]);
+  res.json({ defaults: settings.pickup, recent, suggestedQty: waiting });
+};
+
+// POST /api/couriers/steadfast/pickup-requests
+// { addressId, policeStationId, address, contactNumber, note?, estimatedQty?, saveDefaults?,
+//   districtName?, policeStationName? }
+exports.createPickup = async (req, res) => {
+  if (!steadfast.isConfigured()) return notConfigured(res);
+  const b = req.body || {};
+
+  const addressId = int(b.addressId);
+  const policeStationId = int(b.policeStationId);
+  const address = String(b.address || '').trim();
+  const contactNumber = String(b.contactNumber || '').replace(/\D/g, '');
+  const note = String(b.note || '').trim();
+  const estimatedQty = b.estimatedQty === '' || b.estimatedQty == null ? null : int(b.estimatedQty);
+
+  if (!addressId) return res.status(400).json({ message: 'Enter your Steadfast pickup address ID (from the Pickup Addresses page in the Steadfast portal).' });
+  if (!policeStationId) return res.status(400).json({ message: 'Choose the thana the pickup address is in.' });
+  if (!address) return res.status(400).json({ message: 'Enter the pickup address.' });
+  if (address.length > 255) return res.status(400).json({ message: 'The pickup address must be 255 characters or fewer.' });
+  if (!/^01[3-9]\d{8}$/.test(contactNumber)) {
+    return res.status(400).json({ message: 'The contact number must be 11 digits starting with 013 to 019.' });
+  }
+  if (note.length > 500) return res.status(400).json({ message: 'The note must be 500 characters or fewer.' });
+  if (b.estimatedQty && estimatedQty === null) return res.status(400).json({ message: 'Estimated quantity must be a whole number.' });
+
+  let result;
+  try {
+    result = await steadfast.createPickupRequest({
+      address_id: addressId,
+      police_station_id: policeStationId,
+      address,
+      contact_number: contactNumber,
+      ...(note ? { note } : {}),
+      ...(estimatedQty ? { estim_qty: estimatedQty } : {}),
+    });
+  } catch (err) {
+    logger.error('courier: pickup request failed', { error: err.message });
+    if (err.statusCode === 409) {
+      return res.status(409).json({ message: 'A pickup request for this address is already pending — a rider will come, no need to ask again.' });
+    }
+    return res.status(err.statusCode || 502).json({ message: `Steadfast: ${err.message}` });
+  }
+
+  const saved = await PickupRequest.create({
+    addressId,
+    policeStationId,
+    address,
+    contactNumber,
+    note,
+    estimatedQty,
+    steadfastId: result?.data?.id ?? null,
+    response: result,
+    createdBy: req.user?._id || null,
+  });
+
+  if (b.saveDefaults) {
+    const settings = await CourierSettings.load();
+    settings.pickup = {
+      addressId,
+      policeStationId,
+      districtName: String(b.districtName || '').slice(0, 80),
+      policeStationName: String(b.policeStationName || '').slice(0, 80),
+      address,
+      contactNumber,
+    };
+    await settings.save();
+  }
+
+  notificationCenter.push({
+    type: 'system',
+    severity: 'success',
+    title: 'Pickup requested from Steadfast',
+    body: `${estimatedQty ? `~${estimatedQty} parcel(s) · ` : ''}${address}`,
+    link: '/',
+  });
+  res.status(201).json({ request: saved });
+};

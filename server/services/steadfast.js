@@ -50,6 +50,9 @@ const createOrder = (payload) => unwrap(client().post('/create_order', payload))
 
 const createBulkOrder = (items) => unwrap(client().post('/create_order/bulk-order', { data: items }));
 
+// Same as createBulkOrder but each failure comes back as readable sentences, not codes.
+const createBulkOrderExtended = (items) => unwrap(client().post('/create_order/bulk-order/extended', { data: items }));
+
 const statusByConsignmentId = (id) => unwrap(client().get(`/status_by_cid/${id}`));
 const statusByInvoice = (invoice) => unwrap(client().get(`/status_by_invoice/${invoice}`));
 const statusByTrackingCode = (code) => unwrap(client().get(`/status_by_trackingcode/${code}`));
@@ -84,6 +87,7 @@ module.exports = {
   isConfigured,
   createOrder,
   createBulkOrder,
+  createBulkOrderExtended,
   statusByConsignmentId,
   statusByInvoice,
   statusByTrackingCode,
