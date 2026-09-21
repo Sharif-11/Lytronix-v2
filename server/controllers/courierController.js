@@ -203,3 +203,56 @@ exports.createPickup = async (req, res) => {
   });
   res.status(201).json({ request: saved });
 };
+
+// ---- COD settlement ------------------------------------------------------
+const SteadfastPayout = require('../models/SteadfastPayout');
+const { syncPayouts } = require('../services/payoutSync');
+
+const NO_PAYOUT = [{ 'courier.payoutId': '' }, { 'courier.payoutId': null }, { 'courier.payoutId': { $exists: false } }];
+
+async function settlementSnapshot() {
+  const awaitingFilter = {
+    'courier.consignmentId': { $exists: true, $ne: null },
+    'courier.status': { $in: ['delivered', 'partial_delivered'] },
+    'courier.codAmount': { $gt: 0 },
+    $or: NO_PAYOUT,
+  };
+  const [awaitingAgg, awaitingList, settledAgg, received] = await Promise.all([
+    Order.aggregate([{ $match: awaitingFilter }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$courier.codAmount' } } }]),
+    Order.find(awaitingFilter).sort({ updatedAt: 1 }).limit(8).select('orderNumber customer.name courier.codAmount updatedAt').lean(),
+    Order.aggregate([
+      { $match: { 'courier.payoutId': { $exists: true, $ne: '' } } },
+      { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$courier.payoutAmount' } } },
+    ]),
+    SteadfastPayout.aggregate([
+      { $match: { statusLabel: /^paid$/i } },
+      { $group: { _id: null, payouts: { $sum: 1 }, net: { $sum: '$total' }, lastPaidAt: { $max: '$paidAt' }, lastSyncAt: { $max: '$updatedAt' } } },
+    ]),
+  ]);
+  const anySync = await SteadfastPayout.findOne().sort({ updatedAt: -1 }).select('updatedAt').lean();
+  return {
+    awaiting: { count: awaitingAgg[0]?.count || 0, amount: awaitingAgg[0]?.amount || 0, orders: awaitingList },
+    settled: { count: settledAgg[0]?.count || 0, amount: settledAgg[0]?.amount || 0 },
+    received: { payouts: received[0]?.payouts || 0, net: received[0]?.net || 0, lastPaidAt: received[0]?.lastPaidAt || null },
+    lastSyncAt: anySync?.updatedAt || null,
+  };
+}
+exports.settlementSnapshot = settlementSnapshot;
+
+// GET /api/couriers/steadfast/settlement
+exports.getSettlement = async (req, res) => {
+  res.json(await settlementSnapshot());
+};
+
+// POST /api/couriers/steadfast/payouts/sync
+// Looks for new payouts right now and marks the orders they settle.
+exports.syncPayoutsNow = async (req, res) => {
+  if (!steadfast.isConfigured()) return notConfigured(res);
+  try {
+    const summary = await syncPayouts();
+    res.json({ summary, ...(await settlementSnapshot()) });
+  } catch (err) {
+    logger.error('courier: payout sync failed', { error: err.message });
+    res.status(err.statusCode || 502).json({ message: `Steadfast: ${err.message}` });
+  }
+};

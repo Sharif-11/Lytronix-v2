@@ -146,6 +146,11 @@ const orderSchema = new mongoose.Schema(
       deliveryCharge: { type: Number, default: null },
       lastMessage: { type: String, trim: true, default: '' },
       lastSyncedAt: { type: Date, default: null },
+      // Set when a PAID Steadfast payout contains this parcel — i.e. the COD money
+      // for it has reached us (net of Steadfast's fees, which are per payout).
+      payoutId: { type: String, trim: true, default: '' }, // e.g. SFC-31556147
+      payoutPaidAt: { type: Date, default: null },
+      payoutAmount: { type: Number, default: null }, // this parcel's COD as Steadfast counted it
     },
 
     // Fine-grained tracking messages from the courier's webhook (e.g. "Package

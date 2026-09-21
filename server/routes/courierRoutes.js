@@ -14,4 +14,7 @@ router.get('/steadfast/returns', protect, authorize('orders:manage', 'orders:vie
 router.get('/steadfast/pickup', protect, authorize('orders:manage', 'orders:view'), asyncHandler(courier.getPickup));
 router.post('/steadfast/pickup-requests', protect, authorize('orders:manage'), asyncHandler(courier.createPickup));
 
+router.get('/steadfast/settlement', protect, authorize('orders:manage', 'orders:view'), asyncHandler(courier.getSettlement));
+router.post('/steadfast/payouts/sync', protect, authorize('orders:manage'), asyncHandler(courier.syncPayoutsNow));
+
 module.exports = router;
