@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import PickupRequestModal from './PickupRequestModal';
+import CodSettlement from './CodSettlement';
 import { Link } from 'react-router-dom';
 import { Truck, Banknote, Undo2 } from 'lucide-react';
 import { getCourierPayouts, getCourierReturns } from '../api/client';
@@ -58,6 +59,9 @@ export default function CourierInsights({ courierByStatus = {} }) {
   return (
     <>
     {pickupOpen && <PickupRequestModal onClose={() => setPickupOpen(false)} />}
+    <div className="mb-4 sm:mb-5">
+      <CodSettlement />
+    </div>
     <div className="grid gap-4 sm:gap-5 lg:grid-cols-3">
       <Card
         icon={Truck}

@@ -280,6 +280,9 @@ export const getCourierReturns = () =>
 export const requestCourierReturn = (orderId, reason) =>
   client.post(`/orders/${orderId}/steadfast/return`, { reason }).then((r) => r.data);
 
+export const getCourierSettlement = () =>
+  client.get('/couriers/steadfast/settlement', { skipErrorModal: true }).then((r) => r.data);
+export const syncCourierPayouts = () => client.post('/couriers/steadfast/payouts/sync').then((r) => r.data);
 export const bulkBookSteadfast = (ids) =>
   client.post('/orders/steadfast/bulk-book', { ids }).then((r) => r.data);
 export const getPickupInfo = () => client.get('/couriers/steadfast/pickup', { skipErrorModal: true }).then((r) => r.data);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Truck, RefreshCw, AlertTriangle, PauseCircle, MapPin, Undo2 } from 'lucide-react';
-import { formatDate, formatTime, groupTimelineByDate } from '../utils/format';
+import { formatDate, formatTime, formatMoney, groupTimelineByDate } from '../utils/format';
 
 // Step-by-step: which stages an order has passed through on its way to
 // delivery, derived from order.status + whether it's been booked with a
@@ -100,6 +100,15 @@ export default function CourierTracker({ order, onBook, onSync, onReturn, busy }
             <Row label="Tracking code" value={order.courier.trackingCode || '—'} mono />
             <Row label="Steadfast status" value={order.courier.status || '—'} />
             {order.courier.lastMessage && <Row label="Last update" value={order.courier.lastMessage} />}
+            {order.courier.payoutId ? (
+              <Row
+                label="COD payout"
+                value={`Received · ${order.courier.payoutId}${order.courier.payoutAmount ? ` · ${formatMoney(order.courier.payoutAmount)}` : ''}${order.courier.payoutPaidAt ? ` · ${formatDate(order.courier.payoutPaidAt)}` : ''}`}
+              />
+            ) : (
+              ['delivered', 'partial_delivered'].includes(String(order.courier.status).toLowerCase()) &&
+              order.courier.codAmount > 0 && <Row label="COD payout" value="Waiting for Steadfast to pay out" />
+            )}
             {order.courier.lastSyncedAt && <Row label="Synced" value={formatDate(order.courier.lastSyncedAt)} />}
             <button onClick={onSync} disabled={busy} className="btn-secondary w-full mt-2 gap-1.5">
               <RefreshCw size={15} className={busy ? 'animate-spin' : ''} /> {busy ? 'Syncing…' : 'Sync status'}
