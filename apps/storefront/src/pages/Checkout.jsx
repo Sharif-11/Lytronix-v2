@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock, Landmark,
+  ArrowLeft, CheckCircle2, Copy, Check, Truck, Smartphone, Zap, ImagePlus, Loader2, Plus, MapPin, Clock, Landmark, AlertTriangle,
 } from 'lucide-react';
 import {
   createOrder, getPoliceStations, uploadPaymentProof, getPaymentMeta, initiateBkashCheckout, getBankInfo,
@@ -13,6 +13,8 @@ import { useCustomerAuth } from '../context/CustomerAuthContext';
 import SearchableSelect from '../components/SearchableSelect';
 import BankTransferPanel from '../components/BankTransferPanel';
 import ManualPaymentStatus from '../components/ManualPaymentStatus';
+import VerifyNote from '../components/VerifyNote';
+import { waitForVerification, sleep, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
@@ -37,6 +39,7 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
+  const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : 'চেকআউট');
@@ -255,6 +258,26 @@ export default function Checkout() {
         }
       }
 
+
+      // A manual bKash payment is verified from the receipt SMS. Stay on this page
+      // while that happens (the button shows it), and only move on once it is
+      // verified — or, if it can't be, after showing why.
+      if (paymentMethod === 'bkash_manual' && created.manualPayment) {
+        try {
+          setVerifyPhase('verifying');
+          const outcome = await waitForVerification(created.trackingId, created.manualPayment);
+          if (outcome.state !== 'skipped') {
+            setVerifyPhase(outcome.state);
+            await sleep(outcome.state === 'verified' ? VERIFIED_HOLD_MS : FAILED_HOLD_MS);
+          }
+          created.manualPayment = { ...created.manualPayment, ...outcome.info };
+          if (outcome.state === 'verified') created.status = 'pending';
+        } catch {
+          // The order already exists — whatever went wrong here, never show "order failed";
+          // fall through to the confirmation page, which keeps checking on its own.
+        }
+      }
+
       clearCart();
       if (isAuthed) refresh();
       setConfirmed(created);
@@ -262,6 +285,7 @@ export default function Checkout() {
       setError(err.response?.data?.message || 'অর্ডার করার সময় সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setSubmitting(false);
+      setVerifyPhase('');
     }
   };
 
@@ -577,8 +601,26 @@ export default function Checkout() {
           )}
         </section>
 
-        <button type="submit" disabled={submitting} className="btn-primary w-full py-3 text-base gap-2">
-          {uploadingProof ? (
+        <button
+          type="submit"
+          disabled={submitting}
+          className={`btn-primary w-full py-3 text-base gap-2 ${
+            verifyPhase === 'verified' ? '!bg-emerald-600' : ['mismatch', 'failed', 'timeout'].includes(verifyPhase) ? '!bg-amber-600' : ''
+          }`}
+        >
+          {verifyPhase === 'verifying' ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে…
+            </>
+          ) : verifyPhase === 'verified' ? (
+            <>
+              <CheckCircle2 size={16} /> পেমেন্ট ভেরিফাই হয়েছে
+            </>
+          ) : verifyPhase ? (
+            <>
+              <AlertTriangle size={16} /> পেমেন্ট ভেরিফাই হয়নি
+            </>
+          ) : uploadingProof ? (
             <>
               <Loader2 size={16} className="animate-spin" /> স্ক্রিনশট আপলোড হচ্ছে…
             </>
@@ -594,6 +636,7 @@ export default function Checkout() {
             `অর্ডার করুন · ${formatMoney(grandTotal)}`
           )}
         </button>
+        <VerifyNote phase={verifyPhase} />
       </form>
     </div>
   );

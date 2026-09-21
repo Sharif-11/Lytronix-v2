@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ShieldCheck, Truck, Timer, CheckCircle2, Copy, Check, Minus, Plus,
-  Smartphone, ImagePlus, Loader2, ArrowLeft, Zap, ShoppingBag, Landmark,
+  Smartphone, ImagePlus, Loader2, ArrowLeft, Zap, ShoppingBag, Landmark, AlertTriangle,
 } from 'lucide-react';
 import {
   getProduct, getPoliceStations, createOrder, uploadPaymentProof, recordProductView,
@@ -10,6 +10,8 @@ import {
 } from '../api/client';
 import BankTransferPanel from '../components/BankTransferPanel';
 import ManualPaymentStatus from '../components/ManualPaymentStatus';
+import VerifyNote from '../components/VerifyNote';
+import { waitForVerification, sleep, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import SearchableSelect from '../components/SearchableSelect';
@@ -48,6 +50,7 @@ export default function ProductLanding() {
   const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
   const [metaReady, setMetaReady] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
+  const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout
   const [bkash, setBkash] = useState(emptyBkash);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -266,11 +269,32 @@ export default function ProductLanding() {
         }
       }
 
+
+      // A manual bKash payment is verified from the receipt SMS. Stay on this page
+      // while that happens (the button shows it), and only move on once it is
+      // verified — or, if it can't be, after showing why.
+      if (paymentMethod === 'bkash_manual' && created.manualPayment) {
+        try {
+          setVerifyPhase('verifying');
+          const outcome = await waitForVerification(created.trackingId, created.manualPayment);
+          if (outcome.state !== 'skipped') {
+            setVerifyPhase(outcome.state);
+            await sleep(outcome.state === 'verified' ? VERIFIED_HOLD_MS : FAILED_HOLD_MS);
+          }
+          created.manualPayment = { ...created.manualPayment, ...outcome.info };
+          if (outcome.state === 'verified') created.status = 'pending';
+        } catch {
+          // The order already exists — whatever went wrong here, never show "order failed";
+          // fall through to the confirmation page, which keeps checking on its own.
+        }
+      }
+
       setConfirmed(created);
     } catch (err) {
       setError(err.response?.data?.message || 'অর্ডার করার সময় সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setSubmitting(false);
+      setVerifyPhase('');
     }
   };
 
@@ -526,9 +550,17 @@ export default function ProductLanding() {
                 ref={submitBtnRef}
                 type="submit"
                 disabled={submitting || outOfStock}
-                className="btn-primary w-full min-w-0 py-3 text-sm sm:text-base gap-2 text-center leading-tight"
+                className={`btn-primary w-full min-w-0 py-3 text-sm sm:text-base gap-2 text-center leading-tight ${
+                  verifyPhase === 'verified' ? '!bg-emerald-600' : ['mismatch', 'failed', 'timeout'].includes(verifyPhase) ? '!bg-amber-600' : ''
+                }`}
               >
-                {uploadingProof ? (
+                {verifyPhase === 'verifying' ? (
+                  <><Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে…</>
+                ) : verifyPhase === 'verified' ? (
+                  <><CheckCircle2 size={16} /> পেমেন্ট ভেরিফাই হয়েছে</>
+                ) : verifyPhase ? (
+                  <><AlertTriangle size={16} /> পেমেন্ট ভেরিফাই হয়নি</>
+                ) : uploadingProof ? (
                   <><Loader2 size={16} className="animate-spin" /> স্ক্রিনশট আপলোড হচ্ছে…</>
                 ) : redirectingBkash ? (
                   <><Loader2 size={16} className="animate-spin" /> বিকাশে নিয়ে যাওয়া হচ্ছে…</>
@@ -542,6 +574,7 @@ export default function ProductLanding() {
                   `অর্ডার কনফার্ম করুন · ${formatMoney(grandTotal)}`
                 )}
               </button>
+              <VerifyNote phase={verifyPhase} />
 
               <p className="text-[11px] text-ui-faint text-center">
                 অর্ডার করতে কোনো অ্যাকাউন্ট লাগবে না। কনফার্ম করার জন্য আমরা ফোনে যোগাযোগ করব।

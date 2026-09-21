@@ -4,6 +4,7 @@ const notificationCenter = require('./notificationCenter');
 const logger = require('./logger');
 const { parseSms } = require('./smsParsers');
 const SmsListenerSettings = require('../models/SmsListenerSettings');
+const SmsDevice = require('../models/SmsDevice');
 
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const trxRegex = (trx) => new RegExp(`^${escapeRe(trx)}$`, 'i');
@@ -218,6 +219,15 @@ async function tryMatchNewPayment(payment) {
 //   checking  – submitted, waiting for the receipt SMS / a human
 //   mismatch  – a receipt with this TrxID arrived but amount/number differ
 //   failed    – rejected by an admin
+// autoVerify says whether a phone is online to read the receipt at all.
+// Is at least one paired phone online? The phone syncs (or sends a heartbeat) every
+// ~15 minutes, so "seen in the last 30" means SMS receipts are actually flowing in.
+// When none is, nobody can verify a payment automatically, so the checkout must not
+// make the customer wait for it.
+async function listenerActive() {
+  return Boolean(await SmsDevice.exists({ revokedAt: null, lastSeenAt: { $gte: new Date(Date.now() - 30 * 60 * 1000) } }));
+}
+
 async function customerPaymentState(orderId) {
   const payment = await Payment.findOne({ order: orderId, method: 'bkash_manual' })
     .sort({ createdAt: -1 })
@@ -232,6 +242,7 @@ async function customerPaymentState(orderId) {
 
   return {
     state,
+    autoVerify: await listenerActive(),
     amount: payment.amount,
     ageSeconds: Math.max(0, Math.round((Date.now() - new Date(payment.createdAt).getTime()) / 1000)),
     reason: state === 'failed' ? payment.rejectionReason || '' : '',
