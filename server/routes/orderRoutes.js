@@ -49,6 +49,7 @@ router.post('/:id/payments', authorize('orders:manage', 'payments:manage'), asyn
 router.delete('/:id/payments/:paymentId', authorize('orders:manage', 'payments:manage'), asyncHandler(deletePayment));
 router.post('/:id/steadfast/book', authorize('orders:manage'), asyncHandler(bookSteadfastParcel));
 router.post('/:id/steadfast/sync', authorize('orders:manage'), asyncHandler(syncSteadfastStatus));
+router.post('/:id/steadfast/return', authorize('orders:manage'), asyncHandler(require('../controllers/courierController').requestReturn));
 router.post('/:id/message', authorize('orders:manage'), asyncHandler(sendOrderMessage));
 router.delete('/:id', authorize('orders:manage'), asyncHandler(deleteOrder));
 

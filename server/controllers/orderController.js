@@ -245,6 +245,16 @@ exports.orderStats = async (req, res) => {
   });
   const total = await Order.countDocuments({});
 
+  // How many booked parcels sit in each Steadfast status (their word, not ours).
+  const courierResults = await Order.aggregate([
+    { $match: { 'courier.consignmentId': { $exists: true, $ne: null } } },
+    { $group: { _id: { $ifNull: ['$courier.status', 'unknown'] }, count: { $sum: 1 } } },
+  ]);
+  const courierByStatus = {};
+  courierResults.forEach((r) => {
+    courierByStatus[r._id || 'unknown'] = r.count;
+  });
+
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -261,6 +271,7 @@ exports.orderStats = async (req, res) => {
   res.json({
     total,
     byStatus: stats,
+    courierByStatus,
     totalRevenue: totals[0]?.revenue || 0,
     totalDue: totals[0]?.due || 0,
     today: { count: todayTotals[0]?.count || 0, revenue: todayTotals[0]?.revenue || 0 },
@@ -877,15 +888,23 @@ exports.bookSteadfastParcel = async (req, res) => {
     });
   }
 
+  // Steadfast accepts 0 (prepaid) up to 1,000,000 — refuse before booking rather
+  // than let it truncate or reject.
+  const cod = Math.max(0, Number(order.pricing.due) || 0);
+  if (cod > 1000000) {
+    return res.status(400).json({ message: 'Steadfast can collect at most ৳1,000,000 on delivery. Reduce the COD amount first.' });
+  }
+
+  // Field lengths follow Steadfast's documented limits (it truncates silently otherwise).
   const payload = {
     invoice: order.orderNumber,
-    recipient_name: order.customer.name,
+    recipient_name: String(order.customer.name || '').slice(0, 100),
     recipient_phone: phoneDigits,
     recipient_address: buildSteadfastAddress(order.customer),
-    cod_amount: order.pricing.due,
-    note: order.customer.comments || '',
+    cod_amount: cod,
+    note: String(order.customer.comments || '').slice(0, 480),
     item_description: order.items.map((i) => `${i.name} x${i.quantity}`).join(', ').slice(0, 250),
-    total_lot: order.items.length,
+    total_lot: order.items.reduce((n, i) => n + (Number(i.quantity) || 1), 0) || 1,
   };
 
   logger.info('courier: booking attempt', { orderNumber: order.orderNumber, provider: 'steadfast' });
@@ -914,9 +933,11 @@ exports.bookSteadfastParcel = async (req, res) => {
     lastSyncedAt: new Date(),
   };
 
-  const templatedLink = buildTrackingLinkFromTemplate(consignment.tracking_code);
-  if (templatedLink && !order.courierTrackingLink) {
-    order.courierTrackingLink = templatedLink;
+  // Steadfast now returns its own tracking link with the booking; the configured
+  // template is only the fallback. A link already saved on the order is kept.
+  const trackingLink = consignment.tracking_link || buildTrackingLinkFromTemplate(consignment.tracking_code);
+  if (trackingLink && !order.courierTrackingLink) {
+    order.courierTrackingLink = trackingLink;
   }
 
   order.courierEvents.push({ message: 'Booked with Steadfast Courier.', at: new Date() });
@@ -980,6 +1001,24 @@ exports.syncSteadfastStatus = async (req, res) => {
   if (mapped && mapped !== order.status) {
     order.status = mapped;
     order.statusHistory.push({ status: mapped, note: `Synced from Steadfast (${rawStatus})`, at: new Date() });
+  }
+
+  // Also pull the parcel's full step-by-step history, so the tracking timeline is
+  // complete even if a webhook was missed. Best-effort: never fails the sync, and
+  // steps already recorded (matched by text + minute) are not added twice.
+  try {
+    const t = await steadfast.trackingsByInvoice(order.orderNumber);
+    const minute = (d) => new Date(d).toISOString().slice(0, 16);
+    const have = new Set((order.courierEvents || []).map((e) => `${e.message}|${minute(e.at)}`));
+    for (const step of Array.isArray(t.tracking) ? t.tracking : []) {
+      if (!step.text || !step.created_at) continue;
+      const key = `${step.text}|${minute(step.created_at)}`;
+      if (have.has(key)) continue;
+      have.add(key);
+      order.courierEvents.push({ message: step.text, at: new Date(step.created_at) });
+    }
+  } catch (err) {
+    logger.warn('courier: tracking history pull failed', { orderNumber: order.orderNumber, error: err.message });
   }
 
   await order.save();
