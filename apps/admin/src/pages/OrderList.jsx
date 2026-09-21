@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getOrders, getOrderStats } from '../api/client';
+import { getOrders, getOrderStats, bulkBookSteadfast } from '../api/client';
 import StatusBadge, { CourierStatus } from '../components/StatusBadge';
 import TrackingLink from '../components/TrackingLink';
 import { formatMoney, formatDateShort } from '../utils/format';
-import { Printer, Plus, Search, Tag, Loader2 } from 'lucide-react';
+import { Printer, Plus, Search, Tag, Loader2, Truck } from 'lucide-react';
+import BulkBookResultModal from '../components/BulkBookResultModal';
+import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { useLanguage } from '../context/LanguageContext';
 import usePageTitle from '../lib/usePageTitle';
 
@@ -35,6 +38,10 @@ export default function OrderList() {
   const [loading, setLoading] = useState(true); // first page / filter change
   const [loadingMore, setLoadingMore] = useState(false); // subsequent pages via scroll
   const [selected, setSelected] = useState(new Set());
+  const { hasPermission } = useAuth();
+  const confirm = useConfirm();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
   const sentinelRef = useRef(null);
 
   const load = () => {
@@ -125,6 +132,28 @@ export default function OrderList() {
     });
   };
 
+  const bulkBook = async () => {
+    const n = selected.size;
+    const ok = await confirm(
+      `Book ${n} order${n === 1 ? '' : 's'} with Steadfast in one go? Each customer whose parcel is booked gets the “courier booked” SMS. Orders already booked are skipped.`,
+      { title: 'Book with Steadfast', confirmLabel: `Book ${n}` }
+    );
+    if (!ok) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkBookSteadfast([...selected]);
+      setBulkResult(res);
+      // Booked orders leave the selection; the ones that failed stay ticked for a retry.
+      const failedIds = new Set(res.results.filter((r) => !r.ok).map((r) => r.orderId));
+      setSelected(failedIds);
+      load();
+    } catch {
+      /* surfaced globally via the ErrorModal */
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const bulkLabelsHref = `/orders/print-labels?ids=${[...selected].join(',')}`;
 
   return (
@@ -149,11 +178,18 @@ export default function OrderList() {
         </div>
       </div>
 
+      <BulkBookResultModal data={bulkResult} onClose={() => setBulkResult(null)} />
+
       {selected.size > 0 && (
         <div className="no-print mb-4 flex items-center justify-between gap-3 bg-ui-brand/10 border border-ui-brand/30 rounded-xl px-4 py-2.5">
           <span className="text-sm text-ui-brand font-medium">{t('orders.selected', { n: selected.size })}</span>
           <div className="flex items-center gap-3">
             <button onClick={() => setSelected(new Set())} className="text-xs text-ui-muted hover:underline">{t('orders.clear')}</button>
+            {hasPermission('orders:manage') && (
+              <button onClick={bulkBook} disabled={bulkBusy} className="btn-secondary gap-1.5 py-1.5">
+                {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />} Book with Steadfast ({selected.size})
+              </button>
+            )}
             <a href={bulkLabelsHref} target="_blank" rel="noreferrer" className="btn-primary gap-1.5 py-1.5">
               <Tag size={14} /> {t('orders.printLabels', { n: selected.size })}
             </a>

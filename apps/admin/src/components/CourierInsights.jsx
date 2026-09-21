@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import PickupRequestModal from './PickupRequestModal';
 import { Link } from 'react-router-dom';
 import { Truck, Banknote, Undo2 } from 'lucide-react';
 import { getCourierPayouts, getCourierReturns } from '../api/client';
@@ -40,6 +41,7 @@ function Card({ icon: Icon, title, children, action }) {
 export default function CourierInsights({ courierByStatus = {} }) {
   const [payouts, setPayouts] = useState(null);
   const [returns, setReturns] = useState(null);
+  const [pickupOpen, setPickupOpen] = useState(false);
 
   useEffect(() => {
     getCourierPayouts()
@@ -54,8 +56,18 @@ export default function CourierInsights({ courierByStatus = {} }) {
   const totalParcels = statuses.reduce((n, [, c]) => n + c, 0);
 
   return (
+    <>
+    {pickupOpen && <PickupRequestModal onClose={() => setPickupOpen(false)} />}
     <div className="grid gap-4 sm:gap-5 lg:grid-cols-3">
-      <Card icon={Truck} title="Parcels by courier status">
+      <Card
+        icon={Truck}
+        title="Parcels by courier status"
+        action={
+          <button type="button" onClick={() => setPickupOpen(true)} className="btn-secondary text-xs py-1 px-2.5 gap-1">
+            <Truck size={12} /> Request pickup
+          </button>
+        }
+      >
         {totalParcels === 0 ? (
           <p className="text-xs text-ui-muted">No parcel has been booked with Steadfast yet.</p>
         ) : (
@@ -121,5 +133,6 @@ export default function CourierInsights({ courierByStatus = {} }) {
         )}
       </Card>
     </div>
+    </>
   );
 }

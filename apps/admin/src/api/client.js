@@ -280,6 +280,11 @@ export const getCourierReturns = () =>
 export const requestCourierReturn = (orderId, reason) =>
   client.post(`/orders/${orderId}/steadfast/return`, { reason }).then((r) => r.data);
 
+export const bulkBookSteadfast = (ids) =>
+  client.post('/orders/steadfast/bulk-book', { ids }).then((r) => r.data);
+export const getPickupInfo = () => client.get('/couriers/steadfast/pickup', { skipErrorModal: true }).then((r) => r.data);
+export const createPickupRequest = (data) => client.post('/couriers/steadfast/pickup-requests', data).then((r) => r.data);
+
 // ---- Courier callback log ----
 export const getSteadfastWebhookLogs = (params) =>
   client.get('/couriers/steadfast/webhook-logs', { params }).then((r) => r.data);
