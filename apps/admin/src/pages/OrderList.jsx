@@ -11,7 +11,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { useLanguage } from '../context/LanguageContext';
 import usePageTitle from '../lib/usePageTitle';
 
-const STATUS_TABS = ['pending', 'unverified', 'processing', 'shipped', 'delivered', 'cancelled', 'all'];
+const STATUS_TABS = ['pending', 'unverified', 'processing', 'shipped', 'delivered', 'cancelled', 'rejected', 'all'];
 
 function buildPrintQuery({ status, search }) {
   const params = new URLSearchParams();

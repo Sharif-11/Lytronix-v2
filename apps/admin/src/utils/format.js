@@ -42,6 +42,7 @@ export const STATUS_STYLES = {
   cancelled: 'bg-red-50 text-ui-rust border-red-200',
   refunded: 'bg-orange-50 text-orange-700 border-orange-200',
   returned: 'bg-rose-50 text-rose-700 border-rose-200',
+  rejected: 'bg-red-50 text-ui-rust border-red-200',
 };
 
 export const statusStyle = (status) =>

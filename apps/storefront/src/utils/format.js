@@ -59,6 +59,7 @@ const ORDER_STATUS_BN = {
   in_review: 'ইন রিভিউ',
   refunded: 'রিফান্ডেড',
   returned: 'রিটার্নড',
+  rejected: 'রিজেক্টেড',
 };
 
 export const STATUS_STYLES = {
@@ -74,6 +75,7 @@ export const STATUS_STYLES = {
   in_review: 'bg-sky-50 text-sky-700 border-sky-200',
   refunded: 'bg-orange-50 text-orange-700 border-orange-200',
   returned: 'bg-rose-50 text-rose-700 border-rose-200',
+  rejected: 'bg-red-50 text-ui-rust border-red-200',
 };
 
 export const statusStyle = (status) =>

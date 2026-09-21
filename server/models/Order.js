@@ -9,6 +9,7 @@ const nanoid = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8);
 //
 // Lifecycle (see server/controllers/orderController.js + steadfastStatusMap.js):
 //   unverified -> pending          (payment verified, e.g. bKash manual)
+//   unverified -> rejected         (an admin rejected the payment)
 //   pending    -> processing       (admin books the parcel with a courier)
 //   processing -> shipped          (Steadfast reports "pending")
 //   shipped    -> delivered        (Steadfast reports "delivered")
@@ -27,6 +28,7 @@ const SUGGESTED_STATUSES = [
   'in_review',
   'refunded',
   'returned',
+  'rejected', // payment was rejected by an admin
 ];
 
 const orderItemSchema = new mongoose.Schema(

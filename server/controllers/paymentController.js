@@ -169,7 +169,35 @@ exports.rejectPayment = async (req, res) => {
   payment.verifiedAt = new Date();
   await payment.save();
 
-  res.json(payment);
+  // An order that was only waiting for this payment can't go ahead: mark it
+  // rejected and give back the stock it reserved. An order that has already
+  // moved on (another payment verified, admin changed the status) is left alone.
+  let orderStatus = null;
+  const order = await Order.findById(payment.order);
+  if (order && String(order.status).trim().toLowerCase() === 'unverified') {
+    order.status = 'rejected';
+    order.statusHistory.push({ status: 'rejected', note: `Payment rejected: ${payment.rejectionReason}`, at: new Date() });
+    await order.save();
+    orderStatus = order.status;
+
+    const Product = require('../models/Product');
+    await Promise.all(
+      (order.items || [])
+        .filter((it) => it.product)
+        .map((it) => Product.updateOne({ _id: it.product }, { $inc: { stock: Number(it.quantity) || 0 } }).catch(() => {}))
+    );
+
+    webPush
+      .notifyCustomer(order.customer?.phone, {
+        title: `অর্ডার ${order.orderNumber}`,
+        body: 'আপনার পেমেন্ট যাচাই করা যায়নি, তাই অর্ডারটি রিজেক্ট হয়েছে। বিস্তারিত দেখুন।',
+        url: `/track/${order.trackingId}`,
+        tag: `order-${order._id}`,
+      })
+      .catch(() => {});
+  }
+
+  res.json({ ...payment.toObject(), orderStatus });
 };
 
 // POST /api/orders/:id/payments/bkash/initiate  (public)
