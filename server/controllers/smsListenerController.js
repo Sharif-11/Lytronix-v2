@@ -4,6 +4,7 @@ const SmsPairingCode = require('../models/SmsPairingCode');
 const IncomingSms = require('../models/IncomingSms');
 const { ingest, settle } = require('../services/smsPaymentMatcher');
 const { knownSenders } = require('../services/smsParsers');
+const SmsListenerSettings = require('../models/SmsListenerSettings');
 const logger = require('../services/logger');
 
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -45,7 +46,17 @@ exports.createPairingCode = async (req, res) => {
 // GET /api/sms-listener/devices
 exports.listDevices = async (req, res) => {
   const devices = await SmsDevice.find().sort({ createdAt: -1 }).select('-tokenHash').lean();
-  res.json({ devices, senders: knownSenders() });
+  const settings = await SmsListenerSettings.load();
+  res.json({ devices, senders: knownSenders(), testUntil: settings.testUntil });
+};
+
+// POST /api/sms-listener/test-mode  { minutes }   (0 = switch off; at most 30)
+exports.setTestMode = async (req, res) => {
+  const minutes = Math.min(30, Math.max(0, parseInt(req.body?.minutes, 10) || 0));
+  const settings = await SmsListenerSettings.load();
+  settings.testUntil = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000) : null;
+  await settings.save();
+  res.json({ testUntil: settings.testUntil });
 };
 
 // DELETE /api/sms-listener/devices/:id  — the phone is refused from now on.

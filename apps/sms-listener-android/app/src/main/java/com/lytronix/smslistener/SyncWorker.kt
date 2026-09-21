@@ -15,9 +15,16 @@ class SyncWorker(context: Context, params: WorkerParameters) : Worker(context, p
         val db = SmsDb.get(applicationContext)
 
         try {
+            var first = true
             while (true) {
                 val batch = db.unsent(50)
-                if (batch.isEmpty()) break
+                if (batch.isEmpty()) {
+                    // Nothing to send: still make one (empty) call, so a dead server, no network or a
+                    // revoked phone shows up right away instead of only when the next payment SMS arrives.
+                    if (first) Api.send(prefs.serverUrl, prefs.deviceToken, emptyList())
+                    break
+                }
+                first = false
 
                 val results = Api.send(prefs.serverUrl, prefs.deviceToken, batch)
                 var progressed = false

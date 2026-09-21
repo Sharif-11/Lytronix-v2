@@ -19,7 +19,11 @@ class SmsReceiver : BroadcastReceiver() {
         val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         val first = parts.firstOrNull() ?: return
         val sender = first.originatingAddress ?: return
-        if (!prefs.isAllowedSender(sender)) return
+        if (!prefs.isAllowedSender(sender)) {
+            // Not stored and not sent — only the sender name is remembered, locally, for the "ignored" hint.
+            prefs.recordIgnored(sender)
+            return
+        }
 
         // A long SMS arrives in several parts; join them back into one message.
         val body = parts.joinToString("") { it.messageBody ?: "" }

@@ -76,5 +76,5 @@ object Api {
 }
 
 object BuildConfigVersion {
-    const val NAME = "1.0"
+    const val NAME = "1.1"
 }

@@ -3,6 +3,7 @@ package com.lytronix.smslistener
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,9 +12,11 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.format.DateUtils
+import android.view.LayoutInflater
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -23,6 +26,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
+import com.google.android.material.textfield.TextInputEditText
 
 class MainActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
@@ -35,14 +43,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private lateinit var setupGroup: LinearLayout
-    private lateinit var pairedGroup: LinearLayout
+    // What was last drawn, so the 3-second refresh only rebuilds a section when it really changed
+    // (and never disturbs a field the user is typing in).
+    private val drawn = HashMap<String, String>()
+
+    private enum class Tone { OK, WARN, ERROR }
+
+    private lateinit var setupGroup: View
+    private lateinit var pairedGroup: View
     private lateinit var pairMessage: TextView
-    private lateinit var statusText: TextView
-    private lateinit var recentList: TextView
-    private lateinit var permButton: Button
-    private lateinit var batteryButton: Button
-    private lateinit var pairButton: Button
+    private lateinit var pairButton: MaterialButton
+    private lateinit var heroCard: MaterialCardView
+    private lateinit var heroIcon: ImageView
+    private lateinit var heroTitle: TextView
+    private lateinit var heroSubtitle: TextView
+    private lateinit var heroAction: MaterialButton
+    private lateinit var healthContainer: LinearLayout
+    private lateinit var recentContainer: LinearLayout
+    private lateinit var sendersChips: ChipGroup
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,41 +77,40 @@ class MainActivity : AppCompatActivity() {
         setupGroup = findViewById(R.id.setupGroup)
         pairedGroup = findViewById(R.id.pairedGroup)
         pairMessage = findViewById(R.id.pairMessage)
-        statusText = findViewById(R.id.statusText)
-        recentList = findViewById(R.id.recentList)
-        permButton = findViewById(R.id.permButton)
-        batteryButton = findViewById(R.id.batteryButton)
         pairButton = findViewById(R.id.pairButton)
+        heroCard = findViewById(R.id.heroCard)
+        heroIcon = findViewById(R.id.heroIcon)
+        heroTitle = findViewById(R.id.heroTitle)
+        heroSubtitle = findViewById(R.id.heroSubtitle)
+        heroAction = findViewById(R.id.heroAction)
+        healthContainer = findViewById(R.id.healthContainer)
+        recentContainer = findViewById(R.id.recentContainer)
+        sendersChips = findViewById(R.id.sendersChips)
 
-        findViewById<EditText>(R.id.serverUrl).setText(prefs.serverUrl)
-        findViewById<EditText>(R.id.deviceName).setText(if (prefs.deviceName.isNotEmpty()) prefs.deviceName else Build.MODEL)
-        findViewById<EditText>(R.id.senders).setText(prefs.senders)
+        findViewById<TextInputEditText>(R.id.serverUrl).setText(prefs.serverUrl)
+        findViewById<TextInputEditText>(R.id.deviceName).setText(if (prefs.deviceName.isNotEmpty()) prefs.deviceName else Build.MODEL)
+        findViewById<TextView>(R.id.versionText).text = "Version ${BuildConfigVersion.NAME}"
 
         pairButton.setOnClickListener { pair() }
-        findViewById<Button>(R.id.syncNow).setOnClickListener {
-            prefs.authFailed = false
-            Scheduler.syncNow(this)
-            Toast.makeText(this, "Sync queued", Toast.LENGTH_SHORT).show()
+
+        findViewById<MaterialButton>(R.id.addSender).setOnClickListener { addSenderFromField() }
+        findViewById<TextInputEditText>(R.id.newSender).setOnEditorActionListener { _, _, _ ->
+            addSenderFromField()
+            true
         }
-        permButton.setOnClickListener {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECEIVE_SMS), 1)
-        }
-        batteryButton.setOnClickListener { requestBatteryExemption() }
-        findViewById<Button>(R.id.saveSenders).setOnClickListener {
-            val v = findViewById<EditText>(R.id.senders).text.toString().trim()
-            prefs.senders = if (v.isEmpty()) "bKash" else v
-            Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
+        findViewById<MaterialButton>(R.id.ignoredAdd).setOnClickListener {
+            prefs.addSender(prefs.lastIgnoredSender)
             render()
         }
-        findViewById<Button>(R.id.unpair).setOnClickListener {
+        findViewById<MaterialButton>(R.id.testButton).setOnClickListener {
+            prefs.testUntil = if (prefs.isTestMode) 0L else System.currentTimeMillis() + 15 * 60 * 1000L
+            render()
+        }
+        findViewById<MaterialButton>(R.id.unpair).setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Unpair this phone?")
                 .setMessage("It will stop forwarding SMS. Messages not yet sent stay on the phone.")
-                .setPositiveButton("Unpair") { _, _ ->
-                    Scheduler.cancelAll(this)
-                    prefs.clearPairing()
-                    render()
-                }
+                .setPositiveButton("Unpair") { _, _ -> unpair() }
                 .setNegativeButton("Cancel", null)
                 .show()
         }
@@ -114,16 +131,19 @@ class MainActivity : AppCompatActivity() {
         render()
     }
 
+    // ------------------------------------------------------------------ actions
+
     private fun pair() {
-        val url = findViewById<EditText>(R.id.serverUrl).text.toString().trim()
-        val code = findViewById<EditText>(R.id.pairCode).text.toString().trim()
-        val name = findViewById<EditText>(R.id.deviceName).text.toString().trim().ifEmpty { Build.MODEL }
+        val url = findViewById<TextInputEditText>(R.id.serverUrl).text.toString().trim()
+        val code = findViewById<TextInputEditText>(R.id.pairCode).text.toString().trim()
+        val name = findViewById<TextInputEditText>(R.id.deviceName).text.toString().trim().ifEmpty { Build.MODEL }
         if (url.isEmpty() || code.isEmpty()) {
             pairMessage.text = "Enter the server address and the pairing code."
             return
         }
         pairButton.isEnabled = false
-        pairMessage.text = "Pairing…"
+        pairButton.text = "Connecting…"
+        pairMessage.text = ""
         Thread {
             var message = ""
             try {
@@ -142,11 +162,30 @@ class MainActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 pairButton.isEnabled = true
+                pairButton.text = "Connect"
                 pairMessage.text = message
                 render()
             }
         }.start()
     }
+
+    private fun unpair() {
+        Scheduler.cancelAll(this)
+        prefs.clearPairing()
+        render()
+    }
+
+    private fun addSenderFromField() {
+        val field = findViewById<TextInputEditText>(R.id.newSender)
+        val name = field.text.toString().trim()
+        if (name.isEmpty()) return
+        prefs.addSender(name)
+        field.setText("")
+        render()
+    }
+
+    private fun askSmsPermission() =
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECEIVE_SMS), 1)
 
     private fun hasSmsPermission() =
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
@@ -162,6 +201,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun syncNow() {
+        prefs.authFailed = false
+        Scheduler.syncNow(this)
+        Toast.makeText(this, "Sending stored messages…", Toast.LENGTH_SHORT).show()
+    }
+
+    // ------------------------------------------------------------------ drawing
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun ago(t: Long): String =
+        if (t <= 0L) "never"
+        else if (System.currentTimeMillis() - t < 45_000) "just now"
+        else DateUtils.getRelativeTimeSpanString(t, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+
+    private fun tint(view: View, color: Int) {
+        (view.background.mutate() as GradientDrawable).setColor(color)
+    }
+
     private fun render() {
         val paired = prefs.isPaired
         setupGroup.visibility = if (paired) View.GONE else View.VISIBLE
@@ -171,28 +229,233 @@ class MainActivity : AppCompatActivity() {
         val pending = db.unsentCount()
         val sms = hasSmsPermission()
         val battery = ignoringBattery()
-        val last = if (prefs.lastSyncAt > 0)
-            DateUtils.getRelativeTimeSpanString(prefs.lastSyncAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
-        else "never"
 
-        val lines = ArrayList<String>()
-        lines.add("Paired as “${prefs.deviceName}”")
-        lines.add("Server: ${prefs.serverUrl}")
-        lines.add("SMS permission: ${if (sms) "allowed ✔" else "NOT allowed ✘ — tap the button below"}")
-        lines.add("Background: ${if (battery) "unrestricted ✔" else "may be stopped by battery saver — tap the button below"}")
-        lines.add("Waiting to send: $pending message(s)")
-        lines.add("Last successful sync: $last")
-        if (prefs.lastError.isNotEmpty()) lines.add("⚠ ${prefs.lastError}")
-        statusText.text = lines.joinToString("\n")
+        renderHero(pending, sms, battery)
+        findViewById<TextView>(R.id.statWaiting).text = pending.toString()
+        findViewById<TextView>(R.id.statSent).text = db.sentCount().toString()
+        findViewById<TextView>(R.id.statSync).text = ago(prefs.lastSyncAt)
+        renderHealth(sms, battery)
+        renderIgnored()
+        renderSenders()
+        renderTest()
+        renderRecent()
+    }
 
-        permButton.visibility = if (sms) View.GONE else View.VISIBLE
-        batteryButton.visibility = if (battery) View.GONE else View.VISIBLE
+    private fun renderHero(pending: Int, sms: Boolean, battery: Boolean) {
+        val tone: Tone
+        val title: String
+        val sub: String
+        var action: String? = null
+        var onAction: () -> Unit = {}
 
-        val recent = db.recent(15)
-        recentList.text = if (recent.isEmpty()) "Nothing received yet." else recent.joinToString("\n\n") { m ->
-            val when_ = DateUtils.getRelativeTimeSpanString(m.receivedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
-            val state = if (m.sent) "sent (${m.status})" else "waiting"
-            "$when_ · ${m.sender} · $state\n${m.body.take(160)}"
+        when {
+            prefs.authFailed -> {
+                tone = Tone.ERROR
+                title = "Phone disconnected"
+                sub = "The server no longer accepts this phone. Pair it again."
+                action = "Pair again"
+                onAction = { unpair() }
+            }
+            !sms -> {
+                tone = Tone.WARN
+                title = "SMS access needed"
+                sub = "Allow reading SMS so payment messages can be forwarded."
+                action = "Allow SMS access"
+                onAction = { askSmsPermission() }
+            }
+            pending > 0 && prefs.lastError.isNotEmpty() -> {
+                tone = Tone.WARN
+                title = "Waiting for a connection"
+                sub = "$pending message${if (pending == 1) "" else "s"} stored safely — they will be sent automatically."
+                action = "Try now"
+                onAction = { syncNow() }
+            }
+            !battery -> {
+                tone = Tone.WARN
+                title = "Allow background use"
+                sub = "Battery saver may stop this app. Set it to unrestricted so no payment is missed."
+                action = "Fix"
+                onAction = { requestBatteryExemption() }
+            }
+            prefs.isTestMode -> {
+                tone = Tone.OK
+                title = "Test mode is on"
+                val mins = ((prefs.testUntil - System.currentTimeMillis()) / 60_000L + 1).coerceAtLeast(1)
+                sub = "Forwarding every SMS for about $mins more minute${if (mins == 1L) "" else "s"}."
+            }
+            else -> {
+                tone = Tone.OK
+                title = "Listening for payment SMS"
+                sub = "Messages from ${prefs.sendersList().joinToString(", ")} are forwarded automatically."
+            }
+        }
+
+        val key = "$tone|$title|$sub|$action"
+        if (drawn["hero"] == key) return
+        drawn["hero"] = key
+
+        heroCard.setCardBackgroundColor(
+            ContextCompat.getColor(
+                this,
+                when (tone) { Tone.OK -> R.color.brand; Tone.WARN -> R.color.warn; Tone.ERROR -> R.color.danger }
+            )
+        )
+        heroIcon.setImageResource(if (tone == Tone.OK) R.drawable.ic_check else R.drawable.ic_alert)
+        heroTitle.text = title
+        heroSubtitle.text = sub
+        if (action != null) {
+            heroAction.visibility = View.VISIBLE
+            heroAction.text = action
+            heroAction.setOnClickListener { onAction() }
+        } else {
+            heroAction.visibility = View.GONE
+        }
+    }
+
+    private fun renderHealth(sms: Boolean, battery: Boolean) {
+        val server: Triple<Boolean, String, String?> = when {
+            prefs.authFailed -> Triple(false, "Rejected by the server", "Pair again")
+            prefs.lastError.isNotEmpty() -> Triple(false, prefs.lastError, "Retry")
+            prefs.lastSyncAt > 0 -> Triple(true, "Last sync ${ago(prefs.lastSyncAt)}", null)
+            else -> Triple(true, "Waiting for the first message", null)
+        }
+        val key = "$sms|$battery|${server.first}|${server.second}|${server.third}"
+        if (drawn["health"] == key) return
+        drawn["health"] = key
+
+        healthContainer.removeAllViews()
+        addCheckRow(
+            healthContainer, sms, "SMS access",
+            if (sms) "Allowed" else "Not allowed — payments can't be read",
+            if (sms) null else "Allow"
+        ) { askSmsPermission() }
+        addCheckRow(
+            healthContainer, battery, "Runs in the background",
+            if (battery) "Unrestricted" else "May be paused by battery saver",
+            if (battery) null else "Fix"
+        ) { requestBatteryExemption() }
+        addCheckRow(
+            healthContainer, server.first, "Server connection", server.second, server.third
+        ) { if (prefs.authFailed) unpair() else syncNow() }
+    }
+
+    private fun addCheckRow(parent: LinearLayout, ok: Boolean, title: String, sub: String, action: String?, onAction: () -> Unit) {
+        val row = LayoutInflater.from(this).inflate(R.layout.row_check, parent, false)
+        tint(row.findViewById<FrameLayout>(R.id.rowIconBg), ContextCompat.getColor(this, if (ok) R.color.success else R.color.warn))
+        row.findViewById<ImageView>(R.id.rowIcon).setImageResource(if (ok) R.drawable.ic_check else R.drawable.ic_alert)
+        row.findViewById<TextView>(R.id.rowTitle).text = title
+        row.findViewById<TextView>(R.id.rowSub).text = sub
+        val btn = row.findViewById<MaterialButton>(R.id.rowAction)
+        if (action != null) {
+            btn.visibility = View.VISIBLE
+            btn.text = action
+            btn.setOnClickListener { onAction() }
+        }
+        parent.addView(row)
+        if (parent.childCount > 0) {
+            // thin divider between rows
+            val prev = parent.childCount
+            if (prev > 1) {
+                val line = View(this).apply {
+                    setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.line))
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
+                }
+                parent.addView(line, parent.childCount - 1)
+            }
+        }
+    }
+
+    private fun renderIgnored() {
+        val card = findViewById<View>(R.id.ignoredCard)
+        val sender = prefs.lastIgnoredSender
+        if (sender.isEmpty() || prefs.isTestMode) {
+            card.visibility = View.GONE
+            return
+        }
+        card.visibility = View.VISIBLE
+        val n = prefs.ignoredCount
+        findViewById<TextView>(R.id.ignoredText).text =
+            "Ignored $n message${if (n == 1) "" else "s"}. The latest came from “$sender”, which isn't in your sender list. If that is a payment sender, add it."
+        findViewById<MaterialButton>(R.id.ignoredAdd).text = "Forward messages from $sender"
+    }
+
+    private fun renderSenders() {
+        val list = prefs.sendersList()
+        val key = list.joinToString("|")
+        if (drawn["senders"] == key) return
+        drawn["senders"] = key
+        sendersChips.removeAllViews()
+        for (s in list) {
+            val chip = Chip(this).apply {
+                text = s
+                isCloseIconVisible = list.size > 1
+                setChipBackgroundColorResource(R.color.brand_soft)
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.brand))
+                setOnCloseIconClickListener {
+                    prefs.removeSender(s)
+                    render()
+                }
+            }
+            sendersChips.addView(chip)
+        }
+    }
+
+    private fun renderTest() {
+        val on = prefs.isTestMode
+        val mins = ((prefs.testUntil - System.currentTimeMillis()) / 60_000L + 1).coerceAtLeast(1)
+        val key = "$on|${if (on) mins else 0}"
+        if (drawn["test"] == key) return
+        drawn["test"] = key
+        findViewById<TextView>(R.id.testText).text = if (on)
+            "Forwarding every SMS for about $mins more minute${if (mins == 1L) "" else "s"}. The server keeps only messages that look like a bKash receipt and never uses them to verify a payment. Also switch on Test mode in the admin panel."
+        else
+            "To try the setup with a message from your SMS gateway (not from bKash), start a 15-minute test. All incoming SMS are forwarded for that time; the server discards anything that isn't a bKash-style receipt."
+        findViewById<MaterialButton>(R.id.testButton).text = if (on) "Stop test mode" else "Start 15-minute test"
+    }
+
+    private fun renderRecent() {
+        val recent = db.recent(12)
+        val key = recent.joinToString(";") { "${it.id}:${it.sent}:${it.status}" } + "|" + (System.currentTimeMillis() / 60_000L)
+        if (drawn["recent"] == key) return
+        drawn["recent"] = key
+
+        recentContainer.removeAllViews()
+        if (recent.isEmpty()) {
+            recentContainer.addView(TextView(this).apply {
+                text = "Nothing received yet. Payment messages will appear here."
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.muted))
+                textSize = 13.5f
+                setPadding(0, dp(14), 0, dp(14))
+            })
+            return
+        }
+        val amount = Regex("""Tk\s*([\d,]+(?:\.\d+)?)""")
+        val from = Regex("""from\s+(\+?\d{10,14})""")
+        recent.forEachIndexed { i, m ->
+            val row = LayoutInflater.from(this).inflate(R.layout.item_message, recentContainer, false)
+            val amt = amount.find(m.body)?.groupValues?.get(1)
+            val who = from.find(m.body)?.groupValues?.get(1)
+            row.findViewById<TextView>(R.id.msgAvatar).text = (m.sender.firstOrNull() ?: '?').uppercaseChar().toString()
+            row.findViewById<TextView>(R.id.msgTitle).text =
+                if (amt != null) "Tk $amt${if (who != null) " · from $who" else ""}" else m.body.take(48)
+            row.findViewById<TextView>(R.id.msgSub).text = "${m.sender} · ${ago(m.receivedAt)}"
+            val pill = row.findViewById<TextView>(R.id.msgPill)
+            if (m.sent) {
+                pill.text = "Sent"
+                pill.setTextColor(ContextCompat.getColor(this, R.color.success))
+                tint(pill, ContextCompat.getColor(this, R.color.success_soft))
+            } else {
+                pill.text = "Waiting"
+                pill.setTextColor(ContextCompat.getColor(this, R.color.warn))
+                tint(pill, ContextCompat.getColor(this, R.color.warn_soft))
+            }
+            recentContainer.addView(row)
+            if (i < recent.size - 1) {
+                recentContainer.addView(View(this).apply {
+                    setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.line))
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
+                })
+            }
         }
     }
 }

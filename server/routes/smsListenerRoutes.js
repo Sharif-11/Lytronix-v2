@@ -12,6 +12,7 @@ router.post('/messages', asyncHandler(ctrl.deviceAuth), asyncHandler(ctrl.receiv
 const admin = [protect, authorize('payments:manage')];
 router.post('/pairing-codes', ...admin, asyncHandler(ctrl.createPairingCode));
 router.get('/devices', ...admin, asyncHandler(ctrl.listDevices));
+router.post('/test-mode', ...admin, asyncHandler(ctrl.setTestMode));
 router.delete('/devices/:id', ...admin, asyncHandler(ctrl.revokeDevice));
 router.get('/messages', ...admin, asyncHandler(ctrl.listMessages));
 router.post('/messages/:id/match', ...admin, asyncHandler(ctrl.rematch));

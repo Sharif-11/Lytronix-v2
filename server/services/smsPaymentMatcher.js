@@ -3,6 +3,7 @@ const Payment = require('../models/Payment');
 const notificationCenter = require('./notificationCenter');
 const logger = require('./logger');
 const { parseSms } = require('./smsParsers');
+const SmsListenerSettings = require('../models/SmsListenerSettings');
 
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const trxRegex = (trx) => new RegExp(`^${escapeRe(trx)}$`, 'i');
@@ -116,7 +117,43 @@ async function ingest(device, m) {
   const existing = await IncomingSms.findOne({ device: device._id, clientId: m.clientId });
   if (existing) return { clientId: m.clientId, status: existing.status, duplicate: true };
 
-  const hit = parseSms(m.sender, m.body);
+  let hit = parseSms(m.sender, m.body);
+
+  // TEST MODE (switched on for a few minutes from the admin panel): a message from
+  // a sender we don't know — e.g. one sent from an SMS gateway's number to try the
+  // setup — is still run through the bKash parser so you can see it arrive and
+  // parse. It is stored as 'ignored' and can NEVER verify a payment, and text that
+  // is not a receipt is not kept at all.
+  if (!hit && (await SmsListenerSettings.isTestMode())) {
+    const t = parseSms('bkash', m.body);
+    if (t && t.parsed) {
+      const testDoc = new IncomingSms({
+        device: device._id,
+        clientId: m.clientId,
+        sender: m.sender,
+        body: m.body,
+        receivedAt: m.receivedAt,
+        provider: t.provider,
+        parsed: t.parsed,
+        status: 'ignored',
+        note: 'TEST: parsed as a bKash receipt (Tk ' + t.parsed.amount + ', TrxID ' + t.parsed.trxId + ') but not used to verify any payment.',
+      });
+      await testDoc.save();
+      return { clientId: m.clientId, status: testDoc.status };
+    }
+    const other = new IncomingSms({
+      device: device._id,
+      clientId: m.clientId,
+      sender: m.sender,
+      body: '',
+      receivedAt: m.receivedAt,
+      status: 'ignored',
+      note: 'TEST: not a bKash receipt — text not kept.',
+    });
+    await other.save();
+    return { clientId: m.clientId, status: other.status };
+  }
+
   const doc = new IncomingSms({
     device: device._id,
     clientId: m.clientId,

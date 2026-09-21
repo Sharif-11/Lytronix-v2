@@ -68,6 +68,13 @@ class SmsDb private constructor(context: Context) : SQLiteOpenHelper(context, "s
     }
 
     @Synchronized
+    fun sentCount(): Int {
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM messages WHERE sent = 1", null).use {
+            return if (it.moveToFirst()) it.getInt(0) else 0
+        }
+    }
+
+    @Synchronized
     fun markSent(clientId: String, status: String) {
         val cv = ContentValues().apply {
             put("sent", 1)

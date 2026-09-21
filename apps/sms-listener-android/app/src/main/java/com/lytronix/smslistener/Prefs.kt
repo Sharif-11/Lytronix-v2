@@ -39,13 +39,51 @@ class Prefs(context: Context) {
 
     val isPaired: Boolean get() = deviceToken.isNotEmpty()
 
-    fun allowedSenders(): List<String> =
-        senders.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+    /** Until when every SMS is forwarded (a short, explicit test for messages from an SMS gateway). */
+    var testUntil: Long
+        get() = sp.getLong("testUntil", 0L)
+        set(v) = sp.edit().putLong("testUntil", v).apply()
+
+    val isTestMode: Boolean get() = testUntil > System.currentTimeMillis()
+
+    /** Last sender that was NOT forwarded — shown so a wrong sender name is easy to spot and fix. */
+    var lastIgnoredSender: String
+        get() = sp.getString("lastIgnoredSender", "") ?: ""
+        set(v) = sp.edit().putString("lastIgnoredSender", v).apply()
+
+    var ignoredCount: Int
+        get() = sp.getInt("ignoredCount", 0)
+        set(v) = sp.edit().putInt("ignoredCount", v).apply()
+
+    fun sendersList(): List<String> = senders.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+    fun allowedSenders(): List<String> = sendersList().map { it.lowercase() }
 
     fun isAllowedSender(sender: String?): Boolean =
-        sender != null && allowedSenders().contains(sender.trim().lowercase())
+        isTestMode || (sender != null && allowedSenders().contains(sender.trim().lowercase()))
+
+    fun addSender(name: String) {
+        val n = name.trim()
+        if (n.isEmpty() || allowedSenders().contains(n.lowercase())) return
+        senders = (sendersList() + n).joinToString(",")
+        if (lastIgnoredSender.equals(n, ignoreCase = true)) {
+            lastIgnoredSender = ""
+            ignoredCount = 0
+        }
+    }
+
+    fun removeSender(name: String) {
+        val left = sendersList().filterNot { it.equals(name, ignoreCase = true) }
+        senders = if (left.isEmpty()) "bKash" else left.joinToString(",")
+    }
+
+    fun recordIgnored(sender: String) {
+        lastIgnoredSender = sender
+        ignoredCount = ignoredCount + 1
+    }
 
     fun clearPairing() {
-        sp.edit().remove("deviceToken").remove("lastSyncAt").putBoolean("authFailed", false).putString("lastError", "").apply()
+        sp.edit().remove("deviceToken").remove("lastSyncAt").remove("testUntil").remove("lastIgnoredSender").remove("ignoredCount")
+            .putBoolean("authFailed", false).putString("lastError", "").apply()
     }
 }

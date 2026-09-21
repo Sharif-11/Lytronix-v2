@@ -7,6 +7,7 @@ import {
   revokeSmsDevice,
   getSmsMessages,
   rematchSmsMessage,
+  setSmsTestMode,
 } from '../api/client';
 import { formatDate, formatMoney } from '../utils/format';
 import { copyToClipboard } from '../lib/publicLinks';
@@ -54,6 +55,7 @@ export default function SmsListener() {
   usePageTitle(t('nav.smsListener'));
 
   const [devices, setDevices] = useState(null);
+  const [testUntil, setTestUntil] = useState(null);
   const [messages, setMessages] = useState(null);
   const [filter, setFilter] = useState('');
   const [pairing, setPairing] = useState(null); // { code, expiresAt }
@@ -62,7 +64,10 @@ export default function SmsListener() {
 
   const load = useCallback(() => {
     getSmsDevices()
-      .then((d) => setDevices(d.devices))
+      .then((d) => {
+        setDevices(d.devices);
+        setTestUntil(d.testUntil);
+      })
       .catch(() => setDevices([]));
     getSmsMessages({ status: filter || undefined, limit: 100 })
       .then((d) => setMessages(d.messages))
@@ -84,6 +89,17 @@ export default function SmsListener() {
       setNow(Date.now());
     } catch {
       /* surfaced globally via the ErrorModal */
+    }
+  };
+
+  const testMinutesLeft = testUntil ? Math.max(0, Math.ceil((new Date(testUntil).getTime() - now) / 60000)) : 0;
+  const toggleTest = async (minutes) => {
+    try {
+      const r = await setSmsTestMode(minutes);
+      setTestUntil(r.testUntil);
+      setNow(Date.now());
+    } catch {
+      /* ErrorModal */
     }
   };
 
@@ -206,6 +222,31 @@ export default function SmsListener() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ---- Test mode ---- */}
+      <section className="rounded-2xl border border-ui-line bg-ui-panel p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-display text-lg text-ui-ink">Test mode</h2>
+            <p className="text-sm text-ui-muted mt-0.5">
+              Try the setup with a message from an SMS gateway or another phone. While it is on, a message from{' '}
+              <b>any</b> sender that looks like a bKash receipt is shown in the log below as a test — it is{' '}
+              <b>never</b> used to verify a payment — and other text is not kept. Switches off by itself.
+              {testMinutesLeft > 0 && <span className="text-ui-brand font-medium"> On for about {testMinutesLeft} more min.</span>}
+            </p>
+            <p className="text-xs text-ui-faint mt-1">Also start “Test mode” in the phone app, so it forwards messages from any sender.</p>
+          </div>
+          {testMinutesLeft > 0 ? (
+            <button type="button" onClick={() => toggleTest(0)} className="btn-secondary">
+              Stop test mode
+            </button>
+          ) : (
+            <button type="button" onClick={() => toggleTest(15)} className="btn-primary">
+              Start 15-minute test
+            </button>
+          )}
+        </div>
       </section>
 
       {/* ---- Message log ---- */}

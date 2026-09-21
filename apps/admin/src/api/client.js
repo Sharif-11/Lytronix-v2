@@ -257,6 +257,7 @@ export const verifyPayment = (id, data) => client.patch(`/payments/${id}/verify`
 export const rejectPayment = (id, reason) => client.patch(`/payments/${id}/reject`, { reason }).then((r) => r.data);
 
 // ---- SMS listener (Android phone forwarding bKash SMS) ----
+export const setSmsTestMode = (minutes) => client.post('/sms-listener/test-mode', { minutes }).then((r) => r.data);
 export const createSmsPairingCode = () => client.post('/sms-listener/pairing-codes').then((r) => r.data);
 export const getSmsDevices = () => client.get('/sms-listener/devices').then((r) => r.data);
 export const revokeSmsDevice = (id) => client.delete(`/sms-listener/devices/${id}`).then((r) => r.data);
