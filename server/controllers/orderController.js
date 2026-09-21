@@ -561,9 +561,10 @@ exports.createOrder = async (req, res) => {
         proofImageUrl: paymentDetails.proofImageUrl || '',
       });
       // The bKash receipt SMS usually arrives before the customer finishes this
-      // form — if the phone already forwarded it, verify right away. Not awaited:
-      // the order must never wait on (or fail because of) this.
-      require('../services/smsPaymentMatcher').tryMatchNewPayment(manualPayment);
+      // form — if the phone already forwarded it, verify right away so the
+      // confirmation screen can say "verified" instead of "waiting". It never
+      // throws (errors are logged inside), so the order can't fail because of it.
+      await require('../services/smsPaymentMatcher').tryMatchNewPayment(manualPayment);
     } else if (method === 'bkash_automated') {
       // Same as manual bKash: only the required up-front amount is charged
       // online; the cash-on-delivery leg (incl. delivery charge) is not.
@@ -646,7 +647,19 @@ exports.createOrder = async (req, res) => {
     grandTotal: order.pricing.grandTotal,
   });
 
-  res.status(201).json(order);
+  const body = order.toObject();
+  if (method === 'bkash_manual') {
+    try {
+      // Re-read: an instant SMS match may just have verified it and moved the
+      // order from "unverified" to "pending".
+      const fresh = await Order.findById(order._id);
+      const smsMatcher = require('../services/smsPaymentMatcher');
+      Object.assign(body, fresh ? fresh.toObject() : {}, { manualPayment: await smsMatcher.customerPaymentState(order._id) });
+    } catch (err) {
+      logger.error('order: manual payment state failed', { error: err.message });
+    }
+  }
+  res.status(201).json(body);
 };
 
 // PUT /api/orders/:id  (general edit: customer info, items, pricing, comments...)
@@ -822,9 +835,20 @@ exports.trackOrder = async (req, res) => {
   res.json({
     ...order.toObject(),
     bkashPayment: bkashPayment || null,
+    manualPayment: await require('../services/smsPaymentMatcher').customerPaymentState(order._id),
     canPayOnline: canPayOrderOnline(order),
     onlinePayAmount: onlinePayAmount(order),
   });
+};
+
+// GET /api/track/:trackingId/payment  (public) — cheap poll target for the
+// "verifying your bKash payment" panel. Returns { manualPayment: null } when the
+// order has no manual bKash payment.
+exports.trackPaymentState = async (req, res) => {
+  const order = await Order.findOne({ trackingId: req.params.trackingId }).select('_id status');
+  if (!order) return res.status(404).json({ message: 'Tracking ID not found' });
+  const manualPayment = await require('../services/smsPaymentMatcher').customerPaymentState(order._id);
+  res.json({ manualPayment, orderStatus: order.status });
 };
 
 // POST /api/track/by-phone   { phone }   (public)

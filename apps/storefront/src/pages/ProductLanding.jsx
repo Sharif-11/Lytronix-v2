@@ -9,6 +9,7 @@ import {
   getPaymentMeta, initiateBkashCheckout, getBankInfo,
 } from '../api/client';
 import BankTransferPanel from '../components/BankTransferPanel';
+import ManualPaymentStatus from '../components/ManualPaymentStatus';
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import SearchableSelect from '../components/SearchableSelect';
@@ -800,6 +801,10 @@ function Confirmation({ order, paymentMethod, advanceInfo }) {
           ধন্যবাদ, {order.customer?.name?.split(' ')[0] || 'প্রিয় কাস্টমার'} — আপনার অর্ডার পেয়েছি,
           কনফার্ম করতে <span className="font-medium text-ui-ink">{order.customer?.phone}</span> নম্বরে যোগাযোগ করা হবে।
         </p>
+
+        {paymentMethod === 'bkash_manual' && order.manualPayment && (
+          <ManualPaymentStatus trackingId={order.trackingId} orderNumber={order.orderNumber} initial={order.manualPayment} className="mb-4" />
+        )}
 
         <div className="card p-5 text-left mb-6">
           <div className="flex justify-between text-sm mb-1">

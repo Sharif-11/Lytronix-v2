@@ -12,6 +12,7 @@ import { useCart } from '../context/CartContext';
 import { useCustomerAuth } from '../context/CustomerAuthContext';
 import SearchableSelect from '../components/SearchableSelect';
 import BankTransferPanel from '../components/BankTransferPanel';
+import ManualPaymentStatus from '../components/ManualPaymentStatus';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
@@ -765,6 +766,10 @@ function Confirmation({ order, paymentMethod, isAuthed, advanceInfo }) {
             <span className="font-medium">{order.customer?.phone}</span> নম্বরে এসএমএসে পাঠানো হয়েছে।
             ফোন ও পাসওয়ার্ড দিয়ে লগইন করে অর্ডার ট্র্যাক করুন।
           </p>
+        )}
+
+        {paymentMethod === 'bkash_manual' && order.manualPayment && (
+          <ManualPaymentStatus trackingId={order.trackingId} orderNumber={order.orderNumber} initial={order.manualPayment} className="mb-4" />
         )}
 
         <div className="card p-5 text-left mb-6">

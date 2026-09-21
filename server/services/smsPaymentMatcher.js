@@ -211,4 +211,31 @@ async function tryMatchNewPayment(payment) {
   }
 }
 
-module.exports = { ingest, settle, tryMatchNewPayment };
+// What the CUSTOMER may know about their manual-bKash payment (public tracking
+// page + checkout confirmation). Deliberately coarse — never the SMS text,
+// balance or the expected/actual figures.
+//   verified  – confirmed (auto from the SMS, or by an admin)
+//   checking  – submitted, waiting for the receipt SMS / a human
+//   mismatch  – a receipt with this TrxID arrived but amount/number differ
+//   failed    – rejected by an admin
+async function customerPaymentState(orderId) {
+  const payment = await Payment.findOne({ order: orderId, method: 'bkash_manual' })
+    .sort({ createdAt: -1 })
+    .select('status createdAt rejectionReason amount')
+    .lean();
+  if (!payment) return null;
+
+  let state = 'checking';
+  if (payment.status === 'verified') state = 'verified';
+  else if (payment.status === 'failed') state = 'failed';
+  else if (await IncomingSms.exists({ payment: payment._id, status: 'needs_review' })) state = 'mismatch';
+
+  return {
+    state,
+    amount: payment.amount,
+    ageSeconds: Math.max(0, Math.round((Date.now() - new Date(payment.createdAt).getTime()) / 1000)),
+    reason: state === 'failed' ? payment.rejectionReason || '' : '',
+  };
+}
+
+module.exports = { ingest, settle, tryMatchNewPayment, customerPaymentState };

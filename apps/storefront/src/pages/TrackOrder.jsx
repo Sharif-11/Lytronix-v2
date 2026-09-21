@@ -5,6 +5,7 @@ import { trackOrder, initiateBkashCheckout } from '../api/client';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
 import TrackingLink from '../components/TrackingLink';
+import ManualPaymentStatus from '../components/ManualPaymentStatus';
 import { formatMoney, formatTime, mergeTrackingTimeline, groupTimelineByDate } from '../utils/format';
 import usePageTitle from '../lib/usePageTitle';
 
@@ -76,6 +77,15 @@ export default function TrackOrder() {
         )}
 
         {!order && !error && <Loader />}
+
+        {order && order.manualPayment && (
+          <ManualPaymentStatus
+            trackingId={trackingId}
+            orderNumber={order.orderNumber}
+            initial={order.manualPayment}
+            className="mb-5"
+          />
+        )}
 
         {order && (
           <div className="bg-ui-panel border border-ui-line rounded-xl shadow-card p-6">

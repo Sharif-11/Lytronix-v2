@@ -192,6 +192,9 @@ export const getPoliceStations = async () => {
 // here, shown inline on the page rather than as a popup.
 export const trackOrder = (trackingId) =>
   client.get(`/track/${trackingId}`, { skipErrorModal: true }).then((r) => r.data);
+// Manual-bKash verification state, polled while the SMS listener catches up.
+export const trackPaymentState = (trackingId) =>
+  client.get(`/track/${trackingId}/payment`, { skipErrorModal: true }).then((r) => r.data);
 // Guest "My orders": look up a phone number's orders (phone kept on-device).
 export const getGuestOrders = (phone) =>
   client.post('/track/by-phone', { phone }, { skipErrorModal: true }).then((r) => r.data);
