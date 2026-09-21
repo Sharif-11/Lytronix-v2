@@ -11,6 +11,8 @@ const OUTCOME_STYLES = {
   unauthorized: 'bg-red-50 text-ui-rust border-red-200',
   error: 'bg-red-50 text-ui-rust border-red-200',
   received: 'bg-slate-100 text-slate-600 border-slate-200',
+  noted: 'bg-sky-50 text-sky-700 border-sky-200',
+  duplicate: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 
 // Low-key section at the very bottom of the dashboard: the latest few

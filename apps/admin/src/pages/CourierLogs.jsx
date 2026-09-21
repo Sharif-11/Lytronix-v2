@@ -14,9 +14,11 @@ const OUTCOME_STYLES = {
   unauthorized: 'bg-red-50 text-ui-rust border-red-200',
   error: 'bg-red-50 text-ui-rust border-red-200',
   received: 'bg-slate-100 text-slate-600 border-slate-200',
+  noted: 'bg-sky-50 text-sky-700 border-sky-200',
+  duplicate: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 
-const OUTCOMES = ['', 'processed', 'unknown_order', 'invalid', 'unauthorized', 'error'];
+const OUTCOMES = ['', 'processed', 'noted', 'duplicate', 'unknown_order', 'invalid', 'unauthorized', 'error'];
 
 // Every callback Steadfast has sent us — raw payload plus what we did with it.
 export default function CourierLogs() {
@@ -107,6 +109,11 @@ export default function CourierLogs() {
                         l.invoice && <span>invoice {l.invoice}</span>
                       )}
                       {l.consignmentId && <span>consignment {l.consignmentId}</span>}
+                      {l.signatureStatus && l.signatureStatus !== 'not_checked' && (
+                        <span className={l.signatureStatus === 'valid' ? 'text-emerald-700' : 'text-amber-700'}>
+                          signature {l.signatureStatus}
+                        </span>
+                      )}
                       {l.previousStatus && l.newStatus && l.previousStatus !== l.newStatus && (
                         <span>
                           {l.previousStatus} → {l.newStatus}

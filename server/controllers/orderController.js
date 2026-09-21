@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Payment = require('../models/Payment');
@@ -1165,28 +1166,55 @@ exports.listSteadfastWebhookLogs = async (req, res) => {
 };
 
 // POST /api/webhooks/steadfast  (public — Steadfast calls this directly)
-// Handles both "delivery_status" and "tracking_update" notification types.
+//
+// Steadfast sends: Authorization: Bearer <token>, X-Signature (HMAC-SHA256 of the
+// raw body, hex, keyed with the same token) and Idempotency-Key (identical when
+// it retries the same event). It waits 5 seconds for a 2xx; a 5xx or timeout is
+// retried after 30 s and 2 min, a 4xx never is — so: 200 for anything we have
+// understood or deliberately ignore, 4xx only for requests that can never work,
+// and let genuine crashes surface as 5xx so they are retried.
+//
+// Events about a parcel: delivery_status, tracking_update, consignment_update,
+// cancel_request, return_request. Account-level events (no parcel):
+// payment_request, pickup_request, return_list_accepted, user_update.
+const PARCEL_EVENTS = ['delivery_status', 'tracking_update', 'consignment_update', 'cancel_request', 'return_request'];
+const ACCOUNT_EVENTS = {
+  payment_request: { title: 'Steadfast: payout requested', body: 'A payout was requested — checking for COD payments.', severity: 'info' },
+  pickup_request: { title: 'Steadfast: pickup requested', body: 'A pickup was requested on your Steadfast account.', severity: 'info' },
+  return_list_accepted: { title: 'Steadfast: return list accepted', body: 'A return list was confirmed as received.', severity: 'info' },
+  user_update: { title: 'Steadfast: account details changed', body: 'Your Steadfast account details were updated.', severity: 'warning' },
+};
+
+const timingSafeEqualStr = (a, b) => {
+  const A = Buffer.from(String(a));
+  const B = Buffer.from(String(b));
+  return A.length === B.length && crypto.timingSafeEqual(A, B);
+};
+
 exports.steadfastWebhook = async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
   logger.info('courier: webhook callback received', {
-    notification_type: req.body?.notification_type,
-    consignment_id: req.body?.consignment_id,
-    invoice: req.body?.invoice,
-    status: req.body?.status,
+    notification_type: body.notification_type,
+    consignment_id: body.consignment_id,
+    invoice: body.invoice,
+    status: body.status,
   });
 
   // Persist the raw callback up front so even rejected/crashed calls leave a
   // trace. Logging must never break the webhook itself, so every write is
-  // best-effort and errors are swallowed (Steadfast retries on non-2xx).
+  // best-effort and errors are swallowed.
   const { authorization: _auth, ...safeHeaders } = req.headers || {};
+  const idempotencyKey = String(req.get('idempotency-key') || '').slice(0, 200);
   const logDoc = await WebhookLog.create({
     provider: 'steadfast',
-    notificationType: String(req.body?.notification_type ?? ''),
-    consignmentId: String(req.body?.consignment_id ?? ''),
-    invoice: String(req.body?.invoice ?? ''),
-    status: String(req.body?.status ?? ''),
+    notificationType: String(body.notification_type ?? ''),
+    consignmentId: String(body.consignment_id ?? ''),
+    invoice: String(body.invoice ?? ''),
+    status: String(body.status ?? ''),
     payload: req.body ?? null,
     headers: safeHeaders,
     ip: req.ip || '',
+    idempotencyKey,
   }).catch((err) => {
     logger.error('webhook log write failed', { error: err.message });
     return null;
@@ -1197,48 +1225,88 @@ exports.steadfastWebhook = async (req, res) => {
       : Promise.resolve();
 
   try {
-    return await handleSteadfastWebhook(req, res, finishLog);
+    // ---- Authenticity -------------------------------------------------------
+    const configuredToken = process.env.STEADFAST_WEBHOOK_TOKEN;
+    let signatureStatus = 'not_checked';
+    if (configuredToken) {
+      const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      if (!timingSafeEqualStr(bearer, configuredToken)) {
+        await finishLog('unauthorized', { note: 'Invalid or missing webhook auth token.' });
+        return res.status(401).json({ status: 'error', message: 'Invalid or missing webhook auth token.' });
+      }
+      const given = String(req.get('x-signature') || '').trim().toLowerCase();
+      if (given && Buffer.isBuffer(req.rawBody)) {
+        const expected = crypto.createHmac('sha256', configuredToken).update(req.rawBody).digest('hex');
+        if (!timingSafeEqualStr(given, expected)) {
+          await finishLog('unauthorized', { signatureStatus: 'invalid', note: 'X-Signature does not match the request body.' });
+          return res.status(401).json({ status: 'error', message: 'Invalid signature.' });
+        }
+        signatureStatus = 'valid';
+      } else if (!given) {
+        signatureStatus = 'absent'; // token was right but the request was unsigned — accepted, flagged in the log
+      }
+    }
+
+    // ---- Retries of an event we already handled -----------------------------
+    if (idempotencyKey && logDoc) {
+      const seen = await WebhookLog.findOne({
+        _id: { $ne: logDoc._id },
+        provider: 'steadfast',
+        idempotencyKey,
+        outcome: { $in: ['processed', 'noted', 'unknown_order'] },
+      }).select('_id');
+      if (seen) {
+        await finishLog('duplicate', { signatureStatus, note: 'Same Idempotency-Key as an event already handled.' });
+        return res.status(200).json({ status: 'success', message: 'Already handled.' });
+      }
+    }
+
+    return await handleSteadfastWebhook(req, res, finishLog, signatureStatus);
   } catch (err) {
     await finishLog('error', { note: err.message });
-    throw err;
+    throw err; // -> 5xx, so Steadfast retries (the Idempotency-Key makes that safe)
   }
 };
 
-async function handleSteadfastWebhook(req, res, finishLog) {
+async function handleSteadfastWebhook(req, res, finishLog, signatureStatus) {
+  const { notification_type, status, tracking_message, delivery_charge, cod_amount } = req.body || {};
+  const type = String(notification_type || '');
+  const consignmentId = Number.isFinite(Number(req.body?.consignment_id)) && req.body?.consignment_id !== '' ? Number(req.body.consignment_id) : null;
+  const invoice = req.body?.invoice ? String(req.body.invoice) : '';
 
-  const configuredToken = process.env.STEADFAST_WEBHOOK_TOKEN;
-  if (configuredToken) {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '');
-    if (token !== configuredToken) {
-      await finishLog('unauthorized', { note: 'Invalid or missing webhook auth token.' });
-      return res.status(401).json({ status: 'error', message: 'Invalid or missing webhook auth token.' });
+  // ---- Account-level events: nothing to look up, just record and react -------
+  if (ACCOUNT_EVENTS[type] && !consignmentId && !invoice) {
+    const ev = ACCOUNT_EVENTS[type];
+    notificationCenter.push({ type: 'system', severity: ev.severity, title: ev.title, body: ev.body, link: '/', meta: req.body });
+    if (type === 'payment_request') {
+      // A payout is on its way: look for COD payments now (a paid payout marks its orders).
+      require('../services/payoutSync')
+        .syncPayouts()
+        .catch((err) => logger.error('steadfast: payout sync after webhook failed', { error: err.message }));
     }
+    await finishLog('noted', { signatureStatus, note: ev.body });
+    return res.status(200).json({ status: 'success', message: 'Webhook received successfully.' });
   }
 
-  const { notification_type, consignment_id, invoice, status, tracking_message, delivery_charge, cod_amount } = req.body;
-
-  if (!consignment_id && !invoice) {
-    await finishLog('invalid', { note: 'Missing consignment_id or invoice.' });
+  if (!consignmentId && !invoice) {
+    await finishLog('invalid', { signatureStatus, note: 'Missing consignment_id or invoice.' });
     return res.status(400).json({ status: 'error', message: 'Missing consignment_id or invoice.' });
   }
 
-  const order = await Order.findOne(
-    consignment_id ? { 'courier.consignmentId': consignment_id } : { orderNumber: invoice }
-  );
+  const order = await Order.findOne(consignmentId ? { 'courier.consignmentId': consignmentId } : { orderNumber: invoice });
 
   if (!order) {
     // Steadfast still expects a 200 so it doesn't keep retrying for an order
-    // that simply doesn't exist in our system (e.g. a stale/test webhook) —
-    // but surface it in the notification bar so it isn't silently lost.
+    // that simply doesn't exist in our system (e.g. a parcel booked by hand in
+    // the Steadfast portal) — but surface it so it isn't silently lost.
     notificationCenter.push({
       type: 'system',
       severity: 'warning',
       title: 'Steadfast webhook for an unknown parcel',
-      body: `${notification_type || 'event'} · consignment ${consignment_id || '—'} · invoice ${invoice || '—'}`,
+      body: `${type || 'event'} · consignment ${consignmentId || '—'} · invoice ${invoice || '—'}`,
       meta: req.body,
     });
-    await finishLog('unknown_order', { note: 'No matching order found; ignored.' });
+    await finishLog('unknown_order', { signatureStatus, note: 'No matching order found; ignored.' });
     return res.status(200).json({ status: 'success', message: 'No matching order found; ignored.' });
   }
 
@@ -1251,9 +1319,12 @@ async function handleSteadfastWebhook(req, res, finishLog) {
 
   const previousStatus = order.status;
   const rawStatus = status || '';
+  let notif = null; // what the admin sees in the notification bar
 
-  if (notification_type === 'delivery_status') {
-    order.courier.status = rawStatus || order.courier.status;
+  if (type === 'delivery_status') {
+    // Stored lower-case (their docs show both "Delivered" and "delivered"): the dashboard
+    // counts and the COD-settlement query compare against lower-case.
+    order.courier.status = rawStatus ? String(rawStatus).trim().toLowerCase() : order.courier.status;
     // Steadfast delivery_status values: pending | delivered | partial_delivered
     // | cancelled | unknown  (mapSteadfastStatus lower-cases + maps these).
     const mapped = mapSteadfastStatus(rawStatus);
@@ -1267,15 +1338,38 @@ async function handleSteadfastWebhook(req, res, finishLog) {
     }
     // Steadfast's own tracking_message is already a clean, human sentence
     // (e.g. "Consignment status has been updated as Pending") — use it
-    // verbatim so our timeline reads the same as theirs, instead of
-    // prepending our own "Delivery status: X" wrapper. Only synthesize one
+    // verbatim so our timeline reads the same as theirs. Only synthesize one
     // when they don't send a message at all.
     order.courierEvents.push({
       message: tracking_message || `Delivery status updated: ${rawStatus || 'unknown'}`,
       at: new Date(),
     });
-  } else if (notification_type === 'tracking_update') {
+    const s = rawStatus.toLowerCase();
+    notif = {
+      type: 'courier_status',
+      severity: s === 'delivered' ? 'success' : s === 'cancelled' ? 'error' : 'info',
+      title: `Parcel ${order.orderNumber}: ${rawStatus || 'status update'}`,
+      body: tracking_message || `Status changed to ${order.status}.`,
+    };
+  } else if (type === 'tracking_update') {
     order.courierEvents.push({ message: tracking_message || 'Tracking update received.', at: new Date() });
+    notif = { type: 'courier_tracking', severity: 'info', title: `Tracking · ${order.orderNumber}`, body: tracking_message || 'Tracking update received.' };
+  } else if (type === 'consignment_update') {
+    order.courierEvents.push({ message: tracking_message || 'Parcel details were changed on Steadfast.', at: new Date() });
+    notif = { type: 'system', severity: 'info', title: `Parcel changed · ${order.orderNumber}`, body: tracking_message || 'Its details (address or COD) were changed on Steadfast.' };
+  } else if (type === 'cancel_request') {
+    const text = tracking_message || `Cancellation request${rawStatus ? `: ${rawStatus}` : ''}.`;
+    order.courierEvents.push({ message: text, at: new Date() });
+    notif = { type: 'system', severity: 'warning', title: `Cancellation request · ${order.orderNumber}`, body: text };
+  } else if (type === 'return_request') {
+    const text = tracking_message || `Return request${rawStatus ? `: ${rawStatus}` : ''}.`;
+    order.courierEvents.push({ message: text, at: new Date() });
+    notif = { type: 'system', severity: 'info', title: `Return request · ${order.orderNumber}`, body: text };
+  } else {
+    // An event type we don't know yet: keep it visible rather than dropping it.
+    const text = tracking_message || `Steadfast event: ${type || 'unknown'}.`;
+    order.courierEvents.push({ message: text, at: new Date() });
+    notif = { type: 'system', severity: 'info', title: `Steadfast · ${order.orderNumber}`, body: text };
   }
 
   await order.save();
@@ -1296,27 +1390,10 @@ async function handleSteadfastWebhook(req, res, finishLog) {
     });
   }
 
-  // Log every webhook event to the admin notification bar.
-  const isDelivery = notification_type === 'delivery_status';
-  const sev =
-    rawStatus.toLowerCase() === 'delivered'
-      ? 'success'
-      : rawStatus.toLowerCase() === 'cancelled'
-      ? 'error'
-      : 'info';
-  notificationCenter.push({
-    type: isDelivery ? 'courier_status' : 'courier_tracking',
-    severity: isDelivery ? sev : 'info',
-    title: isDelivery
-      ? `Parcel ${order.orderNumber}: ${rawStatus || 'status update'}`
-      : `Tracking · ${order.orderNumber}`,
-    body: tracking_message || (isDelivery ? `Status changed to ${order.status}.` : 'Tracking update received.'),
-    order: order._id,
-    link: `/orders/${order._id}`,
-    meta: req.body,
-  });
+  notificationCenter.push({ ...notif, order: order._id, link: `/orders/${order._id}`, meta: req.body });
 
   await finishLog('processed', {
+    signatureStatus,
     order: order._id,
     orderNumber: order.orderNumber,
     previousStatus,

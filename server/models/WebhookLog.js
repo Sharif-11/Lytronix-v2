@@ -20,10 +20,14 @@ const webhookLogSchema = new mongoose.Schema(
 
     outcome: {
       type: String,
-      enum: ['received', 'processed', 'unauthorized', 'invalid', 'unknown_order', 'error'],
+      enum: ['received', 'processed', 'noted', 'duplicate', 'unauthorized', 'invalid', 'unknown_order', 'error'],
       default: 'received',
       index: true,
     },
+    // Steadfast's Idempotency-Key (the same on retries of one event) and whether the
+    // X-Signature checked out: valid | invalid | absent (right token, unsigned) | not_checked.
+    idempotencyKey: { type: String, default: '', index: true },
+    signatureStatus: { type: String, default: '' },
     note: { type: String, default: '' },
     order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
     orderNumber: { type: String, default: '' },
