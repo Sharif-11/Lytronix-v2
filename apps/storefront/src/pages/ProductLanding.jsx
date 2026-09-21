@@ -11,7 +11,7 @@ import {
 import BankTransferPanel from '../components/BankTransferPanel';
 import ManualPaymentStatus from '../components/ManualPaymentStatus';
 import VerifyNote from '../components/VerifyNote';
-import { waitForVerification, sleep, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
+import { waitForVerification, sleep, bnDigits, VERIFY_TIMEOUT_MS, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
 import { formatMoney } from '../utils/format';
 import { computeCartAdvance } from '../utils/paymentPolicy';
 import SearchableSelect from '../components/SearchableSelect';
@@ -51,6 +51,7 @@ export default function ProductLanding() {
   const [metaReady, setMetaReady] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout
+  const [verifySecs, setVerifySecs] = useState(VERIFY_TIMEOUT_MS / 1000); // countdown shown while verifying
   const [bkash, setBkash] = useState(emptyBkash);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -276,7 +277,7 @@ export default function ProductLanding() {
       if (paymentMethod === 'bkash_manual' && created.manualPayment) {
         try {
           setVerifyPhase('verifying');
-          const outcome = await waitForVerification(created.trackingId, created.manualPayment);
+          const outcome = await waitForVerification(created.trackingId, created.manualPayment, { onTick: setVerifySecs });
           if (outcome.state !== 'skipped') {
             setVerifyPhase(outcome.state);
             await sleep(outcome.state === 'verified' ? VERIFIED_HOLD_MS : FAILED_HOLD_MS);
@@ -555,7 +556,7 @@ export default function ProductLanding() {
                 }`}
               >
                 {verifyPhase === 'verifying' ? (
-                  <><Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে…</>
+                  <><Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে… {bnDigits(verifySecs)} সে.</>
                 ) : verifyPhase === 'verified' ? (
                   <><CheckCircle2 size={16} /> পেমেন্ট ভেরিফাই হয়েছে</>
                 ) : verifyPhase ? (
@@ -574,7 +575,7 @@ export default function ProductLanding() {
                   `অর্ডার কনফার্ম করুন · ${formatMoney(grandTotal)}`
                 )}
               </button>
-              <VerifyNote phase={verifyPhase} />
+              <VerifyNote phase={verifyPhase} secs={verifySecs} />
 
               <p className="text-[11px] text-ui-faint text-center">
                 অর্ডার করতে কোনো অ্যাকাউন্ট লাগবে না। কনফার্ম করার জন্য আমরা ফোনে যোগাযোগ করব।

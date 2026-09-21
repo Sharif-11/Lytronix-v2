@@ -14,7 +14,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import BankTransferPanel from '../components/BankTransferPanel';
 import ManualPaymentStatus from '../components/ManualPaymentStatus';
 import VerifyNote from '../components/VerifyNote';
-import { waitForVerification, sleep, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
+import { waitForVerification, sleep, bnDigits, VERIFY_TIMEOUT_MS, VERIFIED_HOLD_MS, FAILED_HOLD_MS } from '../lib/verifyManualPayment';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
@@ -40,6 +40,7 @@ export default function Checkout() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout
+  const [verifySecs, setVerifySecs] = useState(VERIFY_TIMEOUT_MS / 1000); // countdown shown while verifying
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
   usePageTitle(confirmed ? 'অর্ডার সম্পন্ন হয়েছে' : 'চেকআউট');
@@ -265,7 +266,7 @@ export default function Checkout() {
       if (paymentMethod === 'bkash_manual' && created.manualPayment) {
         try {
           setVerifyPhase('verifying');
-          const outcome = await waitForVerification(created.trackingId, created.manualPayment);
+          const outcome = await waitForVerification(created.trackingId, created.manualPayment, { onTick: setVerifySecs });
           if (outcome.state !== 'skipped') {
             setVerifyPhase(outcome.state);
             await sleep(outcome.state === 'verified' ? VERIFIED_HOLD_MS : FAILED_HOLD_MS);
@@ -610,7 +611,7 @@ export default function Checkout() {
         >
           {verifyPhase === 'verifying' ? (
             <>
-              <Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে…
+              <Loader2 size={16} className="animate-spin" /> পেমেন্ট ভেরিফাই করা হচ্ছে… {bnDigits(verifySecs)} সে.
             </>
           ) : verifyPhase === 'verified' ? (
             <>
@@ -636,7 +637,7 @@ export default function Checkout() {
             `অর্ডার করুন · ${formatMoney(grandTotal)}`
           )}
         </button>
-        <VerifyNote phase={verifyPhase} />
+        <VerifyNote phase={verifyPhase} secs={verifySecs} />
       </form>
     </div>
   );

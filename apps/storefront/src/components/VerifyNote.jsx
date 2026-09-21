@@ -1,17 +1,28 @@
 import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { VERIFY_FAIL } from '../lib/verifyManualPayment';
+import { VERIFY_FAIL, VERIFY_TIMEOUT_MS, bnDigits } from '../lib/verifyManualPayment';
 
 // Sits right under the submit button while the checkout waits for a manual bKash
 // payment to be verified, and explains the outcome when it can't be.
-export default function VerifyNote({ phase }) {
+export default function VerifyNote({ phase, secs = VERIFY_TIMEOUT_MS / 1000 }) {
   if (!phase) return null;
 
   if (phase === 'verifying') {
     return (
-      <p className="flex items-start gap-2 text-xs text-ui-muted text-left" role="status" aria-live="polite">
-        <Loader2 size={14} className="animate-spin shrink-0 mt-0.5" />
-        <span>বিকাশের এসএমএস মিলিয়ে দেখা হচ্ছে — সাধারণত কয়েক সেকেন্ড লাগে। অনুগ্রহ করে এই পেজ বন্ধ করবেন না।</span>
-      </p>
+      <div className="text-left" role="status" aria-live="polite">
+        <div className="h-1.5 rounded-full bg-ui-line overflow-hidden">
+          <div
+            className="h-full bg-bkash transition-[width] duration-1000 ease-linear"
+            style={{ width: `${Math.max(0, Math.min(100, (secs / (VERIFY_TIMEOUT_MS / 1000)) * 100))}%` }}
+          />
+        </div>
+        <p className="flex items-start gap-2 text-xs text-ui-muted mt-2">
+          <Loader2 size={14} className="animate-spin shrink-0 mt-0.5" />
+          <span>
+            বিকাশের এসএমএস মিলিয়ে দেখা হচ্ছে — বাকি <span className="font-mono font-medium text-ui-ink">{bnDigits(secs)}</span> সেকেন্ড।
+            অনুগ্রহ করে এই পেজ বন্ধ করবেন না।
+          </span>
+        </p>
+      </div>
     );
   }
 

@@ -3,12 +3,15 @@ import { trackPaymentState } from '../api/client';
 // After a manual bKash order is placed the checkout stays on the page while the
 // server matches the receipt SMS. This waits for that, and says how it ended.
 const POLL_MS = 2000;
-export const VERIFY_TIMEOUT_MS = 60000; // stay on the checkout for up to 1 minute
+export const VERIFY_TIMEOUT_MS = 30000; // stay on the checkout for up to 30 seconds
 // How long the result stays visible in the button before the page moves on.
 export const VERIFIED_HOLD_MS = 1200;
 export const FAILED_HOLD_MS = 5000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 28 -> ২৮ (the checkout is Bangla-first)
+export const bnDigits = (n) => String(n).replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[d]);
 
 // Copy for every way verification can end without success (Bangla, like the rest of checkout).
 export const VERIFY_FAIL = {
@@ -34,21 +37,31 @@ export const VERIFY_FAIL = {
  *   timeout  – nothing matched within the time limit
  *   skipped  – no SMS phone is online (or no state at all), so there is nothing to wait for
  */
-export async function waitForVerification(trackingId, initial, { timeoutMs = VERIFY_TIMEOUT_MS } = {}) {
+export async function waitForVerification(trackingId, initial, { timeoutMs = VERIFY_TIMEOUT_MS, onTick } = {}) {
   let info = initial;
   if (!info) return { state: 'skipped', info };
   const started = Date.now();
-  for (;;) {
-    if (['verified', 'mismatch', 'failed'].includes(info.state)) return { state: info.state, info };
-    if (info.autoVerify === false) return { state: 'skipped', info };
-    if (Date.now() - started >= timeoutMs) return { state: 'timeout', info };
-    await sleep(POLL_MS);
-    try {
-      const r = await trackPaymentState(trackingId);
-      if (r.manualPayment) info = { ...info, ...r.manualPayment };
-    } catch {
-      /* a failed poll just tries again until the time limit */
+  const secondsLeft = () => Math.max(0, Math.ceil((timeoutMs - (Date.now() - started)) / 1000));
+
+  // The countdown the customer sees ticks every second, independent of the (slower) polling.
+  onTick?.(secondsLeft());
+  const timer = onTick ? setInterval(() => onTick(secondsLeft()), 1000) : null;
+  try {
+    for (;;) {
+      if (['verified', 'mismatch', 'failed'].includes(info.state)) return { state: info.state, info };
+      if (info.autoVerify === false) return { state: 'skipped', info };
+      const remaining = timeoutMs - (Date.now() - started);
+      if (remaining <= 0) return { state: 'timeout', info };
+      await sleep(Math.min(POLL_MS, remaining));
+      try {
+        const r = await trackPaymentState(trackingId);
+        if (r.manualPayment) info = { ...info, ...r.manualPayment };
+      } catch {
+        /* a failed poll just tries again until the time limit */
+      }
     }
+  } finally {
+    if (timer) clearInterval(timer);
   }
 }
 
