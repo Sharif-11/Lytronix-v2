@@ -151,6 +151,9 @@ app.use(errorHandler);
 // Periodically trims old chat messages + their Cloudinary media (keeps each
 // thread + its first message).
 require('./services/chatCleanup').scheduleChatCleanup();
+// Periodically removes expired/unused pairing codes and long-revoked SMS
+// listener devices — see SMS_DEVICE_RETENTION_DAYS.
+require('./services/smsListenerCleanup').scheduleSmsListenerCleanup();
 require('./services/paymentSettings').startRefreshing();
 require('./services/payoutSync').startSchedule();
 
