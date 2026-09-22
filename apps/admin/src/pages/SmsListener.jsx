@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Smartphone, RefreshCw, Copy, Check, Plus, Ban } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   createSmsPairingCode,
   getSmsDevices,
@@ -156,21 +157,26 @@ export default function SmsListener() {
         {pairing && (
           <div className="mb-4 rounded-2xl border border-ui-brand/40 bg-ui-brand/[0.05] p-4 sm:p-5">
             {secondsLeft > 0 ? (
-              <>
-                <div className="text-xs uppercase tracking-wide text-ui-muted mb-1">Pairing code — expires in {mmss}</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-3xl tracking-[0.3em] text-ui-ink">{pairing.code}</span>
-                  <CopyText value={pairing.code} />
+              <div className="flex flex-wrap items-start gap-5">
+                <div className="shrink-0 bg-white p-2 rounded-xl border border-ui-line">
+                  <QRCodeSVG value={`LYTXPAIR|${API_BASE}|${pairing.code}`} size={132} level="M" />
                 </div>
-                <div className="mt-3 text-sm text-ui-ink">
-                  In the app enter this code and the server address:
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <code className="text-xs bg-white border border-ui-line rounded px-2 py-1 break-all">{API_BASE}</code>
-                    <CopyText value={API_BASE} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs uppercase tracking-wide text-ui-muted mb-1">Pairing code — expires in {mmss}</div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-mono text-3xl tracking-[0.3em] text-ui-ink">{pairing.code}</span>
+                    <CopyText value={pairing.code} />
                   </div>
+                  <div className="mt-3 text-sm text-ui-ink">
+                    In the app tap <b>Scan QR code</b>, or enter this code and the server address by hand:
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <code className="text-xs bg-white border border-ui-line rounded px-2 py-1 break-all">{API_BASE}</code>
+                      <CopyText value={API_BASE} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-ui-muted mt-2">One use only. Anyone with this code or QR can pair a phone until it expires.</p>
                 </div>
-                <p className="text-xs text-ui-muted mt-2">One use only. Anyone with this code can pair a phone until it expires.</p>
-              </>
+              </div>
             ) : (
               <div className="text-sm text-ui-muted">
                 That code expired. <button type="button" onClick={startPairing} className="text-ui-brand underline">Generate a new one</button>

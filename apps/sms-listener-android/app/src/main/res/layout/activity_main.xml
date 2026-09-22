@@ -88,13 +88,32 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="In the admin panel open SMS listener → Pair a new phone. It shows a code and the server address to enter here." />
+                        android:text="In the admin panel open SMS listener → Pair a new phone. Scan the QR code it shows, or enter the code and server address below." />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/scanQrButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="Scan QR code"
+                        app:icon="@android:drawable/ic_menu_camera" />
+
+                    <TextView
+                        style="@style/Body"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:gravity="center"
+                        android:text="— or enter it by hand —"
+                        android:textColor="@color/muted"
+                        android:textSize="12sp" />
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
+                        android:layout_marginTop="10dp"
                         android:hint="Server address">
 
                         <com.google.android.material.textfield.TextInputEditText

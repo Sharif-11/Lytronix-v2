@@ -31,8 +31,14 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.textfield.TextInputEditText
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 class MainActivity : AppCompatActivity() {
+    private companion object {
+        const val CAMERA_PERMISSION_REQUEST = 2
+    }
+
     private lateinit var prefs: Prefs
     private lateinit var db: SmsDb
     private val ui = Handler(Looper.getMainLooper())
@@ -61,6 +67,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var healthContainer: LinearLayout
     private lateinit var recentContainer: LinearLayout
     private lateinit var sendersChips: ChipGroup
+
+    // The admin panel's QR encodes "LYTXPAIR|<server address>|<pairing code>" — scanning it does
+    // the same thing as typing both fields by hand, then submits immediately.
+    private val qrScanner = registerForActivityResult(ScanContract()) { result ->
+        val raw = result.contents ?: return@registerForActivityResult
+        val parts = raw.split("|")
+        if (parts.size != 3 || parts[0] != "LYTXPAIR") {
+            pairMessage.text = "That QR code isn't a Lytronix pairing code."
+            return@registerForActivityResult
+        }
+        findViewById<TextInputEditText>(R.id.serverUrl).setText(parts[1])
+        findViewById<TextInputEditText>(R.id.pairCode).setText(parts[2])
+        pair()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.versionText).text = "Version ${BuildConfigVersion.NAME}"
 
         pairButton.setOnClickListener { pair() }
+        findViewById<MaterialButton>(R.id.scanQrButton).setOnClickListener { scanQr() }
 
         findViewById<MaterialButton>(R.id.addSender).setOnClickListener { addSenderFromField() }
         findViewById<TextInputEditText>(R.id.newSender).setOnEditorActionListener { _, _, _ ->
@@ -128,6 +149,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_REQUEST) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) scanQr()
+            return
+        }
         render()
     }
 
@@ -167,6 +192,20 @@ class MainActivity : AppCompatActivity() {
                 render()
             }
         }.start()
+    }
+
+    private fun scanQr() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
+            return
+        }
+        qrScanner.launch(
+            ScanOptions()
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setBeepEnabled(false)
+                .setOrientationLocked(false)
+                .setPrompt("Scan the QR code shown in the admin panel")
+        )
     }
 
     private fun unpair() {
