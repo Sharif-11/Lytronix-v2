@@ -367,6 +367,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderIgnored() {
         val card = findViewById<View>(R.id.ignoredCard)
+        val addBtn = findViewById<MaterialButton>(R.id.ignoredAdd)
         val sender = prefs.lastIgnoredSender
         if (sender.isEmpty() || prefs.isTestMode) {
             card.visibility = View.GONE
@@ -374,9 +375,18 @@ class MainActivity : AppCompatActivity() {
         }
         card.visibility = View.VISIBLE
         val n = prefs.ignoredCount
-        findViewById<TextView>(R.id.ignoredText).text =
-            "Ignored $n message${if (n == 1) "" else "s"}. The latest came from “$sender”, which isn't in your sender list. If that is a payment sender, add it."
-        findViewById<MaterialButton>(R.id.ignoredAdd).text = "Forward messages from $sender"
+        if (prefs.lastIgnoredReason == "format") {
+            // Sender was allowed, but the text wasn't a payment receipt — normal (an OTP, a "you
+            // sent" notice, a promo). Nothing to fix, so no action button.
+            findViewById<TextView>(R.id.ignoredText).text =
+                "Skipped $n message${if (n == 1) "" else "s"} that didn't look like a payment. The latest was from “$sender” but wasn't a payment receipt — e.g. an OTP — so it was never sent anywhere."
+            addBtn.visibility = View.GONE
+        } else {
+            findViewById<TextView>(R.id.ignoredText).text =
+                "Ignored $n message${if (n == 1) "" else "s"}. The latest came from “$sender”, which isn't in your sender list. If that is a payment sender, add it."
+            addBtn.visibility = View.VISIBLE
+            addBtn.text = "Forward messages from $sender"
+        }
     }
 
     private fun renderSenders() {

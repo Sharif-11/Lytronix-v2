@@ -21,13 +21,23 @@ class SmsReceiver : BroadcastReceiver() {
         val sender = first.originatingAddress ?: return
         if (!prefs.isAllowedSender(sender)) {
             // Not stored and not sent — only the sender name is remembered, locally, for the "ignored" hint.
-            prefs.recordIgnored(sender)
+            prefs.recordIgnored(sender, "sender")
             return
         }
 
         // A long SMS arrives in several parts; join them back into one message.
         val body = parts.joinToString("") { it.messageBody ?: "" }
         if (body.isBlank()) return
+
+        // Outside test mode, only a message that actually looks like a payment receipt is ever
+        // written to the outbox. bKash sends OTPs and other texts from this same sender, so being
+        // on the allowed-sender list is not enough by itself — this is what keeps those off the
+        // phone's outbox (and so off the network) entirely.
+        if (!prefs.isTestMode && !MessageFormats.looksLikePaymentReceipt(sender, body)) {
+            prefs.recordIgnored(sender, "format")
+            return
+        }
+
         val receivedAt = if (first.timestampMillis > 0) first.timestampMillis else System.currentTimeMillis()
 
         SmsDb.get(context).insert(sender, body, receivedAt)

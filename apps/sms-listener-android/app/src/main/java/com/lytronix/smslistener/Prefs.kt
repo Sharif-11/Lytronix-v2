@@ -51,6 +51,12 @@ class Prefs(context: Context) {
         get() = sp.getString("lastIgnoredSender", "") ?: ""
         set(v) = sp.edit().putString("lastIgnoredSender", v).apply()
 
+    /** Why the last message was skipped: "sender" (not in the allowed list) or "format"
+     *  (an allowed sender, but the text wasn't a payment receipt — most often an OTP). */
+    var lastIgnoredReason: String
+        get() = sp.getString("lastIgnoredReason", "") ?: ""
+        set(v) = sp.edit().putString("lastIgnoredReason", v).apply()
+
     var ignoredCount: Int
         get() = sp.getInt("ignoredCount", 0)
         set(v) = sp.edit().putInt("ignoredCount", v).apply()
@@ -68,6 +74,7 @@ class Prefs(context: Context) {
         senders = (sendersList() + n).joinToString(",")
         if (lastIgnoredSender.equals(n, ignoreCase = true)) {
             lastIgnoredSender = ""
+            lastIgnoredReason = ""
             ignoredCount = 0
         }
     }
@@ -77,13 +84,15 @@ class Prefs(context: Context) {
         senders = if (left.isEmpty()) "bKash" else left.joinToString(",")
     }
 
-    fun recordIgnored(sender: String) {
+    fun recordIgnored(sender: String, reason: String) {
         lastIgnoredSender = sender
+        lastIgnoredReason = reason
         ignoredCount = ignoredCount + 1
     }
 
     fun clearPairing() {
-        sp.edit().remove("deviceToken").remove("lastSyncAt").remove("testUntil").remove("lastIgnoredSender").remove("ignoredCount")
+        sp.edit().remove("deviceToken").remove("lastSyncAt").remove("testUntil").remove("lastIgnoredSender")
+            .remove("lastIgnoredReason").remove("ignoredCount")
             .putBoolean("authFailed", false).putString("lastError", "").apply()
     }
 }
