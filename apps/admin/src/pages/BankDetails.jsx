@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Landmark, Loader2, Plus, Trash2, Pencil, BadgeCheck, X, Wallet } from 'lucide-react';
-import { getBankSettings, updateBankSettings, getPaymentSettings, updatePaymentSettings } from '../api/client';
+import {
+  getBankSettings, updateBankSettings, getPaymentSettings, updatePaymentSettings,
+  getWalletSettings, updateWalletSettings,
+} from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useConfirm } from '../context/ConfirmContext';
 import usePageTitle from '../lib/usePageTitle';
@@ -18,6 +21,15 @@ const FIELDS = [
 
 const blankAccount = () => ({ bankName: '', accountName: '', accountNumber: '', branchName: '', district: '', routingNumber: '', swiftCode: '', instructions: '' });
 const MAX_ACCOUNTS = 10;
+
+const WALLETS = [
+  { key: 'bkash', title: 'bKash', tone: 'text-[#e2136e] bg-[#e2136e]/10' },
+  { key: 'nagad', title: 'Nagad', tone: 'text-[#ed1c24] bg-[#ed1c24]/10' },
+  { key: 'rocket', title: 'Rocket', tone: 'text-[#8c3494] bg-[#8c3494]/10' },
+];
+const WALLET_TYPES = ['personal', 'agent', 'merchant'];
+const MAX_WALLET_ACCOUNTS = 10; // per wallet
+const blankWallet = (provider) => ({ provider, number: '', accountName: '', accountType: 'personal', instructions: '', isActive: false });
 
 const METHODS = [
   { key: 'cod', title: 'Cash on delivery', hint: 'Customer pays the courier when the parcel arrives.' },
@@ -59,7 +71,18 @@ export default function BankDetails() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null); // null | { idx: number | -1, data }
 
+  const [wallets, setWallets] = useState(null); // flat list of every wallet account
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletOn, setWalletOn] = useState({ bkash: true, nagad: true, rocket: true }); // per-wallet on/off
+  const [walletEditing, setWalletEditing] = useState(null); // null | { idx: number | -1, data }
+
   useEffect(() => {
+    getWalletSettings()
+      .then((d) => {
+        setWallets(d.accounts);
+        if (d.enabled) setWalletOn(d.enabled);
+      })
+      .catch(() => {});
     getPaymentSettings()
       .then((d) => {
         setMethods(d.methods);
@@ -74,7 +97,59 @@ export default function BankDetails() {
       .catch(() => {});
   }, []);
 
-  if (!methods || !accounts) return <Loader inline className="justify-center mt-10" />;
+  if (!methods || !accounts || !wallets) return <Loader inline className="justify-center mt-10" />;
+
+  // Every wallet change replaces the whole list. Activating one account clears
+  // the flag on the others of the same wallet, so only one is ever active.
+  const persistWallets = async (list) => {
+    setWalletBusy(true);
+    try {
+      const d = await updateWalletSettings({ accounts: list });
+      setWallets(d.accounts);
+      return true;
+    } catch {
+      return false; // surfaced globally via the ErrorModal
+    } finally {
+      setWalletBusy(false);
+    }
+  };
+
+  const toggleWallet = async (key, value) => {
+    const prev = walletOn;
+    setWalletOn({ ...walletOn, [key]: value });
+    setWalletBusy(true);
+    try {
+      const d = await updateWalletSettings({ enabled: { [key]: value } });
+      setWalletOn(d.enabled);
+    } catch {
+      setWalletOn(prev); // error already shown by the ErrorModal
+    } finally {
+      setWalletBusy(false);
+    }
+  };
+
+  const activateWallet = (idx) => {
+    const p = wallets[idx].provider;
+    persistWallets(wallets.map((a, i) => (a.provider === p ? { ...a, isActive: i === idx } : a)));
+  };
+
+  const saveWalletForm = async (e) => {
+    e.preventDefault();
+    const { idx, data } = walletEditing;
+    const list = idx === -1 ? [...wallets, data] : wallets.map((a, i) => (i === idx ? data : a));
+    if (await persistWallets(list)) setWalletEditing(null);
+  };
+
+  const removeWallet = async (idx) => {
+    const a = wallets[idx];
+    const ok = await confirm(`Delete ${a.provider} number ${a.number}?`, {
+      title: 'Delete wallet number',
+      danger: true,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    persistWallets(wallets.filter((_, i) => i !== idx));
+  };
 
   const toggleMethod = async (key, value) => {
     setSavingMethod(key);
@@ -166,6 +241,94 @@ export default function BankDetails() {
         </div>
       </section>
 
+      {/* ---- Mobile wallets ---- */}
+      <section>
+        <h2 className="font-display text-2xl text-ui-ink flex items-center gap-2 mb-1">
+          <Wallet size={22} className="text-ui-brand" /> Mobile wallet numbers
+        </h2>
+        <p className="text-sm text-ui-muted mb-4">
+          Save as many bKash, Nagad and Rocket numbers as you like. Only <b>one per wallet</b> is active — that is the number customers are shown. Switch a wallet <b>off</b> to stop offering it altogether.
+        </p>
+        <div className="space-y-4">
+          {WALLETS.map((w) => {
+            const rows = wallets.map((a, idx) => ({ a, idx })).filter((r) => r.a.provider === w.key);
+            return (
+              <div key={w.key} className={`bg-ui-panel border border-ui-line rounded-2xl shadow-card p-4 ${walletOn[w.key] ? '' : 'opacity-70'}`}>
+                {!walletOn[w.key] && (
+                  <p className="text-xs text-amber-700 mb-2">{w.title} is switched off — customers won’t see any {w.title} number.</p>
+                )}
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-sm font-semibold rounded-full px-3 py-1 ${w.tone}`}>{w.title}</span>
+                  <div className="ml-auto flex items-center gap-2 text-xs text-ui-muted">
+                    {walletOn[w.key] ? 'On' : 'Off'}
+                    <Toggle
+                      on={walletOn[w.key]}
+                      disabled={walletBusy}
+                      label={`${w.title} on/off`}
+                      onChange={(v) => toggleWallet(w.key, v)}
+                    />
+                  </div>
+                  {rows.length < MAX_WALLET_ACCOUNTS && (
+                    <button
+                      type="button"
+                      onClick={() => setWalletEditing({ idx: -1, data: blankWallet(w.key) })}
+                      className="btn-secondary gap-1.5 text-xs"
+                    >
+                      <Plus size={14} /> Add {w.title} number
+                    </button>
+                  )}
+                </div>
+                {rows.length === 0 ? (
+                  <p className="text-xs text-ui-muted mt-3">No {w.title} numbers yet.</p>
+                ) : (
+                  <ul className="mt-3 divide-y divide-dashed divide-ui-line">
+                    {rows.map(({ a, idx }) => (
+                      <li key={a._id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-sm text-ui-ink">{a.number}</div>
+                          <div className="text-xs text-ui-muted truncate">
+                            {[a.accountName, a.accountType].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                        {a.isActive ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ui-brand bg-ui-brand/10 rounded-full px-2 py-0.5">
+                            <BadgeCheck size={12} /> Active
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={walletBusy}
+                            onClick={() => activateWallet(idx)}
+                            className="text-xs text-ui-brand hover:underline disabled:opacity-50"
+                          >
+                            Set as active
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setWalletEditing({ idx, data: { ...a } })}
+                          className="inline-flex items-center gap-1 rounded-md border border-ui-line bg-white px-2 py-1 text-xs hover:bg-ui-bg"
+                        >
+                          <Pencil size={12} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={walletBusy}
+                          onClick={() => removeWallet(idx)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-ui-rust hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* ---- Bank accounts ---- */}
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
@@ -248,6 +411,83 @@ export default function BankDetails() {
           </div>
         )}
       </section>
+
+      {/* ---- Add / edit wallet number ---- */}
+      {walletEditing && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => !walletBusy && setWalletEditing(null)} />
+          <form
+            onSubmit={saveWalletForm}
+            className="relative bg-white w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-floating p-4 sm:p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg text-ui-ink">
+                {walletEditing.idx === -1 ? 'Add' : 'Edit'} {WALLETS.find((w) => w.key === walletEditing.data.provider)?.title} number
+              </h3>
+              <button type="button" onClick={() => setWalletEditing(null)} className="text-ui-faint hover:text-ui-ink" aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <label className="block">
+              <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-1">
+                Number <span className="text-ui-rust">*</span>
+              </span>
+              <input
+                required
+                inputMode="numeric"
+                className="input font-mono"
+                placeholder="01XXXXXXXXX"
+                value={walletEditing.data.number}
+                onChange={(e) => setWalletEditing((s) => ({ ...s, data: { ...s.data, number: e.target.value } }))}
+              />
+            </label>
+            <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
+              <label className="block">
+                <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-1">Account name</span>
+                <input
+                  className="input"
+                  value={walletEditing.data.accountName}
+                  onChange={(e) => setWalletEditing((s) => ({ ...s, data: { ...s.data, accountName: e.target.value } }))}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-1">Type</span>
+                <select
+                  className="input"
+                  value={walletEditing.data.accountType}
+                  onChange={(e) => setWalletEditing((s) => ({ ...s, data: { ...s.data, accountType: e.target.value } }))}
+                >
+                  {WALLET_TYPES.map((t) => (
+                    <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="block">
+              <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-1">
+                Note shown to the customer (optional)
+              </span>
+              <textarea
+                className="input min-h-[60px]"
+                placeholder="e.g. Use “Send Money”, not “Payment”."
+                value={walletEditing.data.instructions}
+                onChange={(e) => setWalletEditing((s) => ({ ...s, data: { ...s.data, instructions: e.target.value } }))}
+              />
+            </label>
+            <p className="text-xs text-ui-muted">
+              The first number you add for a wallet becomes its active one. Use “Set as active” on the list to switch.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setWalletEditing(null)} className="btn-secondary">
+                Cancel
+              </button>
+              <button disabled={walletBusy} className="btn-primary">
+                {walletBusy ? <Loader2 size={15} className="animate-spin" /> : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* ---- Add / edit form ---- */}
       {editing && (

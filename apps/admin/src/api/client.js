@@ -267,7 +267,9 @@ export const rematchSmsMessage = (id) => client.post(`/sms-listener/messages/${i
 // ---- Bank details (customers pay into this account for bank transfer) ----
 export const getBankSettings = () => client.get('/settings/bank').then((r) => r.data);
 export const updateBankSettings = (data) => client.put('/settings/bank', data).then((r) => r.data);
-export const getPaymentSettings = () => client.get('/settings/payments').then((r) => r.data);
+export const getWalletSettings = () => client.get('/settings/wallets').then((r) => r.data);
+export const updateWalletSettings = (data) => client.put('/settings/wallets', data).then((r) => r.data);
+export const getPaymentSettings =() => client.get('/settings/payments').then((r) => r.data);
 export const updatePaymentSettings = (data) => client.put('/settings/payments', data).then((r) => r.data);
 
 // ---- Steadfast extras ----

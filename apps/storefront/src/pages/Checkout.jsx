@@ -47,6 +47,7 @@ export default function Checkout() {
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // { configured, bankName, ... } — bank transfer shows only once configured
   const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
+  const [bkashNumber, setBkashNumber] = useState(BKASH_MERCHANT_NUMBER); // the merchant's ACTIVE bKash number (falls back to the built-in one)
   const [metaReady, setMetaReady] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;
@@ -79,6 +80,7 @@ export default function Checkout() {
     Promise.all([getPaymentMeta(), getBankInfo()]).then(([m, b]) => {
       setBkashAutoOn(Boolean(m.bkashAutomated));
       if (m.methods) setMethods(m.methods);
+      if (m.wallets?.bkash?.number) setBkashNumber(m.wallets.bkash.number);
       setBank(b);
       setMetaReady(true);
     });
@@ -690,9 +692,9 @@ function BkashPanel({ grandTotal, advanceInfo, bkash, setBkash, onProofChange })
           <div className="rounded-xl bg-bkash text-white p-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wide text-white/70">এই নম্বরে পাঠান</div>
-              <div ref={numRef} className="font-mono font-bold text-lg truncate select-all">{BKASH_MERCHANT_NUMBER}</div>
+              <div ref={numRef} className="font-mono font-bold text-lg truncate select-all">{bkashNumber}</div>
             </div>
-            <CopyChip value={BKASH_MERCHANT_NUMBER} valueRef={numRef} />
+            <CopyChip value={bkashNumber}valueRef={numRef} />
           </div>
           <div className="rounded-xl bg-bkash-dark text-white p-3 flex items-center justify-between gap-2">
             <div className="min-w-0">

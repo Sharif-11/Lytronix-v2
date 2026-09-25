@@ -96,15 +96,28 @@ app.get('/api/meta/steadfast', (req, res) =>
   })
 );
 // Which online payment methods the storefront checkout should offer.
-app.get('/api/meta/payments', (req, res) => {
+app.get('/api/meta/payments', asyncHandler(async (req, res) => {
   const bkash = require('./services/payments').getGateway('bkash');
   const methods = require('./services/paymentSettings').get();
+  // Only the ACTIVE number of each wallet (bKash / Nagad / Rocket) is exposed.
+  let wallets = { bkash: null, nagad: null, rocket: null };
+  let bkashWalletOn = true;
+  try {
+    const walletDoc = await require('./models/WalletSettings').load();
+    wallets = walletDoc.toPublic();
+    bkashWalletOn = walletDoc.enabledMap().bkash;
+  } catch {
+    /* storefront falls back to its built-in bKash number */
+  }
+  // Switching the bKash wallet off also hides manual "send money" bKash.
+  const shownMethods = { ...methods, bkash_manual: methods.bkash_manual && bkashWalletOn };
   res.json({
+    wallets,
     bkashAutomated: Boolean(bkash && bkash.isEnabled && bkash.isEnabled() && methods.bkash_automated),
     // Which methods a super admin has switched on (bank transfer also needs an active bank account).
-    methods,
+    methods: shownMethods,
   });
-});
+}));
 
 // Public: the bank account customers transfer to (storefront checkout shows it
 // only when bank transfer is set up).

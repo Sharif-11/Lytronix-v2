@@ -48,6 +48,7 @@ export default function ProductLanding() {
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // bank transfer shows only once the bank details are configured
   const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
+  const [bkashNumber, setBkashNumber] = useState(BKASH_MERCHANT_NUMBER); // the merchant's ACTIVE bKash number (falls back to the built-in one)
   const [metaReady, setMetaReady] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout
@@ -110,6 +111,7 @@ export default function ProductLanding() {
     Promise.all([getPaymentMeta(), getBankInfo()]).then(([m, b]) => {
       setBkashAutoOn(Boolean(m.bkashAutomated));
       if (m.methods) setMethods(m.methods);
+      if (m.wallets?.bkash?.number) setBkashNumber(m.wallets.bkash.number);
       setBank(b);
       setMetaReady(true);
     });
@@ -730,10 +732,10 @@ function BkashPanel({ amountToSend, advanceInfo, bkash, setBkash, onProofChange 
                 ref={numRef}
                 className="font-mono font-bold text-lg sm:text-base leading-tight whitespace-nowrap select-all"
               >
-                {BKASH_MERCHANT_NUMBER}
+                {bkashNumber}
               </div>
             </div>
-            <CopyChip value={BKASH_MERCHANT_NUMBER} valueRef={numRef} />
+            <CopyChip value={bkashNumber}valueRef={numRef} />
           </div>
           <div className="rounded-xl bg-bkash-dark text-white p-3 flex items-center justify-between gap-3">
             <div className="min-w-0">

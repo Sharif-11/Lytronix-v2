@@ -365,6 +365,9 @@ exports.createOrder = async (req, res) => {
   if (!isAdminCreated && require('../services/paymentSettings').get()[method] === false) {
     return res.status(400).json({ message: 'এই পেমেন্ট পদ্ধতিটি এখন চালু নেই। অন্য পদ্ধতি বেছে নিন।' });
   }
+  if (!isAdminCreated && method === 'bkash_manual' && !(await require('../models/WalletSettings').load()).enabledMap().bkash) {
+    return res.status(400).json({ message: 'এই পেমেন্ট পদ্ধতিটি এখন চালু নেই। অন্য পদ্ধতি বেছে নিন।' });
+  }
   if (!adminEntry && method === 'bank_transfer') {
     const bank = await BankSettings.load();
     const activeBank = bank.activeAccount();
