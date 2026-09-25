@@ -37,6 +37,7 @@ const paymentSchema = new mongoose.Schema(
 
     // ----- Automated gateway fields (bKash Tokenized Checkout, SSLCommerz, ...) -----
     gatewayReference: { type: String, trim: true, default: '' }, // e.g. bKash paymentID / trxID
+    gatewayAccount: { type: String, trim: true, default: '' }, // wallet account whose credentials created this payment
     gatewayResponse: { type: mongoose.Schema.Types.Mixed, default: null }, // raw response, for debugging/audit
 
     // ----- Manual verification -----

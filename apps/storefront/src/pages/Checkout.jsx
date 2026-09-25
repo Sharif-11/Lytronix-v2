@@ -19,7 +19,6 @@ import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
 import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
 import useFormDraft from '../lib/useFormDraft';
-import { BKASH_MERCHANT_NUMBER } from '../utils/company';
 import usePageTitle from '../lib/usePageTitle';
 
 const emptyAddress = { name: '', phone: '', zilla: '', thana: '', address: '', comments: '' };
@@ -47,7 +46,7 @@ export default function Checkout() {
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // { configured, bankName, ... } — bank transfer shows only once configured
   const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
-  const [bkashNumber, setBkashNumber] = useState(BKASH_MERCHANT_NUMBER); // the merchant's ACTIVE bKash number (falls back to the built-in one)
+  const [bkashNumber, setBkashNumber] = useState(''); // the merchant's ACTIVE bKash number (no fallback — bKash is hidden when none is set)
   const [metaReady, setMetaReady] = useState(false);
 
   const grandTotal = subtotal + deliveryTotal;

@@ -315,7 +315,7 @@ Without `SMS_API_KEY`/`SMS_SENDER_ID` set, the gateway just logs "not configured
 
 - **Checkout** (`/shop/checkout`): customers pick Cash on Delivery, bKash manual transfer (with sender number, transaction ID, and an optional screenshot uploaded straight to Cloudinary), or bKash Checkout (automated — currently a documented stub, see below). Every choice creates one persistent `Payment` record via `server/models/Payment.js`, so even "pay on delivery" intent is logged, not just completed transactions.
 - **Admin → Payments**: a filterable queue (Needs review / Pending / Verified / Failed) for verifying manual bKash transfers — proof screenshot in a lightbox, transaction ID, one-click Verify/Reject. Verifying a payment mirrors it into the order's existing due-amount ledger automatically.
-- **Automated gateways are pluggable** (`server/services/payments/`): `bkash.js` is a real integration *point*, not a fake — it reports itself "not configured" and the storefront gracefully falls back to COD/manual until real `BKASH_*` merchant credentials are added to `.env`. Adding SSLCommerz or another gateway later means writing one file with `{ isConfigured, initiate, verify }` and registering it in `server.js` — no changes to order/payment logic.
+- **Automated gateways are pluggable** (`server/services/payments/`): `bkash.js` is a real integration *point*, not a fake — it reports itself "not configured" and the storefront gracefully falls back to COD/manual until a bKash merchant account's credentials are added in the admin panel (Payment settings → Mobile wallet numbers, then choose it for automated payments). Adding SSLCommerz or another gateway later means writing one file with `{ isConfigured, initiate, verify }` and registering it in `server.js` — no changes to order/payment logic.
 - **Inventory**: `Product.stock` + `trackInventory` (per-product opt-out for made-to-order items) + `lowStockThreshold`. Checkout atomically reserves stock (rolls back if the order fails to save, rejects with a clear message if insufficient), and marking an order "returned" restocks it automatically.
 - **Cloudinary**: product photos (multi-image, drag-and-drop-free file picker with cover-photo selection in the admin's Product form) and payment-proof screenshots both upload through `server/services/cloudinary.js`. Without `CLOUDINARY_*` set, uploads fail with a clear "not configured" message instead of a silent 500.
 
@@ -324,8 +324,7 @@ Add to `server/.env`:
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
-BKASH_MERCHANT_NUMBER=01776775495   # shown to customers for manual transfers
-# Leave BKASH_APP_KEY/APP_SECRET/USERNAME/PASSWORD blank until you have real bKash merchant credentials
+# bKash merchant credentials are entered in the admin panel, not here
 ```
 
 Add to `server/.env` for AI order extraction:

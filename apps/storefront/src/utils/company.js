@@ -7,4 +7,3 @@ export const COMPANY_ADDRESS = 'জহুর কোম্পানি ভবন,
 export const COMPANY_MAPS_URL = 'https://share.google/cgi1MTG0VnvZkg9K7';
 export const COMPANY_MAPS_EMBED_URL =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3682.500976962288!2d91.78592067481314!3d22.635102730677456!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x37532b1f4b878c9b%3A0x44373bf2be2ad806!2sNazirhat%20University%20College!5e0!3m2!1sen!2sbd!4v1788634948804!5m2!1sen!2sbd';
-export const BKASH_MERCHANT_NUMBER = '01776775495'; // Personal/Merchant number customers send manual bKash transfers to

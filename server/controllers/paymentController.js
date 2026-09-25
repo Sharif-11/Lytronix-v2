@@ -298,7 +298,7 @@ exports.bkashCallback = async (req, res) => {
   }
 
   try {
-    const result = await gateway.execute(paymentID);
+    const result = await gateway.execute(paymentID, payment.gatewayAccount);
     if (result.ok) {
       // Trust bKash's reported amount for the ledger entry; fall back to what
       // we asked for if it's missing.

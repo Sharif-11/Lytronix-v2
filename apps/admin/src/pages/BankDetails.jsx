@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Landmark, Loader2, Plus, Trash2, Pencil, BadgeCheck, X, Wallet } from 'lucide-react';
+import { Zap, Landmark, Loader2, Plus, Trash2, Pencil, BadgeCheck, X, Wallet } from 'lucide-react';
 import {
   getBankSettings, updateBankSettings, getPaymentSettings, updatePaymentSettings,
   getWalletSettings, updateWalletSettings,
@@ -27,6 +27,15 @@ const WALLETS = [
   { key: 'nagad', title: 'Nagad', tone: 'text-[#ed1c24] bg-[#ed1c24]/10' },
   { key: 'rocket', title: 'Rocket', tone: 'text-[#8c3494] bg-[#8c3494]/10' },
 ];
+// Wallets with an automated gateway, and the API credentials that identify the receiving merchant account.
+const GATEWAY_FIELDS = {
+  bkash: [
+    { key: 'appKey', label: 'App key' },
+    { key: 'appSecret', label: 'App secret' },
+    { key: 'username', label: 'Username' },
+    { key: 'password', label: 'Password' },
+  ],
+};
 const WALLET_TYPES = ['personal', 'agent', 'merchant'];
 const MAX_WALLET_ACCOUNTS = 10; // per wallet
 const blankWallet = (provider) => ({ provider, number: '', accountName: '', accountType: 'personal', instructions: '', isActive: false });
@@ -133,10 +142,19 @@ export default function BankDetails() {
     persistWallets(wallets.map((a, i) => (a.provider === p ? { ...a, isActive: i === idx } : a)));
   };
 
+  // Which account RECEIVES automated payments (one per wallet; needs saved credentials).
+  const activateAuto = (idx) => {
+    const p = wallets[idx].provider;
+    persistWallets(wallets.map((a, i) => (a.provider === p ? { ...a, autoActive: i === idx } : a)));
+  };
+
   const saveWalletForm = async (e) => {
     e.preventDefault();
     const { idx, data } = walletEditing;
-    const list = idx === -1 ? [...wallets, data] : wallets.map((a, i) => (i === idx ? data : a));
+    // Drop blank credential fields: blank means "keep what is saved".
+    const creds = Object.fromEntries(Object.entries(data.credentials || {}).filter(([, v]) => String(v).trim()));
+    const entry = { ...data, credentials: Object.keys(creds).length ? creds : undefined };
+    const list = idx === -1 ? [...wallets, entry] : wallets.map((a, i) => (i === idx ? entry : a));
     if (await persistWallets(list)) setWalletEditing(null);
   };
 
@@ -247,13 +265,16 @@ export default function BankDetails() {
           <Wallet size={22} className="text-ui-brand" /> Mobile wallet numbers
         </h2>
         <p className="text-sm text-ui-muted mb-4">
-          Save as many bKash, Nagad and Rocket numbers as you like. Only <b>one per wallet</b> is active — that is the number customers are shown. Switch a wallet <b>off</b> to stop offering it altogether.
+          Save as many bKash, Nagad and Rocket numbers as you like (no number is used automatically). Only <b>one per wallet</b> is active — that is the number customers are shown. Switch a wallet <b>off</b> to stop offering it altogether.
         </p>
         <div className="space-y-4">
           {WALLETS.map((w) => {
             const rows = wallets.map((a, idx) => ({ a, idx })).filter((r) => r.a.provider === w.key);
             return (
               <div key={w.key} className={`bg-ui-panel border border-ui-line rounded-2xl shadow-card p-4 ${walletOn[w.key] ? '' : 'opacity-70'}`}>
+                {walletOn[w.key] && !rows.some((r) => r.a.isActive) && (
+                  <p className="text-xs text-amber-700 mb-2">No active {w.title} number — customers won’t see {w.title}{w.key === 'bkash' ? ' (send money)' : ''} until you set one as active.</p>
+                )}
                 {!walletOn[w.key] && (
                   <p className="text-xs text-amber-700 mb-2">{w.title} is switched off — customers won’t see any {w.title} number.</p>
                 )}
@@ -303,6 +324,21 @@ export default function BankDetails() {
                           >
                             Set as active
                           </button>
+                        )}
+                        {GATEWAY_FIELDS[w.key] && (
+                          <div className="basis-full text-xs flex flex-wrap items-center gap-2 text-ui-muted">
+                            {a.autoActive ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-ui-brand bg-ui-brand/10 rounded-full px-2 py-0.5">
+                                <Zap size={12} /> Receives automated payments{a.sandbox ? ' (sandbox)' : ''}
+                              </span>
+                            ) : a.hasCredentials ? (
+                              <button type="button" disabled={walletBusy} onClick={() => activateAuto(idx)} className="text-ui-brand hover:underline disabled:opacity-50">
+                                Use for automated payments
+                              </button>
+                            ) : (
+                              <span>No gateway credentials — edit to add them and use this account for automated payments.</span>
+                            )}
+                          </div>
                         )}
                         <button
                           type="button"
@@ -463,6 +499,50 @@ export default function BankDetails() {
                 </select>
               </label>
             </div>
+            {GATEWAY_FIELDS[walletEditing.data.provider] && (
+              <fieldset className="rounded-xl border border-ui-line p-3 space-y-3">
+                <legend className="px-1 text-xs uppercase tracking-wide text-ui-muted">Automated payments (optional)</legend>
+                <p className="text-xs text-ui-muted">
+                  Money from the automated checkout goes to the merchant account these API credentials belong to. Saved encrypted and never shown again.
+                  {walletEditing.data.hasCredentials && <b> Credentials are saved — leave blank to keep them.</b>}
+                </p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {GATEWAY_FIELDS[walletEditing.data.provider].map((f) => (
+                    <label key={f.key} className="block">
+                      <span className="block text-[11px] uppercase tracking-wide text-ui-muted mb-1">{f.label}</span>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        className="input font-mono"
+                        placeholder={walletEditing.data.hasCredentials ? '••••••••' : ''}
+                        value={walletEditing.data.credentials?.[f.key] || ''}
+                        onChange={(e) =>
+                          setWalletEditing((st) => ({ ...st, data: { ...st.data, credentials: { ...st.data.credentials, [f.key]: e.target.value } } }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 text-sm text-ui-ink">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(walletEditing.data.sandbox)}
+                    onChange={(e) => setWalletEditing((st) => ({ ...st, data: { ...st.data, sandbox: e.target.checked } }))}
+                  />
+                  Sandbox (test) account
+                </label>
+                {walletEditing.data.hasCredentials && (
+                  <label className="flex items-center gap-2 text-sm text-ui-rust">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(walletEditing.data.clearCredentials)}
+                      onChange={(e) => setWalletEditing((st) => ({ ...st, data: { ...st.data, clearCredentials: e.target.checked } }))}
+                    />
+                    Remove the saved credentials
+                  </label>
+                )}
+              </fieldset>
+            )}
             <label className="block">
               <span className="block text-[11px] sm:text-xs uppercase tracking-wide text-ui-muted mb-1">
                 Note shown to the customer (optional)
@@ -475,7 +555,7 @@ export default function BankDetails() {
               />
             </label>
             <p className="text-xs text-ui-muted">
-              The first number you add for a wallet becomes its active one. Use “Set as active” on the list to switch.
+              A new number is not shown to customers until you press “Set as active” on it.
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setWalletEditing(null)} className="btn-secondary">

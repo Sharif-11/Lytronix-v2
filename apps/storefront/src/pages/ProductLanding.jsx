@@ -23,7 +23,7 @@ import { recordGuestCheckout, getReorderPrefill } from '../lib/guestOrders';
 import useFormDraft from '../lib/useFormDraft';
 import { getSessionId, track } from '../lib/analytics';
 import { copyText } from '../lib/clipboard';
-import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL, BKASH_MERCHANT_NUMBER } from '../utils/company';
+import { COMPANY_NAME, COMPANY_PHONE, COMPANY_EMAIL } from '../utils/company';
 import logoMark from '../assets/lytronix-logo.png';
 import usePageTitle from '../lib/usePageTitle';
 
@@ -48,7 +48,7 @@ export default function ProductLanding() {
   const [bkashAutoOn, setBkashAutoOn] = useState(false);
   const [bank, setBank] = useState(null); // bank transfer shows only once the bank details are configured
   const [methods, setMethods] = useState({ cod: true, bkash_manual: true, bkash_automated: true, bank_transfer: true }); // which methods the merchant has switched on
-  const [bkashNumber, setBkashNumber] = useState(BKASH_MERCHANT_NUMBER); // the merchant's ACTIVE bKash number (falls back to the built-in one)
+  const [bkashNumber, setBkashNumber] = useState(''); // the merchant's ACTIVE bKash number (no fallback — bKash is hidden when none is set)
   const [metaReady, setMetaReady] = useState(false);
   const [redirectingBkash, setRedirectingBkash] = useState(false);
   const [verifyPhase, setVerifyPhase] = useState(''); // '' | verifying | verified | mismatch | failed | timeout

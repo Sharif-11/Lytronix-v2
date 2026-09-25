@@ -4,6 +4,8 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { protect } = require('../middleware/auth');
 const BankSettings = require('../models/BankSettings');
 const WalletSettings = require('../models/WalletSettings');
+const walletCredentials = require('../services/walletCredentials');
+const { encrypt, decrypt } = require('../utils/secretBox');
 const paymentSettings = require('../services/paymentSettings');
 
 const MAX_ACCOUNTS = 10;
@@ -87,6 +89,8 @@ router.put(
       return res.status(400).json({ message: 'Send accounts and/or enabled.' });
     }
 
+    const doc = await WalletSettings.load();
+    const existingById = new Map(doc.accounts.map((x) => [String(x._id), x]));
     const seen = new Set();
     const perProvider = {};
     const accounts = [];
@@ -119,10 +123,35 @@ router.put(
         isActive: a.isActive === true,
       };
       if (a._id && /^[0-9a-f]{24}$/i.test(String(a._id))) clean._id = a._id;
+
+      // Gateway credentials (only wallets with an automated gateway). They are
+      // write-only: saved encrypted, never returned. Blank fields keep the saved
+      // value, so an edit needn't re-enter them.
+      const prev = clean._id ? existingById.get(String(clean._id)) : null;
+      const fields = WalletSettings.CREDENTIAL_FIELDS[provider];
+      clean.credentialsEnc = fields && prev && prev.provider === provider ? prev.credentialsEnc : '';
+      clean.sandbox = fields ? a.sandbox === true : false;
+      clean.autoActive = fields ? a.autoActive === true : false;
+      if (fields) {
+        if (a.clearCredentials === true) {
+          clean.credentialsEnc = '';
+        } else if (a.credentials && typeof a.credentials === 'object') {
+          const typed = Object.fromEntries(fields.map((k) => [k, String(a.credentials[k] ?? '').trim()]));
+          if (fields.some((k) => typed[k])) {
+            const merged = { ...(decrypt(clean.credentialsEnc) || {}) };
+            fields.forEach((k) => {
+              if (typed[k]) merged[k] = typed[k];
+            });
+            if (!fields.every((k) => merged[k])) {
+              return res.status(400).json({ message: `Enter every ${provider} credential: ${fields.join(', ')}.` });
+            }
+            clean.credentialsEnc = encrypt(merged);
+          }
+        }
+      }
       accounts.push(clean);
     }
 
-    const doc = await WalletSettings.load();
     if (hasAccounts) {
       doc.accounts = accounts;
       doc.enforceOneActive();
@@ -134,6 +163,7 @@ router.put(
     }
     doc.updatedBy = req.user._id;
     await doc.save();
+    await walletCredentials.refresh(); // the gateway picks the change up immediately
     res.json(doc.toAdmin());
   })
 );

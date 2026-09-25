@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const SINGLETON_ID = 'wallet-settings';
 const PROVIDERS = ['bkash', 'nagad', 'rocket'];
 const ACCOUNT_TYPES = ['personal', 'agent', 'merchant'];
+// Wallets that have an automated gateway, and the credential fields each needs.
+const CREDENTIAL_FIELDS = { bkash: ['appKey', 'appSecret', 'username', 'password'] };
 const BD_MOBILE = /^01[3-9]\d{8}$/;
 
 const walletAccountSchema = new mongoose.Schema({
@@ -15,7 +17,13 @@ const walletAccountSchema = new mongoose.Schema({
   accountName: { type: String, trim: true, default: '', maxlength: 100 },
   accountType: { type: String, enum: ACCOUNT_TYPES, default: 'personal' },
   instructions: { type: String, trim: true, default: '', maxlength: 500 },
+  // Shown to customers for manual "send money" payments (one per wallet).
   isActive: { type: Boolean, default: false },
+  // RECEIVES AUTOMATED (gateway) PAYMENTS (one per wallet). The gateway pays into whichever
+  // merchant account the API credentials belong to, so this needs credentials.
+  autoActive: { type: Boolean, default: false },
+  credentialsEnc: { type: String, default: '' }, // AES-GCM of the gateway credentials — never sent to a client
+  sandbox: { type: Boolean, default: false }, // gateway test environment instead of live
 });
 
 const walletSettingsSchema = new mongoose.Schema(
@@ -37,6 +45,7 @@ walletSettingsSchema.statics.SINGLETON_ID = SINGLETON_ID;
 walletSettingsSchema.statics.PROVIDERS = PROVIDERS;
 walletSettingsSchema.statics.ACCOUNT_TYPES = ACCOUNT_TYPES;
 walletSettingsSchema.statics.BD_MOBILE = BD_MOBILE;
+walletSettingsSchema.statics.CREDENTIAL_FIELDS = CREDENTIAL_FIELDS;
 
 walletSettingsSchema.statics.load = async function load() {
   let doc = await this.findById(SINGLETON_ID);
@@ -44,15 +53,18 @@ walletSettingsSchema.statics.load = async function load() {
   return doc;
 };
 
-// Enforce "one active per wallet": the first account flagged active wins, and a
-// wallet that has accounts but none flagged gets its first one activated, so
-// customers are never left without a number to pay.
+// Enforce "one active per wallet": if several are flagged active the first wins.
+// Nothing is auto-activated — a wallet with no active account shows no number.
 walletSettingsSchema.methods.enforceOneActive = function enforceOneActive() {
   PROVIDERS.forEach((p) => {
-    const list = this.accounts.filter((a) => a.provider === p);
-    const winner = list.find((a) => a.isActive) || list[0];
-    list.forEach((a) => {
-      a.isActive = a === winner;
+    const winner = this.accounts.find((a) => a.provider === p && a.isActive);
+    this.accounts.forEach((a) => {
+      if (a.provider === p) a.isActive = a === winner;
+    });
+    // Same rule for the automated-payments account, which must also have credentials.
+    const auto = this.accounts.find((a) => a.provider === p && a.autoActive && a.credentialsEnc);
+    this.accounts.forEach((a) => {
+      if (a.provider === p) a.autoActive = a === auto;
     });
   });
 };
@@ -65,6 +77,9 @@ const shape = (a) => ({
   accountType: a.accountType,
   instructions: a.instructions || '',
   isActive: Boolean(a.isActive),
+  autoActive: Boolean(a.autoActive),
+  hasCredentials: Boolean(a.credentialsEnc),
+  sandbox: Boolean(a.sandbox),
 });
 
 walletSettingsSchema.methods.enabledMap = function enabledMap() {

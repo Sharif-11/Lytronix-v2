@@ -101,15 +101,15 @@ app.get('/api/meta/payments', asyncHandler(async (req, res) => {
   const methods = require('./services/paymentSettings').get();
   // Only the ACTIVE number of each wallet (bKash / Nagad / Rocket) is exposed.
   let wallets = { bkash: null, nagad: null, rocket: null };
-  let bkashWalletOn = true;
+  let bkashWalletOn = false; // needs an enabled wallet AND an active number — no fallback number
   try {
     const walletDoc = await require('./models/WalletSettings').load();
     wallets = walletDoc.toPublic();
-    bkashWalletOn = walletDoc.enabledMap().bkash;
+    bkashWalletOn = Boolean(wallets.bkash);
   } catch {
-    /* storefront falls back to its built-in bKash number */
+    /* no wallet data: manual bKash stays hidden */
   }
-  // Switching the bKash wallet off also hides manual "send money" bKash.
+  // Manual "send money" bKash needs an active bKash number; there is no fallback number.
   const shownMethods = { ...methods, bkash_manual: methods.bkash_manual && bkashWalletOn };
   res.json({
     wallets,
@@ -168,6 +168,7 @@ require('./services/chatCleanup').scheduleChatCleanup();
 // listener devices — see SMS_DEVICE_RETENTION_DAYS.
 require('./services/smsListenerCleanup').scheduleSmsListenerCleanup();
 require('./services/paymentSettings').startRefreshing();
+require('./services/walletCredentials').startRefreshing();
 require('./services/payoutSync').startSchedule();
 
 const PORT = process.env.PORT || 5000;
