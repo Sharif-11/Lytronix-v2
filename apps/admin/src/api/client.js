@@ -271,6 +271,8 @@ export const getWalletSettings = () => client.get('/settings/wallets').then((r) 
 export const updateWalletSettings = (data) => client.put('/settings/wallets', data).then((r) => r.data);
 export const getPaymentSettings =() => client.get('/settings/payments').then((r) => r.data);
 export const updatePaymentSettings = (data) => client.put('/settings/payments', data).then((r) => r.data);
+export const getSmsSettings = () => client.get('/settings/sms').then((r) => r.data);
+export const updateSmsSettings = (data) => client.put('/settings/sms', data).then((r) => r.data);
 
 // ---- Steadfast extras ----
 // Passive: shown inline under the phone field, so no error popup.

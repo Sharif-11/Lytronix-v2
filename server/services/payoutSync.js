@@ -67,6 +67,9 @@ async function run({ notify }) {
           order.courier.payoutPaidAt = paidAt || new Date();
           order.courier.payoutAmount = Number(c.cod_amount) || 0;
           order.courierEvents.push({ message: `COD received from Steadfast in payout ${paymentId}.`, at: new Date() });
+          // Money has actually landed in our account now — the order is done.
+          order.status = 'completed';
+          order.statusHistory.push({ status: 'completed', note: `COD received from Steadfast (payout ${paymentId}).`, at: new Date() });
           await order.save();
           summary.newlySettled += 1;
           summary.settledOrders.push({ orderNumber: order.orderNumber, payoutId: paymentId, amount: order.courier.payoutAmount });

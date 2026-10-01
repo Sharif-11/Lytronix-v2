@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Zap, Landmark, Loader2, Plus, Trash2, Pencil, BadgeCheck, X, Wallet } from 'lucide-react';
+import { Zap, Landmark, Loader2, Plus, Trash2, Pencil, BadgeCheck, X, Wallet, MessageSquare } from 'lucide-react';
 import {
   getBankSettings, updateBankSettings, getPaymentSettings, updatePaymentSettings,
-  getWalletSettings, updateWalletSettings,
+  getWalletSettings, updateWalletSettings, getSmsSettings, updateSmsSettings,
 } from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -47,6 +47,12 @@ const METHODS = [
   { key: 'bank_transfer', title: 'Bank transfer', hint: 'Customer transfers to your active bank account and enters the transaction ID.' },
 ];
 
+const SMS_EVENTS = [
+  { key: 'admin_new_order', title: 'New order arrived', hint: 'Texts your admin phone(s) when a customer places an order from the storefront. Orders you create yourself from New Order never trigger this.' },
+  { key: 'customer_consignment_booked', title: 'Parcel booked with courier', hint: 'Texts the customer when their order is booked with Steadfast.' },
+  { key: 'customer_delivered', title: 'Order delivered', hint: 'Texts the customer when the courier marks the parcel delivered.' },
+];
+
 function Toggle({ on, onChange, disabled, label }) {
   return (
     <button
@@ -85,6 +91,9 @@ export default function BankDetails() {
   const [walletOn, setWalletOn] = useState({ bkash: true, nagad: true, rocket: true }); // per-wallet on/off
   const [walletEditing, setWalletEditing] = useState(null); // null | { idx: number | -1, data }
 
+  const [smsEvents, setSmsEvents] = useState(null);
+  const [savingSmsEvent, setSavingSmsEvent] = useState('');
+
   useEffect(() => {
     getWalletSettings()
       .then((d) => {
@@ -104,9 +113,12 @@ export default function BankDetails() {
         setActiveId(d.activeAccountId);
       })
       .catch(() => {});
+    getSmsSettings()
+      .then((d) => setSmsEvents(d.events))
+      .catch(() => {});
   }, []);
 
-  if (!methods || !accounts || !wallets) return <Loader inline className="justify-center mt-10" />;
+  if (!methods || !accounts || !wallets || !smsEvents) return <Loader inline className="justify-center mt-10" />;
 
   // Every wallet change replaces the whole list. Activating one account clears
   // the flag on the others of the same wallet, so only one is ever active.
@@ -183,6 +195,20 @@ export default function BankDetails() {
     }
   };
 
+  const toggleSmsEvent = async (key, value) => {
+    setSavingSmsEvent(key);
+    const prev = smsEvents;
+    setSmsEvents({ ...smsEvents, [key]: value });
+    try {
+      const d = await updateSmsSettings({ [key]: value });
+      setSmsEvents(d.events);
+    } catch {
+      setSmsEvents(prev); // error already shown by the ErrorModal
+    } finally {
+      setSavingSmsEvent('');
+    }
+  };
+
   // Every bank change replaces the whole list; activeIdx says which entry is active (-1 = let the server pick).
   const persist = async (list, activeIdx) => {
     setBusy(true);
@@ -253,6 +279,32 @@ export default function BankDetails() {
                 disabled={savingMethod === m.key}
                 label={m.title}
                 onChange={(v) => toggleMethod(m.key, v)}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ---- SMS notifications ---- */}
+      <section>
+        <h2 className="font-display text-2xl text-ui-ink flex items-center gap-2 mb-1">
+          <MessageSquare size={22} className="text-ui-brand" /> SMS notifications
+        </h2>
+        <p className="text-sm text-ui-muted mb-4">
+          Turn automatic SMS updates on or off per event. OTPs, login/password texts and messages you type yourself always send.
+        </p>
+        <div className="bg-ui-panel border border-ui-line rounded-2xl shadow-card divide-y divide-ui-line">
+          {SMS_EVENTS.map((e) => (
+            <div key={e.key} className="flex items-center gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ui-ink">{e.title}</div>
+                <div className="text-xs text-ui-muted">{e.hint}</div>
+              </div>
+              <Toggle
+                on={smsEvents[e.key]}
+                disabled={savingSmsEvent === e.key}
+                label={e.title}
+                onChange={(v) => toggleSmsEvent(e.key, v)}
               />
             </div>
           ))}

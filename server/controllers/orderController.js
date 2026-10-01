@@ -639,10 +639,14 @@ exports.createOrder = async (req, res) => {
   }
 
   // Don't make the customer's checkout wait on an SMS round-trip — send it
-  // in the background and just log if it fails.
-  notifications.notifyAdminsNewOrder(order).catch((err) => {
-    logger.error('notifyAdminsNewOrder failed', { orderNumber: order.orderNumber, error: err.message });
-  });
+  // in the background and just log if it fails. Admin-created orders (New
+  // Order form) are the admin's own entry, not an arrival to be told about —
+  // skipped same as the notificationCenter push above.
+  if (!isAdminCreated) {
+    notifications.notifyAdminsNewOrder(order).catch((err) => {
+      logger.error('notifyAdminsNewOrder failed', { orderNumber: order.orderNumber, error: err.message });
+    });
+  }
 
   logger.info('order: created', {
     orderNumber: order.orderNumber,

@@ -168,6 +168,7 @@ require('./services/chatCleanup').scheduleChatCleanup();
 // listener devices — see SMS_DEVICE_RETENTION_DAYS.
 require('./services/smsListenerCleanup').scheduleSmsListenerCleanup();
 require('./services/paymentSettings').startRefreshing();
+require('./services/smsSettings').startRefreshing();
 require('./services/walletCredentials').startRefreshing();
 require('./services/payoutSync').startSchedule();
 

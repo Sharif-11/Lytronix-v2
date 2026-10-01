@@ -1,6 +1,7 @@
 const smsGateway = require('./sms');
 const SmsLog = require('../models/SmsLog');
 const logger = require('./logger');
+const smsSettings = require('./smsSettings');
 
 // Every SMS body in this module is written in Bangla (merchant requirement).
 // Bangla is Unicode SMS: ~70 chars = 1 segment, then ~67 per extra segment,
@@ -65,6 +66,7 @@ function adminPhones() {
 }
 
 async function notifyAdminsNewOrder(order) {
+  if (!smsSettings.get().admin_new_order) return [];
   const phones = adminPhones();
   if (phones.length === 0) return [];
 
@@ -81,6 +83,7 @@ async function notifyAdminsNewOrder(order) {
 // courier tracking code and link are deliberately left out — the code is
 // useless to the customer and the link alone would push it to a second segment.
 async function notifyCustomerConsignmentBooked(order) {
+  if (!smsSettings.get().customer_consignment_booked) return { success: false, skipped: true };
   const message = `Lytronix: ${order.orderNumber} কুরিয়ারে বুকড হয়েছে`;
 
   return sendAndLog({
@@ -92,6 +95,7 @@ async function notifyCustomerConsignmentBooked(order) {
 }
 
 async function notifyCustomerDelivered(order) {
+  if (!smsSettings.get().customer_delivered) return { success: false, skipped: true };
   const message = `Lytronix: অর্ডার ${order.orderNumber} ডেলিভারি সম্পন্ন। ধন্যবাদ!`;
   return sendAndLog({ to: order.customer.phone, message, purpose: 'customer_delivered', orderId: order._id });
 }

@@ -13,8 +13,9 @@ const nanoid = customAlphabet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 8);
 //   pending    -> processing       (admin books the parcel with a courier)
 //   processing -> shipped          (Steadfast reports "pending")
 //   shipped    -> delivered        (Steadfast reports "delivered")
+//   delivered  -> completed        (Steadfast payout for the parcel is paid — see payoutSync.js)
 //   any        -> cancelled/hold/partial_delivered/in_review  (mirrors Steadfast 1:1)
-// completed/refunded/returned stay available for manual, non-courier use.
+// refunded/returned stay available for manual, non-courier use.
 const SUGGESTED_STATUSES = [
   'unverified',
   'pending',

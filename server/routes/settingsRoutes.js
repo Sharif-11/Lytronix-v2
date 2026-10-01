@@ -7,6 +7,7 @@ const WalletSettings = require('../models/WalletSettings');
 const walletCredentials = require('../services/walletCredentials');
 const { encrypt, decrypt } = require('../utils/secretBox');
 const paymentSettings = require('../services/paymentSettings');
+const smsSettings = require('../services/smsSettings');
 
 const MAX_ACCOUNTS = 10;
 const MAX_WALLET_ACCOUNTS = 10; // per wallet
@@ -200,6 +201,28 @@ router.put(
     }
     const methods = await paymentSettings.update(req.body || {}, req.user._id);
     res.json({ methods });
+  })
+);
+
+// GET /api/settings/sms — which automatic SMS events are switched on.
+router.get(
+  '/sms',
+  protect,
+  asyncHandler(async (req, res) => {
+    res.json({ events: await smsSettings.refresh() });
+  })
+);
+
+// PUT /api/settings/sms  { admin_new_order?, customer_consignment_booked?, customer_delivered? } — super admin only.
+router.put(
+  '/sms',
+  protect,
+  asyncHandler(async (req, res) => {
+    if (!req.user?.role?.isSuperAdmin) {
+      return res.status(403).json({ message: 'Only a super admin can change SMS notification settings.' });
+    }
+    const events = await smsSettings.update(req.body || {}, req.user._id);
+    res.json({ events });
   })
 );
 
