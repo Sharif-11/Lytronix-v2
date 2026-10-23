@@ -86,6 +86,10 @@ export default function ProductLanding() {
   }, [slug]);
 
   useEffect(() => {
+    // Load Facebook Meta Pixel
+    window.fbq('init', '1659446359219462');
+    window.fbq('track', 'PageView');
+
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
   }, []);
 
