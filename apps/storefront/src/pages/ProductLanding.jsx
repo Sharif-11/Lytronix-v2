@@ -5,7 +5,7 @@ import {
   ImagePlus, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
 import {
-  getProduct, getPoliceStations, createOrder, recordProductView,
+  getProduct, getPoliceStations, createOrder, recordProductView, getPaymentMeta,
 } from '../api/client';
 import { formatMoney } from '../utils/format';
 import SearchableSelect from '../components/SearchableSelect';
@@ -38,6 +38,7 @@ export default function ProductLanding() {
   const [qty, setQty] = useState(1);
   // Returning guest → prefill name / phone / last delivery address.
   const [form, setForm] = useState(() => ({ ...emptyForm, ...getReorderPrefill() }));
+  const [codEnabled, setCodEnabled] = useState(true); // Assume COD is enabled by default
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(null);
@@ -87,6 +88,12 @@ export default function ProductLanding() {
 
   useEffect(() => {
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
+    getPaymentMeta().then((m) => {
+      setCodEnabled(Boolean(m.methods?.cod));
+    }).catch(() => {
+      // If we can't fetch methods, assume COD is enabled
+      setCodEnabled(true);
+    });
   }, []);
 
   // Hide the floating "order now" bar once the real submit button scrolls
@@ -124,6 +131,7 @@ export default function ProductLanding() {
     e.preventDefault();
     setError('');
 
+    if (!codEnabled) return setError('ক্যাশ অন ডেলিভারি এখন চালু নেই।');
     if (outOfStock) return setError('দুঃখিত, প্রোডাক্টটি এখন স্টকে নেই।');
     if (!form.name.trim() || !form.phone.trim()) {
       return setError('আপনার নাম ও ফোন নম্বর দিন যাতে আমরা যোগাযোগ করতে পারি।');
@@ -343,13 +351,15 @@ export default function ProductLanding() {
               <button
                 ref={submitBtnRef}
                 type="submit"
-                disabled={submitting || outOfStock}
+                disabled={submitting || outOfStock || !codEnabled}
                 className="btn-primary w-full min-w-0 py-3 text-sm sm:text-base gap-2 text-center leading-tight"
               >
                 {submitting ? (
                   <>অর্ডার হচ্ছে…</>
                 ) : outOfStock ? (
                   'স্টকে নেই'
+                ) : !codEnabled ? (
+                  'ক্যাশ অন ডেলিভারি চালু নেই'
                 ) : (
                   `অর্ডার কনফার্ম করুন · ${formatMoney(grandTotal)}`
                 )}
