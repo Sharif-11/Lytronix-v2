@@ -8,6 +8,7 @@ import RequireCustomer from './components/RequireCustomer';
 import ScrollToTop from './components/ScrollToTop';
 import UpdatePrompt from './components/UpdatePrompt';
 import { trackVisitOnce } from './lib/analytics';
+import { useHealthCheck } from './lib/useHealthCheck';
 
 import Shop from './pages/Shop';
 import Products from './pages/Products';
@@ -43,6 +44,8 @@ function ShopLayout({ children }) {
 }
 
 export default function App() {
+  useHealthCheck();
+
   useEffect(() => {
     trackVisitOnce();
   }, []);

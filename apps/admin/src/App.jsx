@@ -39,6 +39,7 @@ import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
+import { useHealthCheck } from './lib/useHealthCheck';
 
 function AdminLayout({ children }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -70,6 +71,8 @@ function AdminLayout({ children }) {
 }
 
 export default function App() {
+  useHealthCheck();
+
   return (
     <>
       <ScrollToTop />
