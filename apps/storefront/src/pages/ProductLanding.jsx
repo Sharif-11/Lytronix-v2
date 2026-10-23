@@ -86,9 +86,11 @@ export default function ProductLanding() {
   }, [slug]);
 
   useEffect(() => {
-    // Load Facebook Meta Pixel
-    window.fbq('init', '1659446359219462');
-    window.fbq('track', 'PageView');
+    // Facebook Meta Pixel is initialized in index.html
+    // Just ensure the tracking call is made for this page
+    if (window.fbq) {
+      window.fbq('track', 'PageView');
+    }
 
     getPoliceStations().then(setDistricts).catch(() => setDistricts([]));
   }, []);
