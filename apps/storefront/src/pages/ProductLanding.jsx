@@ -260,16 +260,9 @@ export default function ProductLanding() {
       clearDraft();
 
       if (paymentMethod === 'bkash_automated') {
-        setRedirectingBkash(true);
-        try {
-          const { redirectURL } = await initiateBkashCheckout(created._id);
-          window.location.href = redirectURL;
-          return;
-        } catch {
-          // bKash didn't start — fall through to the confirmation screen; the
-          // tracking page has a "retry bKash payment" button.
-          setRedirectingBkash(false);
-        }
+        // Manual checkout — don't redirect to bKash automatically.
+        // User can initiate payment from the tracking page.
+        setRedirectingBkash(false);
       }
 
 
