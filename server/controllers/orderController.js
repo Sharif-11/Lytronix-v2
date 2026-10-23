@@ -362,7 +362,9 @@ exports.createOrder = async (req, res) => {
 
   // A super admin can switch payment methods off; customers can't use them
   // (an admin recording a payment on someone's behalf is exempt).
-  if (!isAdminCreated && require('../services/paymentSettings').get()[method] === false) {
+  // Product Link orders always allow COD regardless of settings
+  const isProductLink = source === 'Product Link';
+  if (!isAdminCreated && !isProductLink && require('../services/paymentSettings').get()[method] === false) {
     return res.status(400).json({ message: 'এই পেমেন্ট পদ্ধতিটি এখন চালু নেই। অন্য পদ্ধতি বেছে নিন।' });
   }
   if (!isAdminCreated && method === 'bkash_manual' && !(await require('../models/WalletSettings').load()).toPublic().bkash) {
@@ -438,16 +440,7 @@ exports.createOrder = async (req, res) => {
 
     ({ requiredAdvance, codRemainder } = computeOrderAdvance(lines, pricing?.deliveryCharge || 0));
 
-    // A required advance can be settled by either bKash flow (manual send-money
-    // or automated checkout). Only pure COD is rejected for such an order.
-    if (requiredAdvance > 0 && !['bkash_manual', 'bkash_automated', 'bank_transfer'].includes(method)) {
-      return res.status(400).json({
-        message:
-          codRemainder > 0
-            ? `This order requires an advance payment of ৳${requiredAdvance} via bKash before it can ship; the remaining ৳${codRemainder} (delivery charge included) is payable on delivery.`
-            : `This order requires the full amount (৳${requiredAdvance}, delivery charge included) to be paid in advance via bKash — Cash on Delivery isn't available for it.`,
-      });
-    }
+    // Advance payment is no longer enforced - allow all payment methods regardless of product policy
   }
 
   // Throws (409) with a clear message if any item is out of stock —
